@@ -34,7 +34,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <img src="/logo.png" alt="Taxi Romontois"
+          <img src="/logo-dark.png" alt="Taxi Romontois"
             style={{ width: 180, maxWidth: "100%", height: "auto", margin: "0 auto 12px", display: "block" }} />
           <div style={{ fontSize: 13, color: C.gray400 }}>Transport scolaire</div>
         </div>
