@@ -224,7 +224,8 @@ export default function GestionnaireDashboard() {
         borderRadius: 16, marginBottom: 22, color: C.white, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <img src="/logo.jpg" alt="Taxi Romontois"
-            style={{ width: 160, height: "auto", marginBottom: 10, opacity: 0.95, display: "block" }} />
+            style={{ width: 160, height: "auto", marginBottom: 10, display: "block",
+              filter: "brightness(0) invert(1)" }} />
           <div style={{ fontSize: 12, opacity: 0.6, textTransform: "capitalize" }}>{todayStr()}</div>
           <div style={{ fontSize: 24, fontWeight: 900, marginTop: 3 }}>Tableau de bord</div>
           <div style={{ fontSize: 13, opacity: 0.7, marginTop: 3 }}>Vue exploitation temps réel · Supabase Realtime</div>

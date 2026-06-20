@@ -2,32 +2,109 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C, statusColor, statusLabel } from "@/lib/constants";
-import { Badge, Avatar, Card, InfoBox, Btn, SectionTitle, TabBar } from "@/components/ui";
-import type { Conducteur, Circuit } from "@/lib/types";
+import { Badge, Avatar, Card, InfoBox, Btn, SectionTitle, TabBar, Modal } from "@/components/ui";
+import type { Conducteur, Circuit, Vehicule } from "@/lib/types";
+
+const STATUTS = ["disponible","en_service","en_attente","absent","termine"] as const;
+
+function DriverForm({ init, circuits, vehicules, onSave, onCancel, saving }: {
+  init: Partial<Conducteur>; circuits: Circuit[]; vehicules: Vehicule[];
+  onSave: (d: Partial<Conducteur>) => void; onCancel: () => void; saving: boolean;
+}) {
+  const [f, setF] = useState<Partial<Conducteur>>({ status: "disponible", ...init });
+  const set = (k: string, v: any) => setF(p => ({ ...p, [k]: v }));
+  const field = (label: string, key: string, type = "text", ph = "") => (
+    <div style={{ marginBottom: 12 }}>
+      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 4 }}>{label}</label>
+      <input type={type} value={(f as any)[key] ?? ""} onChange={e => set(key, e.target.value)} placeholder={ph}
+        style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 13, boxSizing: "border-box" }} />
+    </div>
+  );
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
+        <div style={{ paddingRight: 12 }}>{field("Nom", "nom")}</div>
+        <div>{field("Prénom", "prenom")}</div>
+        <div style={{ paddingRight: 12 }}>{field("Téléphone", "tel", "tel", "079 000 00 00")}</div>
+        <div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 4 }}>Statut</label>
+          <select value={f.status ?? "disponible"} onChange={e => set("status", e.target.value)}
+            style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 13, marginBottom: 12 }}>
+            {STATUTS.map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}
+          </select>
+        </div>
+        <div style={{ paddingRight: 12 }}>{field("Permis (ex: B,D)", "permis")}</div>
+        <div>{field("Validité permis", "permis_exp", "date")}</div>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 4 }}>Circuit assigné</label>
+        <select value={f.circuit_id ?? ""} onChange={e => set("circuit_id", e.target.value || null)}
+          style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 13, marginBottom: 12 }}>
+          <option value="">— Aucun circuit —</option>
+          {circuits.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.num}-{c.nom} ({c.cercle?.nom})</option>)}
+        </select>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 4 }}>Véhicule assigné</label>
+        <select value={f.vehicule_id ?? ""} onChange={e => set("vehicule_id", e.target.value || null)}
+          style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 13, marginBottom: 12 }}>
+          <option value="">— Aucun véhicule —</option>
+          {vehicules.map(v => <option key={v.id} value={v.id}>{v.plaque} · {v.marque} {v.modele}</option>)}
+        </select>
+      </div>
+
+      {f.status === "absent" && (
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 4 }}>Motif absence</label>
+          <input value={f.absence_motif ?? ""} onChange={e => set("absence_motif", e.target.value)}
+            style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 13, boxSizing: "border-box" }} />
+        </div>
+      )}
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 4 }}>Initiales photo</label>
+        <input value={f.photo_initials ?? ""} onChange={e => set("photo_initials", e.target.value.toUpperCase().slice(0,4))} maxLength={4}
+          style={{ width: 80, padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 13 }} />
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+        <Btn full onClick={() => onSave(f)} disabled={saving || !f.nom || !f.prenom} color={C.green}>
+          {saving ? "Enregistrement…" : "✅ Enregistrer"}
+        </Btn>
+        <Btn outline onClick={onCancel} color={C.gray600}>Annuler</Btn>
+      </div>
+    </div>
+  );
+}
 
 export default function ConducteursPage() {
   const supabase = createClient();
   const [drivers, setDrivers] = useState<Conducteur[]>([]);
   const [circuits, setCircuits] = useState<Circuit[]>([]);
+  const [vehicules, setVehicules] = useState<Vehicule[]>([]);
   const [sel, setSel] = useState<number | null>(null);
-  const [tab, setTab] = useState("historique");
+  const [tab, setTab] = useState("infos");
   const [search, setSearch] = useState("");
-  const [showImport, setShowImport] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [editModal, setEditModal] = useState(false);
+  const [addModal, setAddModal] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetch = async () => {
-      const [drv, cir] = await Promise.all([
-        supabase.from("conducteurs").select("*, circuit:circuits(*,cercle:cercles_scolaires(*)), vehicule:vehicules(*)").order("nom"),
-        supabase.from("circuits").select("*, cercle:cercles_scolaires(*)").order("num"),
-      ]);
-      setDrivers(drv.data ?? []);
-      setCircuits(cir.data ?? []);
-      setLoading(false);
-    };
-    fetch();
-  }, []);
+  const fetchAll = async () => {
+    const [drv, cir, veh] = await Promise.all([
+      supabase.from("conducteurs").select("*, circuit:circuits(*,cercle:cercles_scolaires(*)), vehicule:vehicules(*), cercle:cercles_scolaires(*)").order("nom"),
+      supabase.from("circuits").select("*, cercle:cercles_scolaires(*)").order("num"),
+      supabase.from("vehicules").select("*").order("plaque"),
+    ]);
+    setDrivers(drv.data ?? []);
+    setCircuits(cir.data ?? []);
+    setVehicules(veh.data ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchAll(); }, []);
 
   const filtered = drivers.filter(d =>
     `${d.prenom} ${d.nom} ${d.tel ?? ""}`.toLowerCase().includes(search.toLowerCase())
@@ -35,34 +112,69 @@ export default function ConducteursPage() {
 
   const d = sel ? drivers.find(x => x.id === sel) : null;
 
-  const handleStatusChange = async (driverId: number, status: string) => {
-    await supabase.from("conducteurs").update({ status, absence_motif: status === "absent" ? "Maladie" : null }).eq("id", driverId);
-    setDrivers(prev => prev.map(x => x.id === driverId ? { ...x, status: status as any, absence_motif: status === "absent" ? "Maladie" : undefined } : x));
+  const handleSave = async (form: Partial<Conducteur>) => {
+    setSaving(true);
+    if (sel) {
+      await supabase.from("conducteurs").update({
+        nom: form.nom, prenom: form.prenom, tel: form.tel || null,
+        permis: form.permis || null, permis_exp: form.permis_exp || null,
+        circuit_id: form.circuit_id || null, vehicule_id: form.vehicule_id || null,
+        status: form.status, absence_motif: form.status === "absent" ? (form.absence_motif || null) : null,
+        photo_initials: form.photo_initials || ((form.nom?.[0] ?? "").toUpperCase() + (form.prenom?.[0] ?? "").toUpperCase()),
+      }).eq("id", sel);
+    }
+    await fetchAll();
+    setSaving(false);
+    setEditModal(false);
   };
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImporting(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("type", "conducteurs");
-    await fetch("/api/import", { method: "POST", body: formData });
-    setImporting(false);
-    setShowImport(false);
-    window.location.reload();
+  const handleAdd = async (form: Partial<Conducteur>) => {
+    setSaving(true);
+    await supabase.from("conducteurs").insert({
+      nom: form.nom!, prenom: form.prenom!, tel: form.tel || null,
+      affectation: "Scolaire",
+      permis: form.permis || null, permis_exp: form.permis_exp || null,
+      circuit_id: form.circuit_id || null, vehicule_id: form.vehicule_id || null,
+      status: form.status ?? "disponible",
+      absence_motif: form.status === "absent" ? (form.absence_motif || null) : null,
+      photo_initials: form.photo_initials || (form.nom?.slice(0,1).toUpperCase() ?? "") + (form.prenom?.slice(0,1).toUpperCase() ?? ""),
+      tachygraphe: false,
+    });
+    await fetchAll();
+    setSaving(false);
+    setAddModal(false);
+  };
+
+  const handleDelete = async () => {
+    if (!sel || !confirm("Supprimer ce conducteur ?")) return;
+    await supabase.from("conducteurs").delete().eq("id", sel);
+    setSel(null);
+    fetchAll();
   };
 
   if (loading) return <div style={{ textAlign: "center", padding: 40, color: C.gray400 }}>Chargement…</div>;
 
+  // ── Fiche détail ─────────────────────────────────────────────────────────────
   if (sel && d) {
     const circ = circuits.find(c => c.id === d.circuit_id);
     const permisExpireSoon = d.permis_exp && new Date(d.permis_exp) < new Date(Date.now() + 90 * 864e5);
     return (
       <div>
-        <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: C.navyL, cursor: "pointer", fontWeight: 700, fontSize: 14, marginBottom: 18, padding: 0 }}>
-          ← Tous les conducteurs
-        </button>
+        {editModal && (
+          <Modal title={`Modifier — ${d.prenom} ${d.nom}`} onClose={() => setEditModal(false)}>
+            <DriverForm init={d} circuits={circuits} vehicules={vehicules}
+              onSave={handleSave} onCancel={() => setEditModal(false)} saving={saving} />
+          </Modal>
+        )}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+          <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: C.navyL, cursor: "pointer", fontWeight: 700, fontSize: 14, padding: 0 }}>
+            ← Tous les conducteurs
+          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn small onClick={() => setEditModal(true)} color={C.navyL}>✏️ Modifier</Btn>
+            <Btn small onClick={handleDelete} color={C.red} outline>🗑 Supprimer</Btn>
+          </div>
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: 22 }}>
           <Card style={{ padding: 26 }}>
             <div style={{ display: "flex", gap: 14, alignItems: "center", padding: 18, background: C.skyL, borderRadius: 12, marginBottom: 20 }}>
@@ -83,25 +195,22 @@ export default function ConducteursPage() {
               <InfoBox label="Validité permis" value={d.permis_exp ? new Date(d.permis_exp).toLocaleDateString("fr-FR") : "—"} highlight={permisExpireSoon ? C.red : undefined} />
               <InfoBox label="École" value={circ?.cercle?.nom} />
               <InfoBox label="Tachygraphe" value={d.tachygraphe ? "Requis" : "Non requis"} />
-              <InfoBox label="Cercle scolaire" value={d.cercle?.nom} full />
-            </div>
-            <div style={{ marginTop: 14, padding: 14, background: C.gray50, borderRadius: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.gray800, marginBottom: 8 }}>Modifier le statut</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {(["en_service", "en_attente", "absent", "disponible"] as const).map(s => (
-                  <button key={s} onClick={() => handleStatusChange(d.id, s)}
-                    style={{ padding: "7px 12px", borderRadius: 7, border: `2px solid ${d.status === s ? C.navyL : C.gray200}`,
-                      background: d.status === s ? C.navyL : C.white, color: d.status === s ? C.white : C.gray600,
-                      fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                    {statusLabel(s)}
-                  </button>
-                ))}
-              </div>
+              {d.absence_motif && <InfoBox label="Motif absence" value={d.absence_motif} full highlight={C.red} />}
             </div>
           </Card>
 
           <Card style={{ padding: 26 }}>
-            <TabBar tabs={["historique", "infos"]} active={tab} onChange={setTab} />
+            <TabBar tabs={["infos","historique"]} active={tab} onChange={setTab} />
+            {tab === "infos" && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9 }}>
+                <InfoBox label="Nom" value={d.nom} />
+                <InfoBox label="Prénom" value={d.prenom} />
+                <InfoBox label="Téléphone" value={d.tel} />
+                <InfoBox label="Affectation" value={d.affectation} />
+                <InfoBox label="Cercle scolaire" value={d.cercle?.nom} full />
+                <InfoBox label="Notes" value={d.notes} full />
+              </div>
+            )}
             {tab === "historique" && (
               <div style={{ background: C.gray50, borderRadius: 10, overflow: "hidden" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 1fr", padding: "8px 14px",
@@ -113,34 +222,25 @@ export default function ConducteursPage() {
                 </div>
               </div>
             )}
-            {tab === "infos" && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9 }}>
-                <InfoBox label="Nom" value={d.nom} />
-                <InfoBox label="Prénom" value={d.prenom} />
-                <InfoBox label="Téléphone" value={d.tel} />
-                <InfoBox label="Affectation" value={d.affectation} />
-                <InfoBox label="Notes" value={d.notes} full />
-              </div>
-            )}
           </Card>
         </div>
       </div>
     );
   }
 
+  // ── Liste ─────────────────────────────────────────────────────────────────────
   return (
     <div>
-      <SectionTitle title={`Conducteurs (${drivers.length})`} action="⬆ Importer Excel" onAction={() => setShowImport(true)} />
-      {showImport && (
-        <div style={{ background: C.skyL, borderRadius: 12, padding: 20, marginBottom: 18, border: `1px solid ${C.sky}` }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Import CSV/Excel conducteurs</div>
-          <div style={{ fontSize: 12, color: C.gray600, marginBottom: 12 }}>Format : Nom;Prénom;Téléphone;Affectation;Cercle;Circuit;Véhicule;Permis;Validité</div>
-          <input type="file" accept=".csv,.xlsx,.xls" onChange={handleImport}
-            style={{ display: "block", marginBottom: 10 }} />
-          {importing && <div style={{ color: C.navyL, fontWeight: 700 }}>Import en cours…</div>}
-          <Btn small onClick={() => setShowImport(false)} outline color={C.navyL}>Fermer</Btn>
-        </div>
+      {addModal && (
+        <Modal title="Ajouter un conducteur" onClose={() => setAddModal(false)}>
+          <DriverForm init={{}} circuits={circuits} vehicules={vehicules}
+            onSave={handleAdd} onCancel={() => setAddModal(false)} saving={saving} />
+        </Modal>
       )}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: C.gray800, margin: 0 }}>Conducteurs ({drivers.length})</h2>
+        <Btn onClick={() => setAddModal(true)} color={C.green}>+ Ajouter conducteur</Btn>
+      </div>
       <div style={{ marginBottom: 14 }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher conducteur…"
           style={{ padding: "9px 14px", borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 13, outline: "none", width: 280 }} />

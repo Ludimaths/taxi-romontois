@@ -6,6 +6,7 @@ import type { Role } from "@/lib/types";
 const NAV_ITEMS: Record<Role, { path: string; label: string; icon: string }[]> = {
   gestionnaire: [
     { path: "/gestionnaire",            label: "Tableau de bord", icon: "📊" },
+    { path: "/gestionnaire/rapport",    label: "Rapport du jour", icon: "📋" },
     { path: "/gestionnaire/conducteurs",label: "Conducteurs",     icon: "👤" },
     { path: "/gestionnaire/vehicules",  label: "Véhicules",       icon: "🚌" },
     { path: "/gestionnaire/circuits",   label: "Circuits",        icon: "🗺" },
@@ -21,6 +22,7 @@ const NAV_ITEMS: Record<Role, { path: string; label: string; icon: string }[]> =
     { path: "/admin",            label: "Administration", icon: "⚙️" },
     { path: "/admin/conducteurs",label: "Conducteurs",   icon: "👤" },
     { path: "/admin/vehicules",  label: "Véhicules",     icon: "🚌" },
+    { path: "/admin/qrcodes",    label: "QR Codes",      icon: "📲" },
     { path: "/admin/export",     label: "Exports",       icon: "📁" },
   ],
   mecanicien: [
@@ -61,7 +63,8 @@ export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount =
       <div style={{ padding: "20px 18px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
         <div style={{ marginBottom: 14 }}>
           <img src="/logo.jpg" alt="Taxi Romontois"
-            style={{ width: 180, maxWidth: "100%", height: "auto", display: "block" }} />
+            style={{ width: 180, maxWidth: "100%", height: "auto", display: "block",
+              filter: "brightness(0) invert(1)" }} />
         </div>
         <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 8, padding: "8px 12px" }}>
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5 }}>
@@ -110,7 +113,7 @@ export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount =
           🚪 Déconnexion
         </button>
         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 8 }}>
-          v1.0 · Taxi Romontois
+          v2.0 · Taxi Romontois
         </div>
       </div>
     </div>
