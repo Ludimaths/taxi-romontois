@@ -223,7 +223,7 @@ export default function GestionnaireDashboard() {
       <div style={{ background: `linear-gradient(135deg,${C.navy},${C.navyL})`, padding: "26px 30px",
         borderRadius: 16, marginBottom: 22, color: C.white, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <img src="/logo.jpg" alt="Taxi Romontois"
+          <img src="/logo.png" alt="Taxi Romontois"
             style={{ width: 160, height: "auto", marginBottom: 10, display: "block",
               filter: "brightness(0) invert(1)" }} />
           <div style={{ fontSize: 12, opacity: 0.6, textTransform: "capitalize" }}>{todayStr()}</div>

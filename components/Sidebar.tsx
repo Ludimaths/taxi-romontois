@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { C } from "@/lib/constants";
 import type { Role } from "@/lib/types";
@@ -45,6 +46,7 @@ interface SidebarProps {
 export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount = 0, alertesCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [logoError, setLogoError] = useState(false);
   const navItems = NAV_ITEMS[role] ?? NAV_ITEMS.gestionnaire;
 
   const ROLE_LABELS: Record<Role, string> = {
@@ -62,9 +64,13 @@ export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount =
       {/* Logo */}
       <div style={{ padding: "20px 18px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
         <div style={{ marginBottom: 14 }}>
-          <img src="/logo.jpg" alt="Taxi Romontois"
-            style={{ width: 180, maxWidth: "100%", height: "auto", display: "block",
-              filter: "brightness(0) invert(1)" }} />
+          {logoError
+            ? <span style={{ color: C.white, fontWeight: 900, fontSize: 16, letterSpacing: 0.5 }}>Taxi Romontois</span>
+            : <img src="/logo.png" alt="Taxi Romontois"
+                style={{ width: 160, maxWidth: "100%", height: "auto", display: "block",
+                  filter: "brightness(0) invert(1)" }}
+                onError={() => setLogoError(true)} />
+          }
         </div>
         <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 8, padding: "8px 12px" }}>
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: 0.5 }}>
