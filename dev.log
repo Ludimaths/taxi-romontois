@@ -1,0 +1,48 @@
+
+> taxi-romontois@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.114:3000
+- Environments: .env.local
+✓ Ready in 356ms
+- Experiments (use with caution):
+  · serverActions
+
+ GET / 307 in 1789ms (next.js: 1614ms, application-code: 176ms)
+ GET /login 200 in 524ms (next.js: 442ms, application-code: 82ms)
+ GET /logo.png 404 in 389ms (next.js: 351ms, application-code: 38ms)
+✓ Compiled in 22ms
+ GET /login 200 in 64ms (next.js: 37ms, application-code: 27ms)
+ GET / 307 in 199ms (next.js: 40ms, application-code: 159ms)
+ GET /login 200 in 74ms (next.js: 5ms, application-code: 69ms)
+ GET / 200 in 322ms (next.js: 3ms, application-code: 319ms)
+ GET / 200 in 358ms (next.js: 4ms, application-code: 354ms)
+ GET /gestionnaire 200 in 637ms (next.js: 483ms, application-code: 154ms)
+ GET /gestionnaire 200 in 154ms (next.js: 4ms, application-code: 149ms)
+ GET /gestionnaire 200 in 18ms (next.js: 4ms, application-code: 15ms)
+ GET /gestionnaire/conducteurs 200 in 285ms (next.js: 265ms, application-code: 19ms)
+ GET /gestionnaire/vehicules 200 in 366ms (next.js: 336ms, application-code: 31ms)
+ GET /scan/FR-13 200 in 708ms (next.js: 680ms, application-code: 28ms)
+ GET /scan/FR-150291 200 in 34ms (next.js: 13ms, application-code: 21ms)
+ GET /gestionnaire/circuits 200 in 283ms (next.js: 263ms, application-code: 20ms)
+ GET /gestionnaire/incidents 200 in 271ms (next.js: 254ms, application-code: 17ms)
+ GET /gestionnaire/alertes 200 in 272ms (next.js: 253ms, application-code: 20ms)
+ GET /gestionnaire/export 200 in 281ms (next.js: 262ms, application-code: 18ms)
+ GET /gestionnaire/alertes 200 in 19ms (next.js: 3ms, application-code: 16ms)
+ GET /gestionnaire/incidents 200 in 19ms (next.js: 3ms, application-code: 16ms)
+ GET /gestionnaire/circuits 200 in 19ms (next.js: 3ms, application-code: 16ms)
+ GET /gestionnaire/vehicules 200 in 20ms (next.js: 3ms, application-code: 17ms)
+ GET /gestionnaire/conducteurs 200 in 20ms (next.js: 3ms, application-code: 16ms)
+ GET /gestionnaire 200 in 18ms (next.js: 3ms, application-code: 14ms)
+ GET /gestionnaire/circuits 200 in 20ms (next.js: 3ms, application-code: 16ms)
+ GET /gestionnaire/conducteurs 200 in 25ms (next.js: 4ms, application-code: 22ms)
+ GET /gestionnaire/vehicules 200 in 22ms (next.js: 3ms, application-code: 20ms)
+ GET /gestionnaire/circuits 200 in 23ms (next.js: 3ms, application-code: 20ms)
+ GET /gestionnaire/vehicules 200 in 23ms (next.js: 3ms, application-code: 20ms)
+ GET /scan/FR-13 200 in 37ms (next.js: 11ms, application-code: 26ms)
+ GET /gestionnaire/incidents 200 in 24ms (next.js: 3ms, application-code: 21ms)
+ GET /gestionnaire/alertes 200 in 22ms (next.js: 3ms, application-code: 19ms)
+ GET /gestionnaire 200 in 18ms (next.js: 3ms, application-code: 15ms)
+ GET /gestionnaire/vehicules 200 in 22ms (next.js: 3ms, application-code: 19ms)
