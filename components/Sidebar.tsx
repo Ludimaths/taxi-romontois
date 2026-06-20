@@ -67,8 +67,7 @@ export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount =
           {logoError
             ? <span style={{ color: C.white, fontWeight: 900, fontSize: 16, letterSpacing: 0.5 }}>Taxi Romontois</span>
             : <img src="/logo.png" alt="Taxi Romontois"
-                style={{ width: 160, maxWidth: "100%", height: "auto", display: "block",
-                  filter: "brightness(0) invert(1)" }}
+                style={{ width: 160, maxWidth: "100%", height: "auto", display: "block" }}
                 onError={() => setLogoError(true)} />
           }
         </div>
