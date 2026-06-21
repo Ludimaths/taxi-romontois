@@ -1,819 +1,750 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { SEUIL_REPARATION_CHF } from "@/lib/constants";
-import type { Vehicule, Reparation, Alerte, Incident, Profile } from "@/lib/types";
+import type { Vehicule, Reparation, Alerte } from "@/lib/types";
 
-/* ─── palette ─── */
+type Tab = "dashboard" | "en_cours" | "revisions" | "historique" | "vehicules";
+
+// ── Palette ──────────────────────────────────────────────────────────────────
 const M = {
-  green:  "#16A34A", greenL: "#DCFCE7", greenM: "#BBF7D0",
-  navy:   "#0D3B7A", navyL: "#1565C0",
-  blue:   "#2563EB", blueL: "#EFF6FF",
-  amber:  "#D97706", amberL: "#FEF3C7",
-  red:    "#DC2626", redL: "#FEE2E2",
-  gray:   "#64748B", grayL: "#F8FAFC",
-  border: "#E2E8F0", white: "#FFFFFF", text: "#1E293B",
-  teal:   "#0D9488", tealL: "#F0FDFA",
+  navy:"#0D3B7A", green:"#16A34A", amber:"#D97706",
+  red:"#DC2626",  blue:"#3B82F6",  purple:"#7C3AED", gray:"#64748B",
 };
 
-/* ─── constants ─── */
-const BUDGET_MENSUEL = 5000; // CHF — modifiable par admin
+// ── Status configs ────────────────────────────────────────────────────────────
+const VS: Record<string,{l:string;e:string;c:string;bg:string}> = {
+  en_service:      {l:"En service",          e:"✅",c:M.green, bg:"#DCFCE7"},
+  receptionne:     {l:"Réceptionné",         e:"👁️",c:M.blue,  bg:"#DBEAFE"},
+  en_attente_piece:{l:"Attente pièce",       e:"⏳",c:M.amber, bg:"#FEF9C3"},
+  en_reparation:   {l:"En réparation",       e:"🔧",c:M.navy,  bg:"#EFF6FF"},
+  repare:          {l:"Réparé — en attente", e:"✔️",c:M.purple,bg:"#EDE9FE"},
+  attention:       {l:"Attention requise",   e:"⚠️",c:M.red,   bg:"#FEF2F2"},
+};
+const RS: Record<string,{l:string;c:string}> = {
+  receptionne:          {l:"Réceptionné",         c:M.blue},
+  en_attente_piece:     {l:"Attente pièce",       c:M.amber},
+  en_reparation:        {l:"En réparation",       c:M.navy},
+  repare:               {l:"Réparé",              c:M.purple},
+  remis_en_circulation: {l:"Remis en circulation",c:M.green},
+  annulee:              {l:"Annulée",             c:M.gray},
+};
+const TRANS: Record<string,{label:string;to:string}[]> = {
+  receptionne:     [{label:"⏳ Attente pièce",to:"en_attente_piece"},{label:"🔧 Commencer réparation",to:"en_reparation"}],
+  en_attente_piece:[{label:"🔧 Pièce reçue — Commencer",to:"en_reparation"}],
+  en_reparation:   [{label:"✔️ Marquer réparé",to:"repare"}],
+  repare:          [{label:"🚌 Remettre en circulation",to:"remis_en_circulation"}],
+};
+const BUDGET = 5000;
+const KM_ALERTE = 200000;
 
-type Tab = "dashboard" | "en_cours" | "terminees" | "alertes" | "historique";
-type TypeIntervention = "interne" | "externe" | "piece";
-type NiveauUrgence   = "urgent" | "important" | "normal" | "planifie";
-
-interface RepForm {
-  vehicule_id: string; probleme: string;
-  type: TypeIntervention; garage: string; piece: string; fournisseur: string;
-  urgence: NiveauUrgence; cout_estime: string; date_reception: string; notes: string;
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const fd = (d?:string|null) => d ? new Date(d).toLocaleDateString("fr-CH") : "—";
+const todayStr = () => new Date().toISOString().slice(0,10);
+function nbJours(a:string, b:string) {
+  return Math.round((+new Date(b) - +new Date(a)) / 86400000);
 }
-const EMPTY_FORM: RepForm = {
-  vehicule_id: "", probleme: "", type: "interne", garage: "", piece: "",
-  fournisseur: "", urgence: "normal", cout_estime: "", date_reception: "", notes: "",
-};
-
-/* ─── helpers ─── */
-function parseCT(ct?: string | null): Date | null {
+function ctCheck(ct?:string|null):{label:string;c:string}|null {
   if (!ct) return null;
-  const [mm, yyyy] = ct.split(".");
-  if (!mm || !yyyy) return null;
-  return new Date(parseInt(yyyy), parseInt(mm), 0);
-}
-function ctStatut(ct?: string | null): "valide" | "bientot" | "expire" | null {
-  const d = parseCT(ct);
-  if (!d) return null;
-  const now = new Date(), in3m = new Date(); in3m.setMonth(now.getMonth() + 3);
-  if (d < now) return "expire";
-  if (d < in3m) return "bientot";
-  return "valide";
-}
-function ctBadge(ct?: string | null) {
-  const s = ctStatut(ct);
-  if (!s) return { label: "—", color: M.gray, bg: M.grayL };
-  return {
-    expire:  { label: "⚠ Expiré",  color: M.red,   bg: M.redL   },
-    bientot: { label: "Bientôt",   color: M.amber, bg: M.amberL },
-    valide:  { label: "Valide",    color: M.green, bg: M.greenL },
-  }[s];
-}
-const URGENCE_MAP: Record<NiveauUrgence, { label: string; icon: string; color: string; bg: string }> = {
-  urgent:    { label: "Urgent",    icon: "🔴", color: M.red,   bg: M.redL   },
-  important: { label: "Important", icon: "🟠", color: M.amber, bg: M.amberL },
-  normal:    { label: "Normal",    icon: "🟡", color: M.navy,  bg: M.blueL  },
-  planifie:  { label: "Planifié",  icon: "🟢", color: M.green, bg: M.greenL },
-};
-const STATUT_MAP: Record<string, { label: string; icon: string; color: string; bg: string }> = {
-  signalee:             { label: "Signalée",              icon: "📋", color: M.gray,  bg: M.grayL  },
-  en_attente_validation:{ label: "Attente validation",    icon: "⏳", color: M.amber, bg: M.amberL },
-  en_attente_piece:     { label: "Attente pièce",         icon: "⏳", color: M.blue,  bg: M.blueL  },
-  en_cours:             { label: "En cours",              icon: "🔧", color: M.navyL, bg: "#DBEAFE" },
-  termine:              { label: "Terminée",              icon: "✅", color: M.green, bg: M.greenL },
-  refusee:              { label: "Refusée",               icon: "❌", color: M.red,   bg: M.redL   },
-};
-function statutInfo(s: string) { return STATUT_MAP[s] ?? STATUT_MAP.signalee; }
-
-/* encode type+urgence in responsable field: "type|urgence|extra" */
-function encodeResp(type: TypeIntervention, urgence: NiveauUrgence, extra: string) {
-  return `${type}|${urgence}|${extra}`;
-}
-function decodeResp(r?: string | null): { type: TypeIntervention; urgence: NiveauUrgence; extra: string } {
-  if (!r || !r.includes("|")) return { type: "interne", urgence: "normal", extra: r ?? "" };
-  const [type, urgence, ...rest] = r.split("|");
-  return {
-    type: (type as TypeIntervention) || "interne",
-    urgence: (urgence as NiveauUrgence) || "normal",
-    extra: rest.join("|"),
-  };
+  const [mm,yy] = ct.split(".");
+  if (!mm||!yy) return null;
+  const exp = new Date(+yy,+mm-1,1), now = new Date(), in3m = new Date();
+  in3m.setMonth(now.getMonth()+3);
+  if (exp < now)  return {label:`CT expiré (${ct})`,  c:M.red};
+  if (exp < in3m) return {label:`CT bientôt (${ct})`, c:M.amber};
+  return null;
 }
 
-/* budget progress color */
-function budgetColor(pct: number) {
-  if (pct > 90) return M.red;
-  if (pct > 70) return M.amber;
-  return M.green;
+// ── Micro-components ──────────────────────────────────────────────────────────
+function VBadge({s}:{s:string}) {
+  const v=VS[s]; if(!v) return null;
+  return <span style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",
+    borderRadius:20,fontSize:12,fontWeight:700,background:v.bg,color:v.c}}>{v.e} {v.l}</span>;
 }
-
-function fmtDate(s?: string | null) {
-  if (!s) return "—";
-  return new Date(s).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+function RBadge({s}:{s:string}) {
+  const r=RS[s]; if(!r) return null;
+  return <span style={{padding:"3px 10px",borderRadius:20,fontSize:12,
+    fontWeight:700,background:"#F1F5F9",color:r.c}}>● {r.l}</span>;
 }
-function fmtShort(s?: string | null) {
-  if (!s) return "—";
-  return new Date(s).toLocaleDateString("fr-FR");
-}
-
-/* ─── small components ─── */
-function Pill({ children, color, bg }: { children: ReactNode; color: string; bg: string }) {
+function BSheet({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}) {
   return (
-    <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700,
-      color, background: bg, whiteSpace: "nowrap", display: "inline-block" }}>
-      {children}
-    </span>
-  );
-}
-function InfoRow({ icon, label, value, sub }: { icon: string; label: string; value: ReactNode; sub?: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px",
-      background: M.grayL, borderRadius: 10, border: `1px solid ${M.border}` }}>
-      <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
-      <div>
-        <div style={{ fontSize: 11, color: M.gray, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>{label}</div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: M.text, marginTop: 1 }}>{value}</div>
-        {sub && <div style={{ fontSize: 12, color: M.gray, marginTop: 1 }}>{sub}</div>}
+    <div style={{position:"fixed",inset:0,zIndex:1000,display:"flex",alignItems:"flex-end",
+      background:"rgba(0,0,0,0.55)"}} onClick={onClose}>
+      <div style={{width:"100%",maxHeight:"93vh",overflowY:"auto",background:"#fff",
+        borderRadius:"20px 20px 0 0",padding:"20px 20px 48px"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h2 style={{fontSize:18,fontWeight:800,color:M.navy}}>{title}</h2>
+          <button onClick={onClose} style={{fontSize:26,background:"none",border:"none",
+            cursor:"pointer",color:M.gray,lineHeight:1}}>×</button>
+        </div>
+        {children}
       </div>
     </div>
   );
 }
-function Card({ children, style }: { children: ReactNode; style?: React.CSSProperties }) {
+const baseInp: React.CSSProperties = {width:"100%",padding:"11px 14px",borderRadius:10,
+  border:"1px solid #CBD5E1",fontSize:15,color:"#1E293B",background:"#fff"};
+function Inp({label,type="text",value,onChange,required=false,placeholder=""}:{
+  label:string;type?:string;value:string;onChange:(v:string)=>void;required?:boolean;placeholder?:string
+}) {
   return (
-    <div style={{ background: M.white, borderRadius: 16, padding: "20px 20px",
-      marginBottom: 16, border: `1px solid ${M.border}`,
-      boxShadow: "0 2px 8px rgba(0,0,0,0.04)", ...style }}>
-      {children}
+    <div style={{marginBottom:14}}>
+      <label style={{display:"block",fontSize:13,fontWeight:700,color:M.gray,marginBottom:5}}>
+        {label}{required&&<span style={{color:M.red}}> *</span>}
+      </label>
+      <input type={type} value={value} onChange={e=>onChange(e.target.value)}
+        placeholder={placeholder} style={baseInp}/>
     </div>
   );
 }
-function SectionTitle({ children }: { children: ReactNode }) {
-  return <div style={{ fontSize: 11, fontWeight: 800, color: M.gray, textTransform: "uppercase",
-    letterSpacing: 1, marginBottom: 14 }}>{children}</div>;
-}
-function FieldLabel({ children }: { children: ReactNode }) {
-  return <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: M.text, marginBottom: 6 }}>{children}</label>;
-}
-function Input({ value, onChange, type = "text", placeholder = "" }: {
-  value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
-}) {
+function TA({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}) {
   return (
-    <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-      style={{ width: "100%", padding: "13px 14px", borderRadius: 10, border: `1px solid ${M.border}`,
-        fontSize: 16, color: M.text, background: M.grayL, boxSizing: "border-box",
-        outline: "none", minHeight: 48 }} />
+    <div style={{marginBottom:14}}>
+      <label style={{display:"block",fontSize:13,fontWeight:700,color:M.gray,marginBottom:5}}>{label}</label>
+      <textarea value={value} onChange={e=>onChange(e.target.value)} rows={3}
+        style={{...baseInp,resize:"vertical"} as React.CSSProperties}/>
+    </div>
   );
 }
-function BigBtn({ children, onClick, disabled, color = M.navy }: {
-  children: ReactNode; onClick?: () => void; disabled?: boolean; color?: string;
-}) {
+function Sel({label,value,onChange,opts}:{label:string;value:string;onChange:(v:string)=>void;opts:{v:string;l:string}[]}) {
   return (
-    <button onClick={onClick} disabled={disabled}
-      style={{ width: "100%", padding: "16px", minHeight: 56, borderRadius: 12, border: "none",
-        background: disabled ? M.border : color, color: disabled ? M.gray : M.white,
-        fontSize: 16, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer" }}>
-      {children}
+    <div style={{marginBottom:14}}>
+      <label style={{display:"block",fontSize:13,fontWeight:700,color:M.gray,marginBottom:5}}>{label}</label>
+      <select value={value} onChange={e=>onChange(e.target.value)} style={baseInp as React.CSSProperties}>
+        {opts.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}
+      </select>
+    </div>
+  );
+}
+function DL({label,value}:{label:string;value:string}) {
+  return (
+    <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",
+      borderBottom:"1px solid #F1F5F9",fontSize:13}}>
+      <span style={{color:M.gray,fontWeight:600}}>{label}</span>
+      <span style={{color:"#1E293B",fontWeight:700,textAlign:"right",maxWidth:"65%"}}>{value}</span>
+    </div>
+  );
+}
+function PrimaryBtn({label,onClick,color=M.navy,full=false}:{label:string;onClick:()=>void;color?:string;full?:boolean}) {
+  return (
+    <button onClick={onClick} style={{padding:"12px 20px",borderRadius:12,fontWeight:700,fontSize:15,
+      cursor:"pointer",border:"none",background:color,color:"#fff",width:full?"100%":"auto",marginBottom:8}}>
+      {label}
+    </button>
+  );
+}
+function OutlineBtn({label,onClick,color=M.navy}:{label:string;onClick:()=>void;color?:string}) {
+  return (
+    <button onClick={onClick} style={{padding:"10px 16px",borderRadius:10,fontWeight:700,fontSize:14,
+      cursor:"pointer",border:`2px solid ${color}`,background:"transparent",color,marginRight:8,marginBottom:8}}>
+      {label}
     </button>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════ */
+// ── Main component ────────────────────────────────────────────────────────────
 export default function MecanicienPage() {
-  const supabase = createClient();
-
-  const [profile,     setProfile]     = useState<Profile | null>(null);
-  const [vehicles,    setVehicles]    = useState<Vehicule[]>([]);
+  const sb = createClient();
+  const [vehicules, setVehicules]   = useState<Vehicule[]>([]);
   const [reparations, setReparations] = useState<Reparation[]>([]);
-  const [alertes,     setAlertes]     = useState<Alerte[]>([]);
-  const [incidents,   setIncidents]   = useState<Incident[]>([]);
-  const [activeTab,   setActiveTab]   = useState<Tab>("dashboard");
-  const [selVehId,    setSelVehId]    = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [repForm,     setRepForm]     = useState<RepForm>(EMPTY_FORM);
-  const [saving,      setSaving]      = useState(false);
-  const [loading,     setLoading]     = useState(true);
+  const [alertes, setAlertes]       = useState<Alerte[]>([]);
+  const [tab, setTab]               = useState<Tab>("dashboard");
+  const [loading, setLoading]       = useState(true);
 
-  const setF = (k: keyof RepForm, v: string) => setRepForm(p => ({ ...p, [k]: v }));
+  // Modal: réceptionner
+  const [addOpen, setAddOpen] = useState(false);
+  const [addF, setAddF] = useState({vehicule_id:"",description:"",km_reception:"",date_reception:todayStr()});
 
-  /* ── load ── */
-  const loadData = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-      if (p) setProfile(p);
-    }
-    const [veh, rep, alt, inc] = await Promise.all([
-      supabase.from("vehicules").select("*, circuit:circuits(*), conducteur:conducteurs(*)").order("plaque"),
-      supabase.from("reparations").select("*, vehicule:vehicules(*)").order("created_at", { ascending: false }),
-      supabase.from("alertes").select("*").order("created_at", { ascending: false }).limit(50),
-      supabase.from("incidents").select("*, vehicule:vehicules(*), conducteur:conducteurs(*)").order("reported_at", { ascending: false }).limit(50),
+  // Modal: modifier véhicule
+  const [veOpen, setVeOpen] = useState<Vehicule|null>(null);
+  const [veF, setVeF] = useState({km:"",ct_date:"",etat:"",notes:""});
+
+  // Modal: transition workflow
+  const [tmOpen, setTmOpen] = useState<{rep:Reparation;to:string}|null>(null);
+  const freshTF = () => ({
+    piece_nom:"",piece_fournisseur:"",date_commande_piece:"",date_reception_piece_estimee:"",
+    date_reception_piece_reelle:"",date_debut_reparation:todayStr(),
+    type_intervention:"interne" as "interne"|"externe"|"piece",
+    nom_garage:"",cout_estime:"",
+    date_fin_reparation:todayStr(),cout:"",commentaire_mecanicien:"",km_sortie:"",
+    date_remise_circulation:todayStr(),
+  });
+  const [tmF, setTmF] = useState(freshTF());
+
+  // Modal: détail historique
+  const [detailOpen, setDetailOpen] = useState<Reparation|null>(null);
+
+  // Historique filters
+  const [histVeh, setHistVeh] = useState("all");
+  const [histPer, setHistPer] = useState("all");
+
+  const load = useCallback(async () => {
+    const [v, r, a] = await Promise.all([
+      sb.from("vehicules").select("*,circuit(*),conducteur(*)").order("plaque"),
+      sb.from("reparations").select("*,vehicule(plaque,marque,modele)").order("created_at",{ascending:false}),
+      sb.from("alertes").select("*").eq("read",false).order("created_at",{ascending:false}),
     ]);
-    setVehicles(veh.data ?? []);
-    setReparations((rep.data ?? []) as Reparation[]);
-    setAlertes(alt.data ?? []);
-    setIncidents(inc.data ?? []);
+    if (v.data) setVehicules(v.data);
+    if (r.data) setReparations(r.data);
+    if (a.data) setAlertes(a.data);
     setLoading(false);
-  }, []);
+  }, [sb]);
 
-  useEffect(() => {
-    loadData();
-    const channels = ["reparations", "alertes", "vehicules", "incidents"].map(t =>
-      supabase.channel(`meca-${t}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: t }, () => loadData())
-        .subscribe()
-    );
-    return () => { channels.forEach(c => supabase.removeChannel(c)); };
-  }, [loadData]);
+  useEffect(()=>{
+    load();
+    const ch = sb.channel("meca-rt")
+      .on("postgres_changes",{event:"*",schema:"public",table:"reparations"},load)
+      .on("postgres_changes",{event:"*",schema:"public",table:"vehicules"},load)
+      .on("postgres_changes",{event:"*",schema:"public",table:"alertes"},load)
+      .subscribe();
+    return ()=>{ sb.removeChannel(ch); };
+  },[load,sb]);
 
-  /* ── computed ── */
-  const enAtelier  = vehicles.filter(v => v.etat === "atelier");
-  const urgentes   = vehicles.filter(v => v.km > 130000 || ctStatut(v.ct_date) === "expire");
-  const enCours    = reparations.filter(r => r.statut !== "termine" && r.statut !== "refusee");
-  const terminees  = reparations.filter(r => r.statut === "termine");
-
+  // ── Computed ──────────────────────────────────────────────────────────────
   const now = new Date();
-  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const totalMois = reparations
-    .filter(r => r.created_at >= firstOfMonth && r.statut !== "refusee")
-    .reduce((s, r) => s + (r.cout ?? 0), 0);
-  const budgetPct = Math.min((totalMois / BUDGET_MENSUEL) * 100, 100);
+  const m0  = new Date(now.getFullYear(),now.getMonth(),1).toISOString();
+  const budgetMois = reparations
+    .filter(r=>["en_reparation","repare","remis_en_circulation"].includes(r.statut)&&r.created_at>=m0)
+    .reduce((s,r)=>s+(r.cout||0),0);
+  const activeReps  = reparations.filter(r=>!["remis_en_circulation","annulee"].includes(r.statut));
+  const histReps    = reparations.filter(r=>r.statut==="remis_en_circulation");
+  const inAtelier   = vehicules.filter(v=>["receptionne","en_attente_piece","en_reparation","repare"].includes(v.etat));
+  const urgentVehs  = vehicules.filter(v=>ctCheck(v.ct_date)||v.km>=KM_ALERTE);
 
-  const selVeh = selVehId ? vehicles.find(v => v.id === selVehId) ?? null : null;
-  const selVehReps = reparations.filter(r => r.vehicule_id === selVehId);
-
-  const alertesUrgentes = alertes.filter(a => !a.read && (a.severity === "critique" || a.severity === "haute"));
-
-  /* ── handlers ── */
-  const handleAddRepair = async () => {
-    if (!repForm.vehicule_id || !repForm.probleme) return;
-    setSaving(true);
-    const cout = parseFloat(repForm.cout_estime) || 0;
-    const depasseSeuil = cout >= SEUIL_REPARATION_CHF;
-    const extra = repForm.type === "externe" ? repForm.garage
-      : repForm.type === "piece" ? `${repForm.piece} — ${repForm.fournisseur}`
-      : "";
-    const statut = depasseSeuil ? "en_attente_validation" : "signalee";
-    await supabase.from("reparations").insert({
-      vehicule_id:     repForm.vehicule_id,
-      description:     repForm.probleme + (repForm.notes ? `\n\nNotes: ${repForm.notes}` : ""),
-      cout:            cout,
-      responsable:     encodeResp(repForm.type, repForm.urgence, extra),
-      statut,
-      alerte_envoyee:  depasseSeuil,
-      date_reparation: repForm.date_reception || new Date().toISOString().slice(0,10),
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  async function handleAddRepair() {
+    const {vehicule_id,description,km_reception,date_reception}=addF;
+    if (!vehicule_id||!description.trim()) return;
+    await sb.from("reparations").insert({
+      vehicule_id,description,
+      km_reception:km_reception?+km_reception:null,
+      date_reception:date_reception||null,
+      statut:"receptionne",alerte_envoyee:false,
     });
-    if (depasseSeuil) {
-      const veh = vehicles.find(v => v.id === repForm.vehicule_id);
-      await supabase.from("alertes").insert({
-        type: "reparation", severity: "haute", read: false,
-        message: `⚠ Réparation ${veh?.plaque ?? repForm.vehicule_id} : ${cout.toFixed(2)} CHF — Dépasse le seuil de ${SEUIL_REPARATION_CHF} CHF. En attente de validation.`,
-      });
+    await sb.from("vehicules").update({etat:"receptionne"}).eq("id",vehicule_id);
+    setAddOpen(false);
+    setAddF({vehicule_id:"",description:"",km_reception:"",date_reception:todayStr()});
+  }
+
+  async function handleVeEdit() {
+    if (!veOpen) return;
+    await sb.from("vehicules").update({
+      km:veF.km?+veF.km:veOpen.km,
+      ct_date:veF.ct_date||null,
+      etat:veF.etat||veOpen.etat,
+      notes:veF.notes,
+    }).eq("id",veOpen.id);
+    setVeOpen(null);
+  }
+
+  async function handleTransition() {
+    if (!tmOpen) return;
+    const {rep,to}=tmOpen; const f=tmF;
+    const upd: Record<string,unknown>={statut:to};
+    if (to==="en_attente_piece") {
+      upd.piece_nom=f.piece_nom||null;
+      upd.piece_fournisseur=f.piece_fournisseur||null;
+      upd.date_commande_piece=f.date_commande_piece||null;
+      upd.date_reception_piece_estimee=f.date_reception_piece_estimee||null;
+      await sb.from("vehicules").update({etat:"en_attente_piece"}).eq("id",rep.vehicule_id);
     }
-    setRepForm(EMPTY_FORM);
-    setShowAddForm(false);
-    setSaving(false);
-    loadData();
-  };
+    if (to==="en_reparation") {
+      upd.date_debut_reparation=f.date_debut_reparation||null;
+      upd.type_intervention=f.type_intervention;
+      upd.nom_garage=f.type_intervention==="externe"?f.nom_garage:null;
+      upd.cout_estime=f.cout_estime?+f.cout_estime:null;
+      if (rep.statut==="en_attente_piece") upd.date_reception_piece_reelle=f.date_reception_piece_reelle||null;
+      await sb.from("vehicules").update({etat:"en_reparation"}).eq("id",rep.vehicule_id);
+    }
+    if (to==="repare") {
+      upd.date_fin_reparation=f.date_fin_reparation||null;
+      upd.cout=f.cout?+f.cout:null;
+      upd.commentaire_mecanicien=f.commentaire_mecanicien||null;
+      upd.km_sortie=f.km_sortie?+f.km_sortie:null;
+      if (rep.date_debut_reparation&&f.date_fin_reparation)
+        upd.duree_jours=nbJours(rep.date_debut_reparation,f.date_fin_reparation);
+      await sb.from("vehicules").update({etat:"repare"}).eq("id",rep.vehicule_id);
+    }
+    if (to==="remis_en_circulation") {
+      upd.date_remise_circulation=f.date_remise_circulation||null;
+      await sb.from("vehicules").update({etat:"en_service"}).eq("id",rep.vehicule_id);
+    }
+    await sb.from("reparations").update(upd).eq("id",rep.id);
+    setTmOpen(null);
+  }
 
-  const handleStatut = async (id: number, statut: string) => {
-    await supabase.from("reparations").update({ statut } as any).eq("id", id);
-    loadData();
-  };
+  function openTrans(rep:Reparation,to:string){setTmOpen({rep,to});setTmF(freshTF());}
+  function openVe(v:Vehicule){setVeOpen(v);setVeF({km:String(v.km),ct_date:v.ct_date||"",etat:v.etat,notes:v.notes||""});}
 
-  const handleVehicleEtat = async (id: string, etat: string) => {
-    await supabase.from("vehicules").update({ etat }).eq("id", id);
-    loadData();
-  };
+  // ── Historique filter ─────────────────────────────────────────────────────
+  const histFiltered = histReps.filter(r=>{
+    if (histVeh!=="all"&&r.vehicule_id!==histVeh) return false;
+    if (histPer==="mois"&&r.created_at<m0) return false;
+    if (histPer==="3mois"){const d=new Date();d.setMonth(d.getMonth()-3);if(r.created_at<d.toISOString())return false;}
+    if (histPer==="annee"){const d=new Date();d.setFullYear(d.getFullYear()-1);if(r.created_at<d.toISOString())return false;}
+    return true;
+  });
 
-  const handleAlerteRead = async (id: number) => {
-    await supabase.from("alertes").update({ read: true }).eq("id", id);
-    loadData();
-  };
+  // ── Repair card ───────────────────────────────────────────────────────────
+  function RepCard({rep,showActions=true}:{rep:Reparation;showActions?:boolean}) {
+    type VehiculeMin = {plaque:string;marque:string;modele:string};
+    const v = rep.vehicule as VehiculeMin|undefined;
+    const trans = TRANS[rep.statut]||[];
+    const duree = rep.date_debut_reparation&&rep.date_fin_reparation
+      ? nbJours(rep.date_debut_reparation,rep.date_fin_reparation) : null;
+    return (
+      <div style={{background:"#fff",borderRadius:16,padding:16,marginBottom:12,
+        boxShadow:"0 2px 8px rgba(0,0,0,0.06)",borderLeft:`4px solid ${RS[rep.statut]?.c??M.gray}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+          <div>
+            <div style={{fontWeight:800,fontSize:16,color:M.navy}}>
+              {v?.plaque}{" "}
+              <span style={{fontWeight:400,color:M.gray,fontSize:14}}>{v?.marque} {v?.modele}</span>
+            </div>
+            <RBadge s={rep.statut}/>
+          </div>
+          {rep.cout&&<div style={{fontWeight:800,color:M.navy,fontSize:16}}>{rep.cout.toLocaleString("fr-CH")} CHF</div>}
+        </div>
+        <p style={{fontSize:14,color:"#1E293B",marginBottom:10,lineHeight:1.5}}>{rep.description}</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}>
+          {rep.date_reception&&<DL label="Réceptionné"        value={fd(rep.date_reception)}/>}
+          {rep.km_reception   &&<DL label="Km réception"       value={`${rep.km_reception.toLocaleString()} km`}/>}
+          {rep.piece_nom      &&<DL label="Pièce"              value={`${rep.piece_nom}${rep.piece_fournisseur?` — ${rep.piece_fournisseur}`:""}`}/>}
+          {rep.date_commande_piece&&<DL label="Commandée le"   value={fd(rep.date_commande_piece)}/>}
+          {rep.date_reception_piece_estimee&&<DL label="Réception est." value={fd(rep.date_reception_piece_estimee)}/>}
+          {rep.date_reception_piece_reelle &&<DL label="Pièce reçue"   value={fd(rep.date_reception_piece_reelle)}/>}
+          {rep.date_debut_reparation&&<DL label="Début réparation"     value={fd(rep.date_debut_reparation)}/>}
+          {rep.type_intervention&&<DL label="Type" value={
+            rep.type_intervention==="externe" ? `Externe — ${rep.nom_garage||""}` :
+            rep.type_intervention==="piece"   ? "Pièce détachée" : "Interne"
+          }/>}
+          {rep.cout_estime    &&<DL label="Coût estimé"       value={`${rep.cout_estime.toLocaleString("fr-CH")} CHF`}/>}
+          {rep.date_fin_reparation&&<DL label="Fin réparation" value={fd(rep.date_fin_reparation)}/>}
+          {duree!==null       &&<DL label="Durée totale"      value={`${duree} jour${duree>1?"s":""}`}/>}
+          {rep.km_sortie      &&<DL label="Km sortie"         value={`${rep.km_sortie.toLocaleString()} km`}/>}
+          {rep.date_remise_circulation&&<DL label="Remis en service" value={fd(rep.date_remise_circulation)}/>}
+        </div>
+        {rep.commentaire_mecanicien&&(
+          <div style={{marginTop:10,padding:10,background:"#F8FAFC",borderRadius:10,fontSize:13,
+            color:"#1E293B",fontStyle:"italic"}}>
+            💬 {rep.commentaire_mecanicien}
+          </div>
+        )}
+        {showActions&&trans.length>0&&(
+          <div style={{marginTop:14,display:"flex",flexWrap:"wrap",gap:8}}>
+            {trans.map(t=>(
+              <button key={t.to} onClick={()=>openTrans(rep,t.to)}
+                style={{padding:"10px 18px",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",
+                  border:"none",background:M.navy,color:"#fff"}}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
+  // ── Early return ──────────────────────────────────────────────────────────
   if (loading) return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center",
-      justifyContent: "center", minHeight: 300, gap: 14, color: M.gray }}>
-      <div style={{ fontSize: 36 }}>🔧</div>
-      <div style={{ fontSize: 17 }}>Chargement de l'atelier…</div>
+    <div style={{display:"flex",justifyContent:"center",alignItems:"center",minHeight:"60vh",color:M.gray}}>
+      Chargement…
     </div>
   );
 
-  const nomMeca = profile?.nom
-    ? `${profile.prenom ?? ""} ${profile.nom}`.trim()
-    : null;
+  const TABS: {id:Tab;label:string;badge?:number}[] = [
+    {id:"dashboard",  label:"Dashboard"},
+    {id:"en_cours",   label:"En cours",   badge:activeReps.length||undefined},
+    {id:"revisions",  label:"Révisions",  badge:urgentVehs.length||undefined},
+    {id:"historique", label:"Historique"},
+    {id:"vehicules",  label:"Véhicules"},
+  ];
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto" }}>
+    <div style={{maxWidth:900,margin:"0 auto"}}>
 
-      {/* ── Bienvenue ── */}
-      <div style={{ background: "linear-gradient(135deg,#1B4332,#2D6A4F)",
-        borderRadius: 20, padding: "24px 22px", marginBottom: 20, color: M.white }}>
-        <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>
-          {nomMeca ? `Bonjour ${nomMeca} !` : "Bonjour — Profil en cours de configuration"}
+      {/* Header */}
+      <div style={{marginBottom:24}}>
+        <h1 style={{fontSize:24,fontWeight:900,color:M.navy}}>🔧 Atelier mécanique</h1>
+        <p style={{color:M.gray,fontSize:14,marginTop:4}}>Gestion des réparations et contrôles techniques</p>
+      </div>
+
+      {/* Stat cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12,marginBottom:16}}>
+        {[
+          {label:"Véhicules",          val:vehicules.length,    icon:"🚌",c:M.navy, bg:"#EFF6FF"},
+          {label:"En atelier",         val:inAtelier.length,    icon:"🔧",c:M.amber,bg:"#FFFBEB"},
+          {label:"Révisions urgentes", val:urgentVehs.length,   icon:"⚠️",c:M.red,  bg:"#FEF2F2", click:()=>setTab("revisions")},
+          {label:"Réparations actives",val:activeReps.length,   icon:"📋",c:M.blue, bg:"#DBEAFE", click:()=>setTab("en_cours")},
+        ].map(c=>(
+          <div key={c.label} onClick={c.click}
+            style={{background:c.bg,borderRadius:16,padding:"14px 16px",
+              cursor:c.click?"pointer":"default",border:`1px solid ${c.c}22`}}>
+            <div style={{fontSize:22}}>{c.icon}</div>
+            <div style={{fontSize:26,fontWeight:900,color:c.c,lineHeight:1.2}}>{c.val}</div>
+            <div style={{fontSize:12,color:M.gray,marginTop:2}}>{c.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Budget */}
+      <div style={{background:"#fff",borderRadius:16,padding:16,marginBottom:24,
+        boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontWeight:700,color:M.navy,fontSize:14}}>Budget réparations — mois en cours</span>
+          <span style={{fontWeight:800,color:budgetMois>BUDGET?M.red:M.navy,fontSize:14}}>
+            {budgetMois.toLocaleString("fr-CH")} / {BUDGET.toLocaleString("fr-CH")} CHF
+          </span>
         </div>
-        <div style={{ fontSize: 15, lineHeight: 1.7, opacity: 0.92 }}>
-          Bienvenue dans votre espace atelier.<br />
-          Retrouvez ici le suivi complet de l'entretien et des réparations
-          de la flotte Taxi Romontois.
+        <div style={{background:"#E2E8F0",borderRadius:99,height:8}}>
+          <div style={{background:budgetMois>BUDGET?M.red:M.green,borderRadius:99,height:8,
+            width:`${Math.min(100,(budgetMois/BUDGET)*100)}%`,transition:"width .3s"}}/>
         </div>
       </div>
 
-      {/* ── 4 Stat cards ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 }}>
-
-        <button onClick={() => setActiveTab("dashboard")}
-          style={{ background: M.white, borderRadius: 16, padding: "18px 20px",
-            border: `2px solid ${M.border}`, textAlign: "left", cursor: "pointer",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 28, marginBottom: 6 }}>🚌</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: M.navy }}>{vehicles.length}</div>
-          <div style={{ fontSize: 13, color: M.gray, marginTop: 2 }}>Total véhicules</div>
-        </button>
-
-        <button onClick={() => setActiveTab("en_cours")}
-          style={{ background: enAtelier.length > 0 ? M.redL : M.white, borderRadius: 16,
-            padding: "18px 20px", border: `2px solid ${enAtelier.length > 0 ? "#FECACA" : M.border}`,
-            textAlign: "left", cursor: "pointer", boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 28, marginBottom: 6 }}>🔧</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: enAtelier.length > 0 ? M.red : M.navy }}>{enAtelier.length}</div>
-          <div style={{ fontSize: 13, color: M.gray, marginTop: 2 }}>En atelier</div>
-        </button>
-
-        <button onClick={() => { setActiveTab("dashboard"); }}
-          style={{ background: urgentes.length > 0 ? M.amberL : M.white, borderRadius: 16,
-            padding: "18px 20px", border: `2px solid ${urgentes.length > 0 ? "#FDE68A" : M.border}`,
-            textAlign: "left", cursor: "pointer", boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 28, marginBottom: 6 }}>⚠️</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: urgentes.length > 0 ? M.amber : M.navy }}>{urgentes.length}</div>
-          <div style={{ fontSize: 13, color: M.gray, marginTop: 2 }}>Révisions urgentes</div>
-        </button>
-
-        <div style={{ background: budgetPct > 90 ? M.redL : M.white, borderRadius: 16,
-          padding: "18px 20px", border: `2px solid ${budgetPct > 90 ? "#FECACA" : M.border}`,
-          boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize: 28, marginBottom: 6 }}>💰</div>
-          <div style={{ fontSize: 20, fontWeight: 900, color: budgetColor(budgetPct) }}>
-            {totalMois.toFixed(0)} CHF
-          </div>
-          <div style={{ fontSize: 12, color: M.gray, marginTop: 2 }}>Budget mois / {BUDGET_MENSUEL} CHF</div>
-          <div style={{ marginTop: 8, background: M.border, borderRadius: 6, height: 8, overflow: "hidden" }}>
-            <div style={{ width: `${budgetPct}%`, height: "100%",
-              background: budgetColor(budgetPct), borderRadius: 6, transition: "width .4s" }} />
-          </div>
-          {budgetPct >= 100 && (
-            <div style={{ fontSize: 12, color: M.red, fontWeight: 700, marginTop: 6 }}>
-              🔴 Limite dépassée — alerte admin envoyée
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Bouton ajouter ── */}
-      <button onClick={() => setShowAddForm(true)}
-        style={{ width: "100%", padding: "15px", minHeight: 54, borderRadius: 14,
-          border: "none", background: `linear-gradient(135deg,${M.navy},${M.blue})`,
-          color: M.white, fontSize: 16, fontWeight: 700, cursor: "pointer", marginBottom: 20 }}>
-        🔧 Ajouter une réparation
-      </button>
-
-      {/* ── Tabs ── */}
-      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 18,
-        scrollbarWidth: "none" } as any}>
-        {([
-          { id: "dashboard",  label: "🏠 Tableau de bord", badge: 0 },
-          { id: "en_cours",   label: "🔧 En réparation",   badge: enCours.length },
-          { id: "terminees",  label: "✅ Terminées",         badge: 0 },
-          { id: "alertes",    label: "🔔 Alertes",           badge: alertesUrgentes.length },
-          { id: "historique", label: "📋 Historique",        badge: 0 },
-        ] as { id: Tab; label: string; badge: number }[]).map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)}
-            style={{ padding: "9px 14px", borderRadius: 22, flexShrink: 0,
-              border: `2px solid ${activeTab === t.id ? M.blue : M.border}`,
-              background: activeTab === t.id ? M.blueL : "transparent",
-              color: activeTab === t.id ? M.blue : M.gray,
-              fontWeight: activeTab === t.id ? 700 : 500,
-              fontSize: 13, cursor: "pointer", whiteSpace: "nowrap",
-              position: "relative" } as any}>
+      {/* Tab bar */}
+      <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:20,paddingBottom:4}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{padding:"10px 16px",borderRadius:12,border:"none",cursor:"pointer",
+              fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap",
+              background:tab===t.id?M.navy:"#E2E8F0",color:tab===t.id?"#fff":M.gray}}>
             {t.label}
-            {t.badge > 0 && (
-              <span style={{ marginLeft: 6, background: M.red, color: M.white,
-                borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 6px" }}>
-                {t.badge}
-              </span>
-            )}
+            {t.badge?(
+              <span style={{background:tab===t.id?"rgba(255,255,255,0.25)":M.red,color:"#fff",
+                borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:800}}>{t.badge}</span>
+            ):null}
           </button>
         ))}
       </div>
 
-      {/* ══ DASHBOARD ══ */}
-      {activeTab === "dashboard" && (
+      {/* ── DASHBOARD ────────────────────────────────────────────────────────── */}
+      {tab==="dashboard"&&(
         <div>
-          {/* Révisions urgentes */}
-          {urgentes.length > 0 && (
-            <Card>
-              <SectionTitle>⚠️ Révisions urgentes ({urgentes.length})</SectionTitle>
-              {urgentes.map(v => (
-                <VehiculeRow key={v.id} v={v} onSelect={() => setSelVehId(v.id)} selected={selVehId === v.id} />
-              ))}
-            </Card>
+          {activeReps.length===0?(
+            <div style={{textAlign:"center",padding:"48px 20px",color:M.gray}}>
+              <div style={{fontSize:44,marginBottom:12}}>✅</div>
+              <p style={{fontWeight:700,fontSize:16}}>Aucune réparation en cours</p>
+            </div>
+          ):(
+            <>
+              <h2 style={{fontSize:15,fontWeight:800,color:M.navy,marginBottom:12}}>
+                Réparations en cours ({activeReps.length})
+              </h2>
+              {activeReps.slice(0,4).map(r=><RepCard key={r.id} rep={r}/>)}
+              {activeReps.length>4&&(
+                <button onClick={()=>setTab("en_cours")}
+                  style={{width:"100%",padding:14,borderRadius:12,border:`2px solid ${M.navy}`,
+                    background:"transparent",color:M.navy,fontWeight:700,fontSize:15,cursor:"pointer",marginBottom:20}}>
+                  Voir toutes les réparations ({activeReps.length})
+                </button>
+              )}
+            </>
           )}
-          {/* Tous les véhicules */}
-          <Card>
-            <SectionTitle>🚌 Tous les véhicules ({vehicles.length})</SectionTitle>
-            {vehicles.map(v => (
-              <VehiculeRow key={v.id} v={v} onSelect={() => setSelVehId(v.id)} selected={selVehId === v.id} />
-            ))}
-          </Card>
-        </div>
-      )}
-
-      {/* ══ EN COURS ══ */}
-      {activeTab === "en_cours" && (
-        <div>
-          {enCours.length === 0
-            ? <EmptyState icon="🔧" text="Aucune réparation en cours" />
-            : enCours.map(r => <RepCard key={r.id} r={r} onStatut={handleStatut}
-                onVehicule={(id) => { setSelVehId(id); setActiveTab("dashboard"); }} />)
-          }
-        </div>
-      )}
-
-      {/* ══ TERMINÉES ══ */}
-      {activeTab === "terminees" && (
-        <div>
-          {terminees.length === 0
-            ? <EmptyState icon="✅" text="Aucune réparation terminée enregistrée" />
-            : terminees.map(r => <RepCard key={r.id} r={r} onStatut={handleStatut}
-                onVehicule={(id) => { setSelVehId(id); setActiveTab("dashboard"); }} />)
-          }
-        </div>
-      )}
-
-      {/* ══ ALERTES ══ */}
-      {activeTab === "alertes" && (
-        <div>
-          {/* Incidents véhicules */}
-          {incidents.length > 0 && (
-            <Card>
-              <SectionTitle>🚗 Incidents signalés ({incidents.length})</SectionTitle>
-              {incidents.map(i => (
-                <div key={i.id} style={{ padding: "13px 0", borderBottom: `1px solid ${M.border}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{i.vehicule?.plaque ?? "—"}</div>
-                    <Pill color={i.status === "resolu" ? M.green : M.amber}
-                      bg={i.status === "resolu" ? M.greenL : M.amberL}>
-                      {i.status === "resolu" ? "Résolu" : "En cours"}
-                    </Pill>
+          {urgentVehs.length>0&&(
+            <div style={{marginTop:16}}>
+              <h2 style={{fontSize:15,fontWeight:800,color:M.red,marginBottom:12}}>
+                ⚠️ Révisions urgentes ({urgentVehs.length})
+              </h2>
+              {urgentVehs.slice(0,3).map(v=>{
+                const ct=ctCheck(v.ct_date);
+                return (
+                  <div key={v.id} style={{background:"#FEF2F2",borderRadius:12,padding:14,
+                    marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                    <div>
+                      <div style={{fontWeight:800,color:M.navy}}>{v.plaque} — {v.marque} {v.modele}</div>
+                      {ct&&<div style={{fontSize:13,color:ct.c,fontWeight:700,marginTop:2}}>{ct.label}</div>}
+                      {v.km>=KM_ALERTE&&<div style={{fontSize:13,color:M.amber,fontWeight:700,marginTop:2}}>
+                        Kilométrage élevé : {v.km.toLocaleString()} km</div>}
+                    </div>
+                    <VBadge s={v.etat}/>
                   </div>
-                  <div style={{ fontSize: 14, color: M.text, marginBottom: 4 }}>{i.description}</div>
-                  <div style={{ fontSize: 12, color: M.gray }}>
-                    {i.conducteur?.prenom} {i.conducteur?.nom} · {fmtShort(i.reported_at)}
-                  </div>
-                </div>
-              ))}
-            </Card>
+                );
+              })}
+              {urgentVehs.length>3&&(
+                <button onClick={()=>setTab("revisions")}
+                  style={{width:"100%",padding:12,borderRadius:12,border:`2px solid ${M.red}`,
+                    background:"transparent",color:M.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+                  Voir toutes les révisions urgentes
+                </button>
+              )}
+            </div>
           )}
-          {/* Alertes */}
-          <Card>
-            <SectionTitle>🔔 Alertes ({alertes.length})</SectionTitle>
-            {alertes.length === 0
-              ? <EmptyState icon="🔔" text="Aucune alerte" />
-              : alertes.map(a => (
-                <div key={a.id} style={{ padding: "14px", borderRadius: 12, marginBottom: 10,
-                  background: a.severity === "critique" ? M.redL : a.severity === "haute" ? M.amberL : M.grayL,
-                  border: `1px solid ${a.severity === "critique" ? "#FECACA" : a.severity === "haute" ? "#FDE68A" : M.border}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-                    <Pill color={a.severity === "critique" ? M.red : a.severity === "haute" ? M.amber : M.gray}
-                      bg={a.severity === "critique" ? "#FEE2E2" : a.severity === "haute" ? "#FEF3C7" : M.grayL}>
-                      {a.severity === "critique" ? "🔴 Critique" : a.severity === "haute" ? "🟠 Haute" : "🟡 Normale"}
-                    </Pill>
-                    {!a.read && (
-                      <button onClick={() => handleAlerteRead(a.id)}
-                        style={{ padding: "4px 10px", borderRadius: 8, border: `1px solid ${M.border}`,
-                          background: M.white, fontSize: 12, cursor: "pointer", color: M.green, fontWeight: 700 }}>
-                        ✓ Traité
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 14, color: M.text, fontWeight: a.read ? 400 : 600 }}>{a.message}</div>
-                  <div style={{ fontSize: 12, color: M.gray, marginTop: 4 }}>{fmtDate(a.created_at)}</div>
-                </div>
-              ))
-            }
-          </Card>
         </div>
       )}
 
-      {/* ══ HISTORIQUE ══ */}
-      {activeTab === "historique" && (
-        <Card>
-          <SectionTitle>📋 Historique complet ({reparations.length} réparations)</SectionTitle>
-          {reparations.length === 0
-            ? <EmptyState icon="📋" text="Aucune réparation enregistrée" />
-            : reparations.map(r => <RepCard key={r.id} r={r} onStatut={handleStatut}
-                onVehicule={(id) => { setSelVehId(id); setActiveTab("dashboard"); }} />)
-          }
-        </Card>
-      )}
-
-      {/* ══ VEHICLE DETAIL MODAL ══ */}
-      {selVeh && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
-          zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
-          onClick={e => { if (e.target === e.currentTarget) setSelVehId(null); }}>
-          <div style={{ background: M.white, borderRadius: "20px 20px 0 0",
-            width: "100%", maxWidth: 680, maxHeight: "90vh",
-            overflowY: "auto", padding: "24px 22px" }}>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: M.navy }}>{selVeh.plaque}</div>
-                <div style={{ fontSize: 14, color: M.gray }}>{selVeh.marque} {selVeh.modele}</div>
-              </div>
-              <button onClick={() => setSelVehId(null)}
-                style={{ background: M.grayL, border: "none", borderRadius: "50%",
-                  width: 36, height: 36, fontSize: 20, cursor: "pointer", color: M.gray }}>
-                ×
-              </button>
-            </div>
-
-            {/* Infos véhicule */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-              <InfoRow icon="🔢" label="Kilométrage" value={`${selVeh.km.toLocaleString("fr-FR")} km`}
-                sub={selVeh.km > 130000 ? "⚠ Kilométrage élevé" : undefined} />
-              <InfoRow icon="📋" label="Contrôle technique"
-                value={<span style={{ color: ctStatut(selVeh.ct_date) === "expire" ? M.red : M.text }}>
-                  {selVeh.ct_date || "—"} · {(ctBadge(selVeh.ct_date) as any)?.label ?? "—"}
-                </span>} />
-              <InfoRow icon="🛡" label="Assurance" value={selVeh.assurance_date || "—"} />
-              {selVeh.circuit && (
-                <InfoRow icon="🗺" label="Circuit" value={`${selVeh.circuit.emoji} ${selVeh.circuit.nom}`} />
-              )}
-              {selVeh.conducteur && (
-                <InfoRow icon="👤" label="Conducteur"
-                  value={`${selVeh.conducteur.prenom} ${selVeh.conducteur.nom}`} />
-              )}
-            </div>
-
-            {/* État véhicule */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>État du véhicule</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                {([["bon","✅ Bon état",M.green],["attention","⚠️ Attention",M.amber],["atelier","🔧 Atelier",M.red]] as const).map(([e,l,c]) => (
-                  <button key={e} onClick={() => handleVehicleEtat(selVeh.id, e)}
-                    style={{ flex: 1, padding: "11px 8px", borderRadius: 10, fontSize: 12, fontWeight: 700,
-                      border: `2px solid ${selVeh.etat === e ? c : M.border}`,
-                      background: selVeh.etat === e ? c + "22" : M.white,
-                      color: selVeh.etat === e ? c : M.gray, cursor: "pointer" }}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Réparations du véhicule */}
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>
-              Historique réparations ({selVehReps.length})
-            </div>
-            {selVehReps.length === 0
-              ? <div style={{ textAlign: "center", padding: 24, color: M.gray, fontSize: 15 }}>
-                  Aucune réparation enregistrée
-                </div>
-              : selVehReps.map(r => <RepCard key={r.id} r={r} compact onStatut={handleStatut} />)
-            }
-
-            <button onClick={() => window.print()}
-              style={{ width: "100%", marginTop: 16, padding: "13px", borderRadius: 12,
-                border: `2px solid ${M.navy}`, background: "transparent",
-                color: M.navy, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-              🖨 Télécharger fiche réparations PDF
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ══ ADD REPAIR MODAL ══ */}
-      {showAddForm && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
-          zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
-          onClick={e => { if (e.target === e.currentTarget) setShowAddForm(false); }}>
-          <div style={{ background: M.white, borderRadius: "20px 20px 0 0",
-            width: "100%", maxWidth: 680, maxHeight: "95vh",
-            overflowY: "auto", padding: "24px 22px" }}>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 20, fontWeight: 900, color: M.navy }}>🔧 Ajouter une réparation</div>
-              <button onClick={() => setShowAddForm(false)}
-                style={{ background: M.grayL, border: "none", borderRadius: "50%",
-                  width: 36, height: 36, fontSize: 20, cursor: "pointer", color: M.gray }}>×</button>
-            </div>
-
-            {/* Véhicule */}
-            <div style={{ marginBottom: 16 }}>
-              <FieldLabel>Véhicule concerné</FieldLabel>
-              <select value={repForm.vehicule_id} onChange={e => setF("vehicule_id", e.target.value)}
-                style={{ width: "100%", padding: "13px 14px", borderRadius: 10,
-                  border: `1px solid ${M.border}`, fontSize: 16, background: M.grayL,
-                  color: M.text, minHeight: 48 }}>
-                <option value="">— Sélectionner un véhicule —</option>
-                {vehicles.map(v => <option key={v.id} value={v.id}>{v.plaque} — {v.marque} {v.modele}</option>)}
-              </select>
-            </div>
-
-            {/* Problème */}
-            <div style={{ marginBottom: 16 }}>
-              <FieldLabel>Problème observé</FieldLabel>
-              <textarea value={repForm.probleme} onChange={e => setF("probleme", e.target.value)}
-                placeholder="Décrivez le problème…" rows={3}
-                style={{ width: "100%", padding: "13px 14px", borderRadius: 10,
-                  border: `1px solid ${M.border}`, fontSize: 16, resize: "vertical",
-                  boxSizing: "border-box", fontFamily: "inherit", background: M.grayL, color: M.text }} />
-            </div>
-
-            {/* Type intervention */}
-            <div style={{ marginBottom: 16 }}>
-              <FieldLabel>Type d'intervention</FieldLabel>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {([["interne","🔧 Réparation interne"],["externe","🏢 Réparation externe"],["piece","📦 Commande de pièce"]] as const).map(([k,l]) => (
-                  <button key={k} onClick={() => setF("type", k)}
-                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px",
-                      borderRadius: 12, border: `2px solid ${repForm.type === k ? M.blue : M.border}`,
-                      background: repForm.type === k ? M.blueL : M.white,
-                      cursor: "pointer", textAlign: "left", minHeight: 50 }}>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: repForm.type === k ? M.blue : M.text }}>{l}</span>
-                    {repForm.type === k && <span style={{ marginLeft: "auto", color: M.blue }}>✓</span>}
-                  </button>
-                ))}
-              </div>
-              {repForm.type === "externe" && (
-                <div style={{ marginTop: 10 }}>
-                  <Input value={repForm.garage} onChange={v => setF("garage", v)} placeholder="Nom du garage" />
-                </div>
-              )}
-              {repForm.type === "piece" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-                  <Input value={repForm.piece} onChange={v => setF("piece", v)} placeholder="Désignation de la pièce" />
-                  <Input value={repForm.fournisseur} onChange={v => setF("fournisseur", v)} placeholder="Fournisseur" />
-                </div>
-              )}
-            </div>
-
-            {/* Urgence */}
-            <div style={{ marginBottom: 16 }}>
-              <FieldLabel>Niveau d'urgence</FieldLabel>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {(Object.entries(URGENCE_MAP) as [NiveauUrgence, typeof URGENCE_MAP[NiveauUrgence]][]).map(([k, u]) => (
-                  <button key={k} onClick={() => setF("urgence", k)}
-                    style={{ padding: "12px 14px", borderRadius: 12, minHeight: 50,
-                      border: `2px solid ${repForm.urgence === k ? u.color : M.border}`,
-                      background: repForm.urgence === k ? u.bg : M.white,
-                      cursor: "pointer", fontWeight: 700, fontSize: 14,
-                      color: repForm.urgence === k ? u.color : M.gray }}>
-                    {u.icon} {u.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Coût + Date */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-              <div>
-                <FieldLabel>Coût estimé (CHF)</FieldLabel>
-                <Input type="number" value={repForm.cout_estime} onChange={v => setF("cout_estime", v)} placeholder="ex: 450" />
-              </div>
-              <div>
-                <FieldLabel>Date de réception</FieldLabel>
-                <Input type="date" value={repForm.date_reception} onChange={v => setF("date_reception", v)} />
-              </div>
-            </div>
-
-            {/* Seuil dépassé */}
-            {repForm.cout_estime && parseFloat(repForm.cout_estime) >= SEUIL_REPARATION_CHF && (
-              <div style={{ background: M.amberL, border: "1px solid #FDE68A",
-                borderRadius: 12, padding: "14px", marginBottom: 16 }}>
-                <div style={{ fontWeight: 700, color: M.amber, marginBottom: 4 }}>
-                  ⚠ Montant ≥ {SEUIL_REPARATION_CHF} CHF
-                </div>
-                <div style={{ fontSize: 14, color: M.text }}>
-                  Ce montant dépasse la limite autorisée. Votre demande sera mise en attente
-                  de validation par l'administrateur. Une alerte sera envoyée automatiquement.
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            <div style={{ marginBottom: 20 }}>
-              <FieldLabel>Notes complémentaires (optionnel)</FieldLabel>
-              <textarea value={repForm.notes} onChange={e => setF("notes", e.target.value)}
-                placeholder="Informations supplémentaires…" rows={2}
-                style={{ width: "100%", padding: "13px 14px", borderRadius: 10,
-                  border: `1px solid ${M.border}`, fontSize: 16, resize: "vertical",
-                  boxSizing: "border-box", fontFamily: "inherit", background: M.grayL, color: M.text }} />
-            </div>
-
-            <BigBtn onClick={handleAddRepair}
-              disabled={saving || !repForm.vehicule_id || !repForm.probleme}
-              color="linear-gradient(135deg,#1B4332,#2D6A4F)">
-              {saving ? "Enregistrement…" : "✅ Enregistrer la réparation"}
-            </BigBtn>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─── sub-components définis hors du composant principal ─── */
-
-function VehiculeRow({ v, onSelect, selected }: { v: Vehicule; onSelect: () => void; selected: boolean }) {
-  const ct = ctStatut(v.ct_date);
-  return (
-    <div onClick={onSelect}
-      style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "13px 0", borderBottom: `1px solid ${M.border}`, cursor: "pointer",
-        background: selected ? M.blueL : "transparent", borderRadius: selected ? 10 : 0,
-        paddingLeft: selected ? 12 : 0, paddingRight: selected ? 12 : 0 }}>
-      <div>
-        <div style={{ fontWeight: 700, fontSize: 15, color: M.text }}>{v.plaque} — {v.marque} {v.modele}</div>
-        <div style={{ fontSize: 12, color: M.gray, marginTop: 2 }}>
-          {v.km.toLocaleString("fr-FR")} km · CT {v.ct_date || "—"}
-          {v.circuit && ` · ${v.circuit.emoji} ${v.circuit.nom}`}
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        {v.km > 130000 && <Pill color={M.red} bg={M.redL}>⚠ Km</Pill>}
-        {ct === "expire" && <Pill color={M.red} bg={M.redL}>CT expiré</Pill>}
-        {ct === "bientot" && <Pill color={M.amber} bg={M.amberL}>CT bientôt</Pill>}
-        <Pill
-          color={v.etat === "bon" ? M.green : v.etat === "atelier" ? M.red : M.amber}
-          bg={v.etat === "bon" ? M.greenL : v.etat === "atelier" ? M.redL : M.amberL}>
-          {v.etat === "bon" ? "✅ OK" : v.etat === "atelier" ? "🔧 Atelier" : "⚠️"}
-        </Pill>
-      </div>
-    </div>
-  );
-}
-
-function RepCard({ r, onStatut, compact = false, onVehicule }: {
-  r: Reparation; onStatut?: (id: number, s: string) => void;
-  compact?: boolean; onVehicule?: (id: string) => void;
-}) {
-  const si = statutInfo(r.statut);
-  const { urgence, type, extra } = decodeResp(r.responsable);
-  const u = URGENCE_MAP[urgence] ?? URGENCE_MAP.normal;
-  const NEXT_STATUTS: Record<string, string[]> = {
-    signalee:              ["en_attente_piece", "en_cours"],
-    en_attente_validation: ["en_cours", "refusee"],
-    en_attente_piece:      ["en_cours"],
-    en_cours:              ["termine"],
-    termine:               [],
-    refusee:               [],
-  };
-  const nextStatuts = NEXT_STATUTS[r.statut] ?? [];
-  return (
-    <div style={{ borderRadius: 14, padding: compact ? "12px" : "16px",
-      marginBottom: 12, border: `1px solid ${M.border}`,
-      background: r.statut === "refusee" ? M.redL : r.statut === "termine" ? M.greenL : M.white }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
+      {/* ── EN COURS ─────────────────────────────────────────────────────────── */}
+      {tab==="en_cours"&&(
         <div>
-          {onVehicule && r.vehicule && (
-            <button onClick={() => onVehicule(r.vehicule_id)}
-              style={{ background: "none", border: "none", fontWeight: 800, fontSize: 15,
-                color: M.navy, cursor: "pointer", padding: 0, marginBottom: 2 }}>
-              {r.vehicule.plaque}
-            </button>
+          {activeReps.length===0?(
+            <div style={{textAlign:"center",padding:"60px 20px",color:M.gray}}>
+              <div style={{fontSize:48}}>✅</div>
+              <p style={{fontWeight:700,marginTop:12,fontSize:16}}>Aucune réparation en cours</p>
+              <p style={{fontSize:14,marginTop:4}}>Cliquez sur &quot;+ Réceptionner&quot; pour démarrer</p>
+            </div>
+          ):(
+            activeReps.map(r=><RepCard key={r.id} rep={r}/>)
           )}
-          {!onVehicule && r.vehicule && (
-            <div style={{ fontWeight: 800, fontSize: 14, color: M.navy }}>{r.vehicule.plaque}</div>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <Pill color={u.color} bg={u.bg}>{u.icon} {u.label}</Pill>
-          <Pill color={si.color} bg={si.bg}>{si.icon} {si.label}</Pill>
-        </div>
-      </div>
-      <div style={{ fontSize: 14, color: M.text, marginBottom: 6 }}>{r.description}</div>
-      {extra && (
-        <div style={{ fontSize: 12, color: M.gray, marginBottom: 4 }}>
-          {type === "externe" ? `🏢 ${extra}` : type === "piece" ? `📦 ${extra}` : "🔧 Interne"}
         </div>
       )}
-      <div style={{ fontSize: 12, color: M.gray, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <span>{new Date(r.date_reparation).toLocaleDateString("fr-FR")}</span>
-        {r.cout > 0 && <span>· {r.cout.toFixed(2)} CHF {r.alerte_envoyee ? "· ⚠ Alerte envoyée" : ""}</span>}
-      </div>
-      {!compact && onStatut && nextStatuts.length > 0 && (
-        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-          {nextStatuts.map(ns => {
-            const nsi = statutInfo(ns);
+
+      {/* ── RÉVISIONS ────────────────────────────────────────────────────────── */}
+      {tab==="revisions"&&(
+        <div>
+          <h2 style={{fontSize:15,fontWeight:800,color:M.navy,marginBottom:16}}>
+            Révisions urgentes ({urgentVehs.length})
+          </h2>
+          {urgentVehs.length===0?(
+            <div style={{textAlign:"center",padding:"60px 20px",color:M.gray}}>
+              <div style={{fontSize:48}}>✅</div>
+              <p style={{fontWeight:700,marginTop:12}}>Tous les véhicules sont à jour</p>
+            </div>
+          ):urgentVehs.map(v=>{
+            const ct=ctCheck(v.ct_date);
             return (
-              <button key={ns} onClick={() => onStatut(r.id, ns)}
-                style={{ padding: "8px 14px", borderRadius: 10, border: `1px solid ${nsi.color}`,
-                  background: M.white, color: nsi.color, fontSize: 13, fontWeight: 700,
-                  cursor: "pointer" }}>
-                {nsi.icon} {nsi.label}
-              </button>
+              <div key={v.id} style={{background:"#fff",borderRadius:16,padding:16,marginBottom:12,
+                boxShadow:"0 2px 8px rgba(0,0,0,0.06)",borderLeft:`4px solid ${ct?ct.c:M.amber}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",
+                  marginBottom:10,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:16,color:M.navy}}>{v.plaque}</div>
+                    <div style={{fontSize:14,color:M.gray}}>{v.marque} {v.modele}</div>
+                  </div>
+                  <VBadge s={v.etat}/>
+                </div>
+                {ct&&<div style={{fontSize:14,fontWeight:700,color:ct.c,marginBottom:4}}>⚠️ {ct.label}</div>}
+                {v.km>=KM_ALERTE&&<div style={{fontSize:14,fontWeight:700,color:M.amber,marginBottom:4}}>
+                  🛞 Kilométrage élevé : {v.km.toLocaleString()} km</div>}
+                <div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <button onClick={()=>{setAddF(p=>({...p,vehicule_id:v.id}));setAddOpen(true);}}
+                    style={{padding:"10px 16px",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",
+                      border:"none",background:M.navy,color:"#fff"}}>
+                    🔧 Créer une réparation
+                  </button>
+                  <button onClick={()=>openVe(v)}
+                    style={{padding:"10px 16px",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",
+                      border:`2px solid ${M.navy}`,background:"transparent",color:M.navy}}>
+                    📅 Mettre à jour le CT
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>
       )}
-    </div>
-  );
-}
 
-function EmptyState({ icon, text }: { icon: string; text: string }) {
-  return (
-    <div style={{ textAlign: "center", padding: "32px 0", color: M.gray }}>
-      <div style={{ fontSize: 36, marginBottom: 10 }}>{icon}</div>
-      <div style={{ fontSize: 16 }}>{text}</div>
+      {/* ── HISTORIQUE ───────────────────────────────────────────────────────── */}
+      {tab==="historique"&&(
+        <div>
+          <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+            <select value={histVeh} onChange={e=>setHistVeh(e.target.value)}
+              style={{...baseInp,flex:1,minWidth:140} as React.CSSProperties}>
+              <option value="all">Tous les véhicules</option>
+              {vehicules.map(v=><option key={v.id} value={v.id}>{v.plaque} — {v.marque}</option>)}
+            </select>
+            <select value={histPer} onChange={e=>setHistPer(e.target.value)}
+              style={{...baseInp,flex:1,minWidth:120} as React.CSSProperties}>
+              <option value="all">Toutes périodes</option>
+              <option value="mois">Ce mois</option>
+              <option value="3mois">3 derniers mois</option>
+              <option value="annee">Cette année</option>
+            </select>
+          </div>
+          <p style={{color:M.gray,fontSize:13,marginBottom:12}}>{histFiltered.length} réparation(s) terminée(s)</p>
+          {histFiltered.length===0?(
+            <div style={{textAlign:"center",padding:"60px 20px",color:M.gray}}>
+              <div style={{fontSize:48}}>📭</div>
+              <p style={{fontWeight:700,marginTop:12}}>Aucune réparation terminée</p>
+            </div>
+          ):histFiltered.map(r=>{
+            type VMin={plaque?:string;marque?:string;modele?:string};
+            const vv=r.vehicule as VMin|undefined;
+            const duree=r.date_debut_reparation&&r.date_fin_reparation
+              ?nbJours(r.date_debut_reparation,r.date_fin_reparation):null;
+            return (
+              <div key={r.id} style={{background:"#fff",borderRadius:16,padding:16,marginBottom:12,
+                boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",
+                  marginBottom:8,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:15,color:M.navy}}>
+                      {vv?.plaque} <span style={{color:M.gray,fontWeight:400,fontSize:13}}>{vv?.marque} {vv?.modele}</span>
+                    </div>
+                    <RBadge s={r.statut}/>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    {r.cout&&<div style={{fontWeight:800,color:M.navy}}>{r.cout.toLocaleString("fr-CH")} CHF</div>}
+                    <button onClick={()=>setDetailOpen(r)}
+                      style={{fontSize:13,color:M.blue,background:"none",border:"none",cursor:"pointer",
+                        fontWeight:700,marginTop:4}}>Détails →</button>
+                  </div>
+                </div>
+                <p style={{fontSize:14,color:"#475569",marginBottom:8}}>{r.description}</p>
+                <div style={{display:"flex",gap:12,fontSize:13,color:M.gray,flexWrap:"wrap"}}>
+                  {r.date_reception&&<span>📥 {fd(r.date_reception)}</span>}
+                  {r.date_fin_reparation&&<span>✅ {fd(r.date_fin_reparation)}</span>}
+                  {duree!==null&&<span>⏱ {duree}j</span>}
+                  {r.date_remise_circulation&&<span>🚌 {fd(r.date_remise_circulation)}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── VÉHICULES ────────────────────────────────────────────────────────── */}
+      {tab==="vehicules"&&(
+        <div>
+          {vehicules.map(v=>{
+            const ct=ctCheck(v.ct_date);
+            type CMin={nom?:string;num?:string};
+            type DMin={prenom?:string;nom?:string};
+            const circ=v.circuit as CMin|undefined;
+            const cond=v.conducteur as DMin|undefined;
+            return (
+              <div key={v.id} style={{background:"#fff",borderRadius:16,padding:16,marginBottom:10,
+                boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",
+                  marginBottom:8,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:16,color:M.navy}}>{v.plaque}</div>
+                    <div style={{fontSize:14,color:M.gray}}>{v.marque} {v.modele} · {v.places} places</div>
+                  </div>
+                  <VBadge s={v.etat}/>
+                </div>
+                <div style={{display:"flex",gap:12,fontSize:13,color:M.gray,flexWrap:"wrap",marginBottom:8}}>
+                  <span>🛞 {v.km.toLocaleString()} km</span>
+                  {v.ct_date&&<span style={{color:ct?ct.c:"#059669",fontWeight:ct?700:400}}>
+                    CT: {v.ct_date}{ct?` (${ct.label.split("(")[0].trim()})`:""}</span>}
+                  {circ&&<span>🔒 {circ.num||circ.nom||""}</span>}
+                  {cond&&<span>🔒 {cond.prenom} {cond.nom}</span>}
+                </div>
+                {v.notes&&<p style={{fontSize:13,color:"#475569",fontStyle:"italic",marginBottom:8}}>
+                  📝 {v.notes}</p>}
+                {ct&&<div style={{fontSize:13,fontWeight:700,color:ct.c,marginBottom:8}}>⚠️ {ct.label}</div>}
+                <button onClick={()=>openVe(v)}
+                  style={{padding:"9px 16px",borderRadius:10,fontWeight:700,fontSize:14,cursor:"pointer",
+                    border:`2px solid ${M.navy}`,background:"transparent",color:M.navy}}>
+                  ✏️ Modifier
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* FAB */}
+      <button onClick={()=>setAddOpen(true)}
+        style={{position:"fixed",bottom:24,right:24,zIndex:90,background:M.navy,color:"#fff",
+          border:"none",borderRadius:20,padding:"14px 22px",fontSize:15,fontWeight:800,cursor:"pointer",
+          boxShadow:"0 4px 20px rgba(13,59,122,0.35)"}}>
+        + Réceptionner
+      </button>
+
+      {/* ═══════════ MODALS ══════════════════════════════════════════════════ */}
+
+      {/* Réceptionner */}
+      {addOpen&&(
+        <BSheet title="Réceptionner un véhicule" onClose={()=>setAddOpen(false)}>
+          <Sel label="Véhicule *" value={addF.vehicule_id} onChange={v=>setAddF(p=>({...p,vehicule_id:v}))}
+            opts={[{v:"",l:"— Choisir un véhicule —"},...vehicules.map(v=>({v:v.id,l:`${v.plaque} — ${v.marque} ${v.modele}`}))]}/>
+          <TA label="Problème observé *" value={addF.description} onChange={v=>setAddF(p=>({...p,description:v}))}/>
+          <Inp label="Kilométrage à la réception" type="number" value={addF.km_reception}
+            onChange={v=>setAddF(p=>({...p,km_reception:v}))}/>
+          <Inp label="Date de réception" type="date" value={addF.date_reception}
+            onChange={v=>setAddF(p=>({...p,date_reception:v}))}/>
+          <PrimaryBtn label="Réceptionner le véhicule" onClick={handleAddRepair} full/>
+        </BSheet>
+      )}
+
+      {/* Modifier véhicule */}
+      {veOpen&&(
+        <BSheet title={`Modifier — ${veOpen.plaque}`} onClose={()=>setVeOpen(null)}>
+          <div style={{background:"#F8FAFC",borderRadius:12,padding:12,marginBottom:16}}>
+            <p style={{fontSize:12,fontWeight:700,color:M.gray,marginBottom:8}}>🔒 Champs verrouillés</p>
+            <DL label="Immatriculation" value={veOpen.plaque}/>
+            <DL label="Circuit" value={(veOpen.circuit as {nom?:string}|undefined)?.nom||"Non assigné"}/>
+            <DL label="Conducteur" value={(veOpen.conducteur as {prenom?:string;nom?:string}|undefined)
+              ? `${(veOpen.conducteur as {prenom?:string}).prenom||""} ${(veOpen.conducteur as {nom?:string}).nom||""}`.trim()
+              : "Non assigné"}/>
+          </div>
+          <Inp label="Kilométrage actuel" type="number" value={veF.km} onChange={v=>setVeF(p=>({...p,km:v}))}/>
+          <Inp label="Prochain CT (format MM.YYYY)" value={veF.ct_date} placeholder="ex: 06.2026"
+            onChange={v=>setVeF(p=>({...p,ct_date:v}))}/>
+          <Sel label="État du véhicule" value={veF.etat} onChange={v=>setVeF(p=>({...p,etat:v}))}
+            opts={Object.entries(VS).map(([k,c])=>({v:k,l:`${c.e} ${c.l}`}))}/>
+          <TA label="Notes techniques" value={veF.notes} onChange={v=>setVeF(p=>({...p,notes:v}))}/>
+          <PrimaryBtn label="Enregistrer" onClick={handleVeEdit} full/>
+        </BSheet>
+      )}
+
+      {/* Transition workflow */}
+      {tmOpen&&(()=>{
+        const {rep,to}=tmOpen;
+        const titles: Record<string,string>={
+          en_attente_piece:"Commander une pièce",
+          en_reparation:rep.statut==="en_attente_piece"?"Pièce reçue — Démarrer la réparation":"Commencer la réparation",
+          repare:"Marquer le véhicule réparé",
+          remis_en_circulation:"Remettre en circulation",
+        };
+        return (
+          <BSheet title={titles[to]||to} onClose={()=>setTmOpen(null)}>
+            {to==="en_attente_piece"&&<>
+              <Inp label="Pièce commandée" value={tmF.piece_nom} onChange={v=>setTmF(p=>({...p,piece_nom:v}))}/>
+              <Inp label="Fournisseur" value={tmF.piece_fournisseur} onChange={v=>setTmF(p=>({...p,piece_fournisseur:v}))}/>
+              <Inp label="Date de commande" type="date" value={tmF.date_commande_piece}
+                onChange={v=>setTmF(p=>({...p,date_commande_piece:v}))}/>
+              <Inp label="Réception pièce estimée" type="date" value={tmF.date_reception_piece_estimee}
+                onChange={v=>setTmF(p=>({...p,date_reception_piece_estimee:v}))}/>
+            </>}
+            {to==="en_reparation"&&rep.statut==="en_attente_piece"&&(
+              <Inp label="Date de réception de la pièce" type="date" value={tmF.date_reception_piece_reelle}
+                onChange={v=>setTmF(p=>({...p,date_reception_piece_reelle:v}))}/>
+            )}
+            {to==="en_reparation"&&<>
+              <Inp label="Date de début" type="date" value={tmF.date_debut_reparation}
+                onChange={v=>setTmF(p=>({...p,date_debut_reparation:v}))}/>
+              <Sel label="Type d'intervention" value={tmF.type_intervention}
+                onChange={v=>setTmF(p=>({...p,type_intervention:v as "interne"|"externe"|"piece"}))}
+                opts={[{v:"interne",l:"🏭 Interne (atelier)"},{v:"externe",l:"🏗️ Externe (garage)"},{v:"piece",l:"🔩 Remplacement de pièce"}]}/>
+              {tmF.type_intervention==="externe"&&(
+                <Inp label="Nom du garage" value={tmF.nom_garage} onChange={v=>setTmF(p=>({...p,nom_garage:v}))}/>
+              )}
+              <Inp label="Coût estimé (CHF)" type="number" value={tmF.cout_estime}
+                onChange={v=>setTmF(p=>({...p,cout_estime:v}))}/>
+            </>}
+            {to==="repare"&&<>
+              <Inp label="Date de fin de réparation" type="date" value={tmF.date_fin_reparation}
+                onChange={v=>setTmF(p=>({...p,date_fin_reparation:v}))}/>
+              <Inp label="Coût réel final (CHF)" type="number" value={tmF.cout}
+                onChange={v=>setTmF(p=>({...p,cout:v}))}/>
+              <Inp label="Kilométrage à la sortie" type="number" value={tmF.km_sortie}
+                onChange={v=>setTmF(p=>({...p,km_sortie:v}))}/>
+              <TA label="Commentaire du mécanicien" value={tmF.commentaire_mecanicien}
+                onChange={v=>setTmF(p=>({...p,commentaire_mecanicien:v}))}/>
+            </>}
+            {to==="remis_en_circulation"&&<>
+              <div style={{background:"#DCFCE7",borderRadius:12,padding:14,marginBottom:16}}>
+                <p style={{fontWeight:700,color:M.green,fontSize:14}}>
+                  ✅ Le véhicule repassera automatiquement en &quot;En service&quot;
+                  et sera archivé dans l&apos;historique.
+                </p>
+              </div>
+              <Inp label="Date de remise en service" type="date" value={tmF.date_remise_circulation}
+                onChange={v=>setTmF(p=>({...p,date_remise_circulation:v}))}/>
+            </>}
+            <PrimaryBtn label="Confirmer" onClick={handleTransition} color={M.green} full/>
+          </BSheet>
+        );
+      })()}
+
+      {/* Détail historique */}
+      {detailOpen&&(
+        <BSheet title={`Fiche réparation`} onClose={()=>setDetailOpen(null)}>
+          <RepCard rep={detailOpen} showActions={false}/>
+          <OutlineBtn label="🖨 Imprimer cette fiche" onClick={()=>window.print()} color={M.navy}/>
+        </BSheet>
+      )}
+
     </div>
   );
 }

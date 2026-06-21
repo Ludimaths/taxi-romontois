@@ -1,10 +1,10 @@
 export type Role = "gestionnaire" | "conducteur" | "mecanicien" | "parent" | "admin";
 
 export type DriverStatus = "en_service" | "en_attente" | "absent" | "disponible" | "termine";
-export type VehicleState = "bon" | "atelier" | "attention";
+export type VehicleState = "en_service" | "receptionne" | "en_attente_piece" | "en_reparation" | "repare" | "attention";
 export type IncidentStatus = "en_attente" | "en_cours" | "resolu";
 export type AlertSeverity = "normale" | "haute" | "critique";
-export type RepairStatus = "signalee" | "en_attente_validation" | "en_attente_piece" | "en_cours" | "termine" | "refusee";
+export type RepairStatus = "receptionne" | "en_attente_piece" | "en_reparation" | "repare" | "remis_en_circulation" | "annulee";
 
 export interface CercleScolaire {
   id: number;
@@ -61,6 +61,7 @@ export interface Vehicule {
   ct_date?: string;
   assurance_date?: string;
   km: number;
+  notes?: string;
   qr_token: string;
   created_at: string;
 }
@@ -159,8 +160,24 @@ export interface Reparation {
   vehicule_id: string;
   vehicule?: Vehicule;
   description: string;
-  cout: number;
-  date_reparation: string;
+  cout?: number;
+  cout_estime?: number;
+  date_reparation?: string;
+  // Workflow fields
+  date_reception?: string;
+  km_reception?: number;
+  piece_nom?: string;
+  piece_fournisseur?: string;
+  date_commande_piece?: string;
+  date_reception_piece_estimee?: string;
+  date_reception_piece_reelle?: string;
+  date_debut_reparation?: string;
+  type_intervention?: "interne" | "externe" | "piece";
+  nom_garage?: string;
+  date_fin_reparation?: string;
+  km_sortie?: number;
+  commentaire_mecanicien?: string;
+  date_remise_circulation?: string;
   statut: RepairStatus;
   responsable?: string;
   alerte_envoyee: boolean;

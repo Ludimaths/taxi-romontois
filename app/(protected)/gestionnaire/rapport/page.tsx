@@ -57,7 +57,7 @@ export default function RapportPage() {
   const nonCouverts = circuits.filter(c => !drivers.find(d => d.circuit_id === c.id && d.status !== "absent"));
   const alertesCritiques = alertes.filter(a => a.severity === "critique");
   const alertesHautes = alertes.filter(a => a.severity === "haute");
-  const repEnCours = reparations.filter(r => r.statut === "en_cours");
+  const repEnCours = reparations.filter(r => ["receptionne","en_attente_piece","en_reparation","repare"].includes(r.statut));
 
   const periodeLabel = { jour: "Aujourd'hui", semaine: "7 derniers jours", mois: "30 derniers jours" };
 
@@ -243,13 +243,13 @@ export default function RapportPage() {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>{(r as any).vehicule?.plaque} — {r.description}</div>
                   <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>
-                    {new Date(r.date_reparation).toLocaleDateString("fr-FR")} · {r.cout?.toFixed(2)} CHF
+                    {r.date_reparation ? new Date(r.date_reparation).toLocaleDateString("fr-FR") : r.date_reception ? new Date(r.date_reception).toLocaleDateString("fr-FR") : "—"} · {r.cout != null ? r.cout.toFixed(2) : "—"} CHF
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  {r.cout >= 1000 && <Badge color="red">≥1000 CHF</Badge>}
-                  <Badge color={r.statut === "termine" ? "green" : "amber"}>
-                    {r.statut === "termine" ? "Terminé" : "En cours"}
+                  {(r.cout ?? 0) >= 1000 && <Badge color="red">≥1000 CHF</Badge>}
+                  <Badge color={r.statut === "remis_en_circulation" ? "green" : "amber"}>
+                    {r.statut === "remis_en_circulation" ? "Terminé" : "En cours"}
                   </Badge>
                 </div>
               </div>

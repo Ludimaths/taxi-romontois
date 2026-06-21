@@ -42,8 +42,8 @@ export default function AdminPage() {
     "Disponibles": drivers.filter(d => d.status === "disponible"),
   };
   const vehicleGroups = {
-    "Bon état": vehicles.filter(v => v.etat === "bon"),
-    "En atelier": vehicles.filter(v => v.etat === "atelier"),
+    "En service": vehicles.filter(v => v.etat === "en_service"),
+    "En atelier": vehicles.filter(v => ["receptionne","en_attente_piece","en_reparation","repare"].includes(v.etat)),
     "Attention": vehicles.filter(v => v.etat === "attention"),
     "Km élevé (>130k)": vehicles.filter(v => v.km > 130000),
   };

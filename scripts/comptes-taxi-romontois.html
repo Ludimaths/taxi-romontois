@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Comptes Taxi Romontois — 21 juin 2026</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#1E293B; background:#F1F5F9; }
+  .page { max-width:1100px; margin:0 auto; background:#fff; padding:32px; }
+
+  header { display:flex; align-items:center; justify-content:space-between;
+    border-bottom:3px solid #0D3B7A; padding-bottom:20px; margin-bottom:28px; }
+  header h1 { font-size:22px; font-weight:900; color:#0D3B7A; }
+  header p  { font-size:12px; color:#64748B; margin-top:5px; }
+  .header-right { text-align:right; font-size:12px; color:#64748B; line-height:1.7; }
+  .header-right strong { font-size:16px; color:#DC2626; display:block; }
+
+  .alert { background:#FEF2F2; border:2px solid #FECACA; border-radius:10px;
+    padding:14px 18px; margin-bottom:24px; color:#DC2626; }
+  .alert strong { display:block; font-size:14px; font-weight:800; margin-bottom:4px; }
+  .alert span { font-size:13px; color:#1E293B; font-weight:700; }
+
+  h2 { font-size:15px; font-weight:800; color:#0D3B7A; margin:28px 0 12px;
+    padding-bottom:6px; border-bottom:1px solid #E2E8F0; }
+  h2:first-of-type { margin-top:0; }
+
+  table { width:100%; border-collapse:collapse; border-radius:10px; overflow:hidden;
+    box-shadow:0 2px 6px rgba(0,0,0,0.06); margin-bottom:12px; }
+  thead tr { background:#0D3B7A; }
+  thead th { padding:11px 14px; color:#fff; text-align:left; font-size:11px;
+    text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+  tbody td { padding:10px 14px; border-bottom:1px solid #E2E8F0;
+    vertical-align:middle; font-size:13px; }
+
+  .summary { display:flex; gap:14px; margin-top:24px; }
+  .sum-box { flex:1; border-radius:10px; padding:16px; text-align:center; border:1px solid #E2E8F0; }
+  .sum-box .val { font-size:30px; font-weight:900; }
+  .sum-box .lbl { font-size:11px; color:#64748B; margin-top:3px; }
+
+  footer { margin-top:28px; padding-top:14px; border-top:1px solid #E2E8F0;
+    font-size:11px; color:#94A3B8; text-align:center; }
+
+  @media print {
+    body { background:#fff; font-size:11px; }
+    .page { padding:12px; box-shadow:none; max-width:100%; }
+    h2 { margin:18px 0 8px; }
+    .no-print { display:none; }
+    thead tr { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .alert  { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .sum-box{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    table { page-break-inside:auto; }
+    tr    { page-break-inside:avoid; }
+    @page { size:A4 landscape; margin:12mm; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div>
+      <h1>🚌 Taxi Romontois — Accès plateforme</h1>
+      <p>Généré le 21 juin 2026 · Document confidentiel</p>
+    </div>
+    <div class="header-right">
+      <strong>🔐 CONFIDENTIEL</strong>
+      À distribuer individuellement<br>
+      Ne pas envoyer par e-mail<br>
+      <span style="font-family:monospace;font-size:11px;color:#0D3B7A">
+        https://taxi-romontois.onrender.com/login
+      </span>
+    </div>
+  </header>
+
+  <div class="alert">
+    <strong>⚠ Document confidentiel — À lire avant distribution</strong>
+    Ces identifiants sont personnels et à usage unique. Chaque utilisateur doit changer son mot de passe
+    dès la première connexion. En cas de perte, contacter l'administrateur.
+    <br><span>URL de connexion : https://taxi-romontois.onrender.com/login</span>
+  </div>
+
+  <h2>👔 Comptes Administration & Encadrement</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Nom</th><th>Prénom</th><th>E-mail</th>
+        <th>Mot de passe initial</th><th>Rôle</th><th>Statut</th>
+      </tr>
+    </thead>
+    <tbody>
+    <tr style="background:#fff">
+      <td style="font-weight:700">BARAX</td>
+      <td>Amany</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">admin@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        <em style="color:#94A3B8;font-weight:400">Compte existant</em>
+      </td>
+      <td style="color:#DC2626;font-weight:700">⚙️ Admin</td>
+      <td style="font-size:12px;font-weight:700;color:#D97706">
+        ⚠ Existant
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">BARAX</td>
+      <td>Gestionnaire</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">gestionnaire@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        <em style="color:#94A3B8;font-weight:400">Compte existant</em>
+      </td>
+      <td style="color:#7C3AED;font-weight:700">👔 Gestionnaire</td>
+      <td style="font-size:12px;font-weight:700;color:#D97706">
+        ⚠ Existant
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">ATELIER</td>
+      <td>Mécanicien</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">mecanicien@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        <em style="color:#94A3B8;font-weight:400">Compte existant</em>
+      </td>
+      <td style="color:#059669;font-weight:700">🔧 Mécanicien</td>
+      <td style="font-size:12px;font-weight:700;color:#D97706">
+        ⚠ Existant
+      </td>
+    </tr>
+  </tbody>
+  </table>
+
+  <h2>🚌 Comptes Conducteurs (53)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Nom</th><th>Prénom</th><th>E-mail</th>
+        <th>Mot de passe initial</th><th>Rôle</th><th>Statut</th>
+      </tr>
+    </thead>
+    <tbody>
+    <tr style="background:#fff">
+      <td style="font-weight:700">AEBISCHER</td>
+      <td>Yvan</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">yvan.aebischer@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        2HPsG8Hr*P
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">ATASEVER</td>
+      <td>Mehmet</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">mehmet.atasever@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        wM%E2uQj62
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">AUBORT</td>
+      <td>Michel</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">michel.aubort@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        *NgVz@2dH4
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">AUGUET</td>
+      <td>Stéphane</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">stephane.auguet@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        @steb%CBT9
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">BARCIA</td>
+      <td>José</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">jose.barcia@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        mPJM79!uhg
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">BARSACQ</td>
+      <td>Sandrine</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">sandrine.barsacq@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        B5UY*kvH6F
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">BENHALIMA</td>
+      <td>Omar</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">omar.benhalima@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        q3%55WXuNh
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">BÉROD</td>
+      <td>Sylviane</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">sylviane.berod@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        CV35ePT@un
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">BETTEX</td>
+      <td>Olivier</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">olivier.bettex@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        XbnB@6*Jhb
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">BONNARD</td>
+      <td>Antoine</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">antoine.bonnard@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        %jc8F9B%Mg
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">CAVADA</td>
+      <td>Nancy</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">nancy.cavada@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        PRkQ*6@jye
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">CHABLOZ</td>
+      <td>Jacky</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">jacky.chabloz@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        2%ujQ#UbQg
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">CHARBONNIER</td>
+      <td>Lucas</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">lucas.charbonnier@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        Q2GnFdg2p%
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">CHEVALLEY</td>
+      <td>Stéphane</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">stephane.chevalley@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        %jsfXH5CNJ
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">CORDON</td>
+      <td>Marion</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">marion.cordon@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        s%NaMDN8C7
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">CUÉNOUD</td>
+      <td>Rosemarie</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">rosemarie.cuenoud@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        tT*R5m2RhU
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">DA SILVA PINA</td>
+      <td>Carmindo</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">carmindo.da.silva.pina@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        *j9NB39EDr
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">DINTIMILLE</td>
+      <td>Serge</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">serge.dintimille@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        Kmr6M@b75F
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">EL HASSANY</td>
+      <td>Abdellah</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">abdellah.el.hassany@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        !%EHQ8cQXM
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">ESMEL</td>
+      <td>Abel</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">abel.esmel@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        DCyz9jH*c*
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">FLEUTI</td>
+      <td>Francis</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">francis.fleuti@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        NhS4Ezh@B8
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">GAYA</td>
+      <td>Jenissa</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">jenissa.gaya@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        ms9j@U6f84
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">HERREN</td>
+      <td>Marlyse</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">marlyse.herren@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        wDs6K%FEZS
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">ISMAJLJI</td>
+      <td>Seljman</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">seljman.ismajlji@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        PYKzXDs54%
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">KOUCHOU</td>
+      <td>Lionel</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">lionel.kouchou@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        3*D76yhP@V
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">LAVANCHY</td>
+      <td>Olivier</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">olivier.lavanchy@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        n5%SD#wJ*w
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">LOICHAT</td>
+      <td>Daniel</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">daniel.loichat@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        wp!WsEmnG3
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">MACEDO</td>
+      <td>Bruno</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">bruno.macedo@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        %Cp3@w%W%N
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">MACEDO</td>
+      <td>Elvira</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">elvira.macedo@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        s24*#nW!NR
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">MACEDO</td>
+      <td>Hugo</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">hugo.macedo@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        !bPtS4WR7%
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">MAGNIN</td>
+      <td>Elena</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">elena.magnin@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        py9Wt*MV4s
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">METTRAUX</td>
+      <td>Gabriel</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">gabriel.mettraux@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        yz3RMX4jk!
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">MICEVA</td>
+      <td>Vanja</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">vanja.miceva@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        X%FN5x6xhn
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">MICHARD</td>
+      <td>Vanessa</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">vanessa.michard@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        8pW6sVZUk@
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">MOREIRA</td>
+      <td>Rute</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">rute.moreira@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        VgWW%88mEr
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">NDIAYE</td>
+      <td>Ibrahima</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">ibrahima.ndiaye@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        *@fcC7UjZU
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">NICOLET</td>
+      <td>Gérard</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">gerard.nicolet@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        #Gk!29gVU7
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">NOIRAT</td>
+      <td>Frédéric</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">frederic.noirat@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        8KzYNw!cvf
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">OLIVEIRA</td>
+      <td>Manuel</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">manuel.oliveira@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        afGjMF5H@Y
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">OLIVEIRA</td>
+      <td>Alessandra</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">alessandra.oliveira@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        n3#q*ZbVN5
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">PFISTER</td>
+      <td>Eira</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">eira.pfister@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        zQ98A%YBMa
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">PLANCHEREL</td>
+      <td>Ferdinand</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">ferdinand.plancherel@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        7d*rw8Q8Nc
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">PROGIN</td>
+      <td>Mireille</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">mireille.progin@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        pzQRZ%8b7k
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">PULVER</td>
+      <td>René</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">rene.pulver@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        mpug2W!MB4
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">RÖTHLISBERGER</td>
+      <td>Frédéric</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">frederic.rothlisberger@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        rCzb6rXqh%
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">SCHEMANN</td>
+      <td>Johann</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">johann.schemann@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        qX9%3FCQRb
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">SCHNEIDER</td>
+      <td>Martial</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">martial.schneider@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        5ybjX@XWZ#
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">SOLDATI</td>
+      <td>Noémie</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">noemie.soldati@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        ZG6cMmTu@6
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">STICI</td>
+      <td>Tudor</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">tudor.stici@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        CC2hACPj%T
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">SUAREZ</td>
+      <td>Frédérico</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">frederico.suarez@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        5%zxDgetpV
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">TEST</td>
+      <td>test</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">test.test@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        88Ra!g8F4K
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#F8FAFC">
+      <td style="font-weight:700">TIQDDARINE</td>
+      <td>Khalid</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">khalid.tiqddarine@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        Jjdq*9SW4J
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  
+    <tr style="background:#fff">
+      <td style="font-weight:700">WALTI</td>
+      <td>Léonard</td>
+      <td style="font-family:monospace;font-size:12px;color:#0D3B7A">leonard.walti@taxi-romontois.ch</td>
+      <td style="font-family:'Courier New',monospace;font-weight:800;letter-spacing:1px;
+          background:#EFF6FF;color:#1E3A5F;padding:6px 10px;border-radius:4px">
+        VMp@f!8NvF
+      </td>
+      <td style="color:#0D3B7A;font-weight:700">🚌 Conducteur</td>
+      <td style="font-size:12px;font-weight:700;color:#16A34A">
+        ✅ Créé
+      </td>
+    </tr>
+  </tbody>
+  </table>
+
+  <div class="summary">
+    <div class="sum-box" style="background:#EFF6FF;border-color:#BFDBFE">
+      <div class="val" style="color:#0D3B7A">53</div>
+      <div class="lbl">Comptes créés</div>
+    </div>
+    <div class="sum-box" style="background:#FFFBEB;border-color:#FDE68A">
+      <div class="val" style="color:#D97706">3</div>
+      <div class="lbl">Déjà existants</div>
+    </div>
+    
+    <div class="sum-box" style="background:#DCFCE7;border-color:#86EFAC">
+      <div class="val" style="color:#16A34A">56</div>
+      <div class="lbl">Total comptes</div>
+    </div>
+  </div>
+
+  <div class="no-print" style="margin-top:24px;text-align:center">
+    <button onclick="window.print()"
+      style="padding:14px 32px;background:#0D3B7A;color:#fff;border:none;
+        border-radius:10px;font-size:16px;font-weight:700;cursor:pointer">
+      🖨 Imprimer / Enregistrer en PDF
+    </button>
+    <p style="margin-top:10px;font-size:12px;color:#64748B">
+      Ctrl+P → Enregistrer en PDF → Format A4 paysage
+    </p>
+  </div>
+
+  <footer>
+    Taxi Romontois · Plateforme de gestion transport scolaire
+    · Généré le 21 juin 2026 · Total : 56 comptes
+  </footer>
+</div>
+</body>
+</html>
