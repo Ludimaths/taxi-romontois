@@ -268,3 +268,5 @@
  GET /login 200 in 95ms (next.js: 3ms, application-code: 93ms)
  GET /login 200 in 35ms (next.js: 3ms, application-code: 32ms)
  GET /login 200 in 30ms (next.js: 3ms, application-code: 27ms)
+  Reload env: .env.local
+  Reload env: .env.local

@@ -192,9 +192,11 @@ export default function MecanicienPage() {
 
   const load = useCallback(async () => {
     const [v, r, a] = await Promise.all([
-      sb.from("vehicules").select("*,circuit(*),conducteur(*)").order("plaque"),
+      sb.from("vehicules").select("*,circuit(*)").order("plaque"),
       sb.from("reparations").select("*,vehicule(plaque,marque,modele)").order("created_at",{ascending:false}),
-      sb.from("alertes").select("*").eq("read",false).order("created_at",{ascending:false}),
+      sb.from("alertes").select("*")
+        .in("type",["vehicule","reparation","validation_requise","remise_circulation","transmis_meca"])
+        .eq("read",false).order("created_at",{ascending:false}),
     ]);
     if (v.data) setVehicules(v.data);
     if (r.data) setReparations(r.data);
