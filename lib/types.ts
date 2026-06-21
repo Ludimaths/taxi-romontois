@@ -175,4 +175,5 @@ export interface Profile {
   tel?: string;
   conducteur_id?: number;
   enfant_id?: number;
+  civilite?: "mere" | "pere" | null;
 }
