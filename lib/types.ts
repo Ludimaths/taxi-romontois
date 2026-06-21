@@ -4,7 +4,7 @@ export type DriverStatus = "en_service" | "en_attente" | "absent" | "disponible"
 export type VehicleState = "bon" | "atelier" | "attention";
 export type IncidentStatus = "en_attente" | "en_cours" | "resolu";
 export type AlertSeverity = "normale" | "haute" | "critique";
-export type RepairStatus = "en_cours" | "termine";
+export type RepairStatus = "signalee" | "en_attente_validation" | "en_attente_piece" | "en_cours" | "termine" | "refusee";
 
 export interface CercleScolaire {
   id: number;
