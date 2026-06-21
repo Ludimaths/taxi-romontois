@@ -255,6 +255,9 @@ export default function MecanicienPage() {
         .eq("read",false)
         .order("created_at",{ascending:false}),
     ]);
+    if (v.error) console.error("[meca] vehicules:", v.error);
+    if (r.error) console.error("[meca] reparations:", r.error);
+    if (a.error) console.error("[meca] alertes:", a.error);
     if (v.data) setVehicules(v.data);
     if (r.data) setReparations(r.data);
     if (a.data) setAlertes(a.data);
