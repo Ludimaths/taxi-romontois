@@ -106,19 +106,6 @@ function makePassword() {
 async function createUser({ email, prenom, nom, role, conducteur_id = null }) {
   const password = makePassword();
 
-  // Vérifier si l'email existe déjà
-  const { data: existing } = await supabase.auth.admin.listUsers();
-  const exists = existing?.users?.find(u => u.email === email);
-
-  if (exists) {
-    // Mettre à jour le profil si conducteur_id manque
-    const { data: prof } = await supabase.from("profiles").select("conducteur_id").eq("id", exists.id).single();
-    if (conducteur_id && !prof?.conducteur_id) {
-      await supabase.from("profiles").update({ conducteur_id }).eq("id", exists.id);
-    }
-    return { email, prenom, nom, role, password: "—", status: "exists", user_id: exists.id };
-  }
-
   const { data, error } = await supabase.auth.admin.createUser({
     email,
     password,
@@ -126,8 +113,13 @@ async function createUser({ email, prenom, nom, role, conducteur_id = null }) {
     user_metadata: { prenom, nom, role },
   });
 
+  // Compte déjà existant → ⚠ existant (pas une erreur)
   if (error) {
-    return { email, prenom, nom, role, password: "—", status: "error", error: error.message };
+    const msg = error.message || "";
+    if (msg.includes("already been registered") || msg.includes("already exists") || msg.includes("already")) {
+      return { email, prenom, nom, role, password: "—", status: "exists" };
+    }
+    return { email, prenom, nom, role, password: "—", status: "error", error: msg };
   }
 
   await supabase.from("profiles").upsert({
