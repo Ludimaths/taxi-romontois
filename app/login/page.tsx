@@ -18,7 +18,7 @@ export default function LoginPage() {
     const supabase = createClient();
     const { error: err } = await supabase.auth.signInWithPassword({ email, password });
     if (err) {
-      setError(err.message);
+      setError("Email ou mot de passe incorrect.");
       setLoading(false);
     } else {
       router.push("/");
@@ -26,58 +26,98 @@ export default function LoginPage() {
     }
   };
 
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "14px 16px",
+    borderRadius: 10,
+    border: `2px solid ${C.gray200}`,
+    fontSize: 16,
+    color: "#111827",
+    background: "#FFFFFF",
+    outline: "none",
+    boxSizing: "border-box",
+    appearance: "none",
+    WebkitAppearance: "none",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#374151",
+    marginBottom: 8,
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: `linear-gradient(135deg,${C.navy},${C.navyL})`,
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ background: C.white, borderRadius: 20, padding: 40, width: "100%", maxWidth: 420,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+    <div style={{ minHeight: "100vh", background: "#F1F5F9",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "24px 16px" }}>
+
+      <div style={{ background: "#FFFFFF", borderRadius: 20, padding: "36px 28px",
+        width: "100%", maxWidth: 420,
+        boxShadow: "0 8px 40px rgba(0,0,0,0.12)" }}>
 
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <img src="/logo-dark.png" alt="Taxi Romontois"
-            style={{ width: 180, maxWidth: "100%", height: "auto", margin: "0 auto 12px", display: "block" }} />
-          <div style={{ fontSize: 13, color: C.gray400 }}>Transport scolaire</div>
+            style={{ width: 180, maxWidth: "100%", height: "auto",
+              margin: "0 auto 12px", display: "block" }} />
+          <div style={{ fontSize: 14, color: "#6B7280", fontWeight: 500 }}>
+            Transport scolaire · Romont
+          </div>
         </div>
 
         <form onSubmit={handleLogin}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.gray600,
-              textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
-              Email
-            </label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+          <div style={{ marginBottom: 18 }}>
+            <label style={labelStyle}>Adresse e-mail</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
               placeholder="vous@taxi-romontois.ch"
-              style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: `1px solid ${C.gray200}`,
-                fontSize: 14, outline: "none", boxSizing: "border-box",
-                background: C.gray50 }} />
+              autoComplete="email"
+              style={inputStyle}
+            />
           </div>
-          <div style={{ marginBottom: 24 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.gray600,
-              textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
-              Mot de passe
-            </label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
+
+          <div style={{ marginBottom: 26 }}>
+            <label style={labelStyle}>Mot de passe</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
               placeholder="••••••••"
-              style={{ width: "100%", padding: "12px 14px", borderRadius: 8, border: `1px solid ${C.gray200}`,
-                fontSize: 14, outline: "none", boxSizing: "border-box",
-                background: C.gray50 }} />
+              autoComplete="current-password"
+              style={inputStyle}
+            />
           </div>
+
           {error && (
-            <div style={{ background: C.redL, border: `1px solid #FCA5A5`, borderRadius: 8,
-              padding: "10px 14px", marginBottom: 16, fontSize: 13, color: C.red, fontWeight: 600 }}>
+            <div style={{ background: "#FEF2F2", border: "1px solid #FECACA",
+              borderRadius: 10, padding: "12px 16px", marginBottom: 18,
+              fontSize: 15, color: "#DC2626", fontWeight: 600 }}>
               {error}
             </div>
           )}
-          <button type="submit" disabled={loading}
-            style={{ width: "100%", padding: "13px", borderRadius: 8, border: "none",
-              background: loading ? C.gray200 : C.navyL, color: loading ? C.gray400 : C.white,
-              fontWeight: 800, fontSize: 15, cursor: loading ? "not-allowed" : "pointer",
-              transition: "background .15s" }}>
-            {loading ? "Connexion…" : "Se connecter →"}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{ width: "100%", minHeight: 58, padding: "16px",
+              borderRadius: 12, border: "none",
+              background: loading ? "#CBD5E1" : C.navy,
+              color: loading ? "#94A3B8" : "#FFFFFF",
+              fontWeight: 800, fontSize: 17,
+              cursor: loading ? "not-allowed" : "pointer",
+              letterSpacing: 0.3, transition: "background .15s" }}>
+            {loading ? "Connexion en cours…" : "Se connecter →"}
           </button>
         </form>
 
-        <div style={{ textAlign: "center", marginTop: 20, fontSize: 11, color: C.gray400 }}>
+        <div style={{ textAlign: "center", marginTop: 22,
+          fontSize: 12, color: "#9CA3AF" }}>
           Plateforme réservée au personnel Taxi Romontois
         </div>
       </div>

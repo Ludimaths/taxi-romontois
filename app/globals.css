@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Responsive layout */
+.tx-sidebar        { display: flex; }
+.tx-mobile-header  { display: none; }
+.tx-main-padding   { padding: 26px; }
+
+@media (max-width: 767px) {
+  .tx-sidebar        { display: none !important; }
+  .tx-mobile-header  { display: flex !important; }
+  .tx-main-padding   { padding: 16px !important; }
+}
+
+/* Prevent dark-mode from inverting inputs/buttons */
+input, textarea, select, button {
+  color-scheme: light;
+}
