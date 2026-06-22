@@ -202,7 +202,8 @@ export default function ConducteurPage(){
       sb.from("service_logs").select("*")
         .eq("conducteur_id",cid).eq("date_service",todayISO()).maybeSingle(),
       sb.from("absences_enfants").select("*,enfant:enfants(*)")
-        .eq("date_absence",todayISO()).order("reported_at",{ascending:false}),
+        .gte("date_absence",new Date(Date.now()-30*864e5).toISOString().slice(0,10))
+        .order("date_absence",{ascending:false}).order("reported_at",{ascending:false}),
       sb.from("enfants").select("*").order("nom"),
       sb.from("incidents").select("*")
         .eq("conducteur_id",cid).order("reported_at",{ascending:false}).limit(20),
@@ -259,7 +260,7 @@ export default function ConducteurPage(){
     await sb.from("alertes").insert({
       type:"conducteur",severity:"normale",
       message:`${driver.prenom} ${driver.nom} a pris son service à ${hhmm(nowTimeStr())} — Circuit ${driver.circuit?.nom||"—"}`,
-      driver_id:driver.id,read:false,
+      read:false,
     });
     setTodayLog(data);
     setDriver(p=>p?{...p,status:"en_service"}:p);
@@ -283,7 +284,7 @@ export default function ConducteurPage(){
     await sb.from("alertes").insert({
       type:"conducteur",severity:"normale",
       message:`${driver.prenom} ${driver.nom} remplace ${replRemplace||"—"} sur circuit ${replCircuit} à ${hhmm(nowTimeStr())}`,
-      driver_id:driver.id,read:false,
+      read:false,
     });
     setTodayLog(data);
     setDriver(p=>p?{...p,status:"en_service"}:p);
@@ -300,7 +301,7 @@ export default function ConducteurPage(){
     await sb.from("alertes").insert({
       type:"conducteur",severity:"normale",
       message:`${driver.prenom} ${driver.nom} a terminé son service à ${hhmm(nowTimeStr())}`,
-      driver_id:driver.id,read:false,
+      read:false,
     });
     setDriver(p=>p?{...p,status:"disponible"}:p);
     setTodayLog(p=>p?{...p,heure_fin:nowTimeStr(),status:"termine"}:p);
@@ -332,7 +333,7 @@ export default function ConducteurPage(){
     await sb.from("alertes").insert({
       type:"conducteur",severity:"normale",
       message:`✅ ${driver.prenom} ${driver.nom} reprend le service aujourd'hui`,
-      driver_id:driver.id,read:false,
+      read:false,
     });
     setDriver(p=>p?{...p,status:"disponible",absence_motif:undefined}:p);
     setShowReprise(false);
@@ -352,7 +353,7 @@ export default function ConducteurPage(){
       type:"conducteur",
       severity:signUrgence==="urgent"?"haute":"normale",
       message:`${signType==="accident"?"🚨":signType==="panne"?"🔧":signType==="retard"?"⏰":"⚡"} [${SIGN_LABELS[signType]||signType}] ${driver.prenom} ${driver.nom} — ${signDesc}`,
-      driver_id:driver.id,read:false,
+      read:false,
     });
     setSignType("");setSignDesc("");setSignUrgence("normal");setSignSent(true);
     setTimeout(()=>setSignSent(false),4000);
@@ -383,8 +384,12 @@ export default function ConducteurPage(){
   const enfantsCircuit = driver?.circuit_id
     ? enfants.filter(e=>e.circuit_id===driver.circuit_id)
     : [];
+  const todayAbsences = absences.filter(a=>a.date_absence===todayISO());
+  const incWithResponse = incidents.filter(i=>i.response);
   const unreadMsg = messages.filter(m=>!m.read).length;
   const pendingInc= incidents.filter(i=>i.status==="en_attente").length;
+  // Messages badge : alertes non lues + réponses incidents non vues (incidents résolus/en cours avec réponse)
+  const msgBadge = unreadMsg + incWithResponse.filter(i=>i.status!=="resolu_lu").length;
 
   // History
   const allYears=histLogs.length
@@ -430,7 +435,7 @@ export default function ConducteurPage(){
     {id:"fiche",         label:"📋 Ma fiche"},
     {id:"service",       label:"🚦 Mon service"},
     {id:"signalements",  label:"⚡ Signalements",badge:pendingInc||undefined},
-    {id:"messages",      label:"📨 Messages",    badge:unreadMsg||undefined},
+    {id:"messages",      label:"📨 Messages",    badge:unreadMsg||undefined /* alertes gestionnaire */},
     {id:"historique",    label:"📊 Historique"},
   ];
 
@@ -517,13 +522,13 @@ export default function ConducteurPage(){
           )}
 
           {/* Absences enfants du jour */}
-          {absences.length>0&&(
+          {todayAbsences.length>0&&(
             <div style={{background:G.amberL,borderRadius:16,padding:16,marginBottom:16,
               border:`1px solid #FDE68A`}}>
               <div style={{fontWeight:800,color:G.amber,marginBottom:10,fontSize:14}}>
-                ⚠️ Modifications du jour — {absences.length} absence(s) enfants
+                ⚠️ Modifications du jour — {todayAbsences.length} absence(s) enfants
               </div>
-              {absences.slice(0,5).map(a=>{
+              {todayAbsences.slice(0,5).map(a=>{
                 const enf=enfants.find(e=>e.id===a.enfant_id);
                 const confirmed=absConfirmed.has(a.id)||a.read_by_driver;
                 return(
@@ -549,7 +554,7 @@ export default function ConducteurPage(){
                   </div>
                 );
               })}
-              {absences.length>5&&<p style={{fontSize:13,color:G.gray,marginTop:4}}>+{absences.length-5} autre(s)…</p>}
+              {todayAbsences.length>5&&<p style={{fontSize:13,color:G.gray,marginTop:4}}>+{todayAbsences.length-5} autre(s)…</p>}
             </div>
           )}
 
@@ -872,57 +877,142 @@ export default function ConducteurPage(){
       {/* ════ MESSAGES ════ */}
       {tab==="messages"&&(
         <div>
-          {messages.length===0?(
+          {/* Intro */}
+          <p style={{fontSize:13,color:G.gray,marginBottom:16}}>
+            Messages du gestionnaire, réponses à vos signalements et absences de votre circuit.
+          </p>
+
+          {/* ── Section 1 : Messages gestionnaire ── */}
+          <div style={{marginBottom:24}}>
+            <div style={{fontWeight:800,fontSize:13,color:G.navy,textTransform:"uppercase",
+              letterSpacing:0.5,marginBottom:12}}>
+              📨 Messages du gestionnaire
+              {unreadMsg>0&&<span style={{marginLeft:8,background:G.red,color:"#fff",
+                borderRadius:99,padding:"2px 7px",fontSize:11}}>{unreadMsg} non lu(s)</span>}
+            </div>
+            {messages.length===0?(
+              <div style={{background:G.grayL,borderRadius:14,padding:"18px 16px",
+                textAlign:"center",color:G.gray,fontSize:14}}>
+                Aucun message du gestionnaire
+              </div>
+            ):messages.map(m=>{
+              const isNew=!m.read;
+              const sev=m.severity;
+              const c=sev==="critique"?G.red:sev==="haute"?G.amber:G.navy;
+              const bg=sev==="critique"?G.redL:sev==="haute"?G.amberL:"#EFF6FF";
+              return(
+                <div key={m.id} style={{background:isNew?"#fff":G.grayL,borderRadius:16,
+                  padding:16,marginBottom:10,
+                  boxShadow:isNew?"0 2px 8px rgba(0,0,0,0.06)":"none",
+                  borderLeft:`4px solid ${isNew?c:G.grayB}`,opacity:isNew?1:0.75}}>
+                  <div style={{display:"flex",justifyContent:"space-between",
+                    alignItems:"flex-start",marginBottom:8,gap:8,flexWrap:"wrap"}}>
+                    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                      {isNew&&<span style={{width:8,height:8,borderRadius:"50%",
+                        background:c,display:"inline-block",flexShrink:0}}/>}
+                      <span style={{fontSize:11,fontWeight:700,color:isNew?c:G.gray,
+                        background:isNew?bg:"transparent",borderRadius:99,
+                        padding:isNew?"2px 8px":"0"}}>
+                        {sev==="critique"?"🔴 Critique":sev==="haute"?"🟠 Important":"🔵 Info"}
+                      </span>
+                    </div>
+                    <span style={{fontSize:12,color:G.gray}}>{fdt(m.created_at)}</span>
+                  </div>
+                  <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5,
+                    fontWeight:isNew?600:400,marginBottom:isNew?10:0}}>
+                    {m.message}
+                  </p>
+                  {isNew&&(
+                    <button onClick={()=>handleMarquerLu(m)} style={{
+                      fontSize:12,padding:"6px 12px",borderRadius:8,
+                      border:`1px solid ${G.green}`,background:G.greenL,
+                      color:G.greenD,fontWeight:700,cursor:"pointer"}}>
+                      Lu ✓
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Section 2 : Réponses à mes signalements ── */}
+          {incWithResponse.length>0&&(
+            <div style={{marginBottom:24}}>
+              <div style={{fontWeight:800,fontSize:13,color:G.navy,textTransform:"uppercase",
+                letterSpacing:0.5,marginBottom:12}}>
+                💬 Réponses à mes signalements
+              </div>
+              {incWithResponse.map(inc=>{
+                const stype=SIGN_TYPES.find(s=>s.v===inc.type);
+                return(
+                  <div key={inc.id} style={{background:"#fff",borderRadius:16,padding:16,
+                    marginBottom:10,boxShadow:"0 2px 8px rgba(0,0,0,0.06)",
+                    borderLeft:`4px solid ${G.green}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",
+                      alignItems:"flex-start",marginBottom:8,gap:8,flexWrap:"wrap"}}>
+                      <span style={{fontWeight:700,fontSize:14,color:G.navy}}>
+                        {stype?.e||"⚡"} {stype?.l||inc.type}
+                      </span>
+                      <span style={{fontSize:12,color:G.gray}}>
+                        {new Date(inc.reported_at).toLocaleDateString("fr-CH")}
+                      </span>
+                    </div>
+                    <p style={{fontSize:13,color:"#475569",marginBottom:10,lineHeight:1.4}}>
+                      Votre signalement : {inc.description}
+                    </p>
+                    <div style={{background:G.greenL,borderRadius:10,padding:"10px 12px",
+                      fontSize:14,color:G.greenD,fontWeight:600,lineHeight:1.5}}>
+                      💬 Réponse : {inc.response}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Section 3 : Absences enfants du circuit (30 jours) ── */}
+          {absences.length>0&&(
+            <div>
+              <div style={{fontWeight:800,fontSize:13,color:G.navy,textTransform:"uppercase",
+                letterSpacing:0.5,marginBottom:12}}>
+                👶 Absences de mon circuit — 30 derniers jours
+              </div>
+              {absences.map(a=>{
+                const enf=(a.enfant as{prenom?:string;nom?:string}|undefined);
+                const isToday=a.date_absence===todayISO();
+                return(
+                  <div key={a.id} style={{background:isToday?"#fff":G.grayL,borderRadius:14,
+                    padding:"12px 14px",marginBottom:8,
+                    boxShadow:isToday?"0 1px 4px rgba(0,0,0,0.06)":"none",
+                    borderLeft:`3px solid ${isToday?G.amber:G.grayB}`,
+                    opacity:isToday?1:0.8}}>
+                    <div style={{display:"flex",justifyContent:"space-between",
+                      alignItems:"flex-start",gap:8}}>
+                      <div>
+                        <div style={{fontWeight:700,fontSize:14,color:"#1E293B"}}>
+                          {enf?.prenom} {enf?.nom}
+                          {isToday&&<span style={{marginLeft:8,fontSize:11,fontWeight:700,
+                            color:G.amber,background:G.amberL,borderRadius:99,padding:"2px 7px"}}>
+                            Aujourd'hui
+                          </span>}
+                        </div>
+                        <div style={{fontSize:13,color:G.gray,marginTop:2}}>{a.reason}</div>
+                      </div>
+                      <span style={{fontSize:12,color:G.gray,whiteSpace:"nowrap"}}>
+                        {new Date(a.date_absence).toLocaleDateString("fr-CH",{day:"2-digit",month:"2-digit"})}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {messages.length===0&&incWithResponse.length===0&&absences.length===0&&(
             <div style={{textAlign:"center",padding:"60px 20px",color:G.gray}}>
               <div style={{fontSize:48}}>📭</div>
               <p style={{fontWeight:700,marginTop:12}}>Aucun message</p>
             </div>
-          ):(
-            <>
-              {unreadMsg>0&&(
-                <div style={{background:G.amberL,borderRadius:12,padding:"10px 14px",
-                  marginBottom:16,fontSize:13,fontWeight:700,color:G.amber}}>
-                  📬 {unreadMsg} message(s) non lu(s)
-                </div>
-              )}
-              {messages.map(m=>{
-                const isNew=!m.read;
-                const sev=m.severity;
-                const c=sev==="critique"?G.red:sev==="haute"?G.amber:G.green;
-                const bg=sev==="critique"?G.redL:sev==="haute"?G.amberL:G.greenL;
-                return(
-                  <div key={m.id} style={{background:isNew?"#fff":G.grayL,borderRadius:16,
-                    padding:16,marginBottom:12,boxShadow:isNew?"0 2px 8px rgba(0,0,0,0.06)":"none",
-                    borderLeft:`4px solid ${isNew?c:G.grayB}`,
-                    opacity:isNew?1:0.8}}>
-                    <div style={{display:"flex",justifyContent:"space-between",
-                      alignItems:"flex-start",marginBottom:8,gap:8,flexWrap:"wrap"}}>
-                      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                        {isNew&&<span style={{display:"inline-block",width:8,height:8,
-                          borderRadius:"50%",background:c,flexShrink:0}}/>}
-                        <span style={{fontSize:12,fontWeight:700,
-                          color:isNew?c:G.gray,background:isNew?bg:"transparent",
-                          borderRadius:99,padding:isNew?"2px 8px":"0"}}>
-                          {sev==="critique"?"🔴 Critique":sev==="haute"?"🟠 Important":"🔵 Info"}
-                        </span>
-                      </div>
-                      <span style={{fontSize:12,color:G.gray}}>{fdt(m.created_at)}</span>
-                    </div>
-                    <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5,fontWeight:isNew?600:400}}>
-                      {m.message}
-                    </p>
-                    {isNew&&(
-                      <button onClick={()=>handleMarquerLu(m)} style={{
-                        marginTop:10,fontSize:12,padding:"6px 12px",borderRadius:8,
-                        border:`1px solid ${G.green}`,background:G.greenL,
-                        color:G.greenD,fontWeight:700,cursor:"pointer"}}>
-                        Lu ✓
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </>
           )}
         </div>
       )}
@@ -931,6 +1021,7 @@ export default function ConducteurPage(){
       {tab==="historique"&&(
         <HistoriqueView
           histLogs={histLogs}
+          incidents={incidents}
           allYears={allYears}
           histYear={histYear}
           setHistYear={setHistYear}
@@ -1041,8 +1132,8 @@ export default function ConducteurPage(){
 const SCHOOL_MONTHS_ORDER=[9,10,11,12,1,2,3,4,5,6,7,8];
 const MON_NAMES=["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
-function HistoriqueView({histLogs,allYears,histYear,setHistYear,histMonth,setHistMonth,logsForYear,logsForYearMonth,calcDuration}:{
-  histLogs:ServiceLog[];allYears:number[];
+function HistoriqueView({histLogs,incidents,allYears,histYear,setHistYear,histMonth,setHistMonth,logsForYear,logsForYearMonth,calcDuration}:{
+  histLogs:ServiceLog[];incidents:Incident[];allYears:number[];
   histYear:number|null;setHistYear:(y:number|null)=>void;
   histMonth:number|null;setHistMonth:(m:number|null)=>void;
   logsForYear:(y:number)=>ServiceLog[];
@@ -1098,7 +1189,7 @@ function HistoriqueView({histLogs,allYears,histYear,setHistYear,histMonth,setHis
         </button>
         {/* Détail jours */}
         {logs.length===0?(
-          <div style={{textAlign:"center",padding:"40px 20px",color:G.gray}}>
+          <div style={{textAlign:"center",padding:"32px 20px",color:G.gray}}>
             <div style={{fontSize:40}}>📭</div>
             <p style={{fontWeight:700,marginTop:10}}>Aucun service ce mois</p>
           </div>
@@ -1138,6 +1229,64 @@ function HistoriqueView({histLogs,allYears,histYear,setHistYear,histMonth,setHis
             )}
           </div>
         ))}
+
+        {/* ── Signalements du mois ── */}
+        {(()=>{
+          const monthIncs=incidents.filter(inc=>{
+            const d=new Date(inc.reported_at);
+            return d.getMonth()+1===histMonth&&(
+              d.getMonth()>=8?d.getFullYear()===histYear:d.getFullYear()===histYear+1
+            );
+          });
+          if(monthIncs.length===0)return null;
+          const statusMap:{[k:string]:{l:string;c:string;bg:string}}={
+            en_attente:{l:"En attente",c:G.amber,bg:G.amberL},
+            en_cours:  {l:"Traité",    c:G.blue, bg:G.blueL},
+            resolu:    {l:"Résolu",    c:G.green,bg:G.greenL},
+          };
+          return(
+            <div style={{marginTop:20}}>
+              <div style={{fontWeight:800,fontSize:13,color:G.navy,textTransform:"uppercase",
+                letterSpacing:0.5,marginBottom:12}}>
+                ⚡ Signalements ({monthIncs.length})
+              </div>
+              {monthIncs.map(inc=>{
+                const stype=SIGN_TYPES.find(s=>s.v===inc.type);
+                const st=statusMap[inc.status]||statusMap.en_attente;
+                return(
+                  <div key={inc.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px",
+                    marginBottom:8,borderLeft:`3px solid ${st.c}`,
+                    boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",
+                      alignItems:"flex-start",gap:8,marginBottom:6}}>
+                      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontWeight:700,fontSize:13,color:"#1E293B"}}>
+                          {stype?.e||"⚡"} {stype?.l||inc.type}
+                        </span>
+                        <span style={{fontSize:11,fontWeight:700,color:st.c,
+                          background:st.bg,borderRadius:99,padding:"2px 7px"}}>
+                          {st.l}
+                        </span>
+                      </div>
+                      <span style={{fontSize:11,color:G.gray,whiteSpace:"nowrap"}}>
+                        {new Date(inc.reported_at).toLocaleDateString("fr-CH",{day:"2-digit",month:"2-digit"})}
+                      </span>
+                    </div>
+                    <p style={{fontSize:13,color:"#475569",lineHeight:1.4,marginBottom:inc.response?8:0}}>
+                      {inc.description}
+                    </p>
+                    {inc.response&&(
+                      <div style={{background:G.greenL,borderRadius:8,padding:"8px 10px",
+                        fontSize:12,color:G.greenD,fontWeight:600}}>
+                        💬 {inc.response}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
     );
   }
