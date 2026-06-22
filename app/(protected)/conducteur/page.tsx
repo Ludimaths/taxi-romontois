@@ -389,7 +389,7 @@ export default function ConducteurPage(){
   const unreadMsg = messages.filter(m=>!m.read).length;
   const pendingInc= incidents.filter(i=>i.status==="en_attente").length;
   // Messages badge : alertes non lues + réponses incidents non vues (incidents résolus/en cours avec réponse)
-  const msgBadge = unreadMsg + incWithResponse.filter(i=>i.status!=="resolu_lu").length;
+  const msgBadge = unreadMsg + incWithResponse.filter(i=>i.status!=="resolu").length;
 
   // History
   const allYears=histLogs.length
