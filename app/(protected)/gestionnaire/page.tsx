@@ -388,13 +388,22 @@ export default function GestionnaireDashboard() {
       status: "couvert",
     });
 
-    // Log de service pour le remplaçant (historique)
+    // 1. Log historique pour le CONDUCTEUR ABSENT
+    await sb.from("service_logs").insert({
+      conducteur_id: absentId,
+      date_service: isoToday(),
+      status: "absent",
+      notes: `Absent — Remplacé par ${replacer?.prenom || ""} ${replacer?.nom || ""}`,
+    });
+
+    // 2. Log historique pour le REMPLAÇANT
     await sb.from("service_logs").insert({
       conducteur_id: replacerId,
       circuit_id: circuitId,
       vehicule_id: absent?.vehicule_id || null,
       date_service: isoToday(),
       is_replacement: true,
+      replacement_name: `${absent?.prenom || ""} ${absent?.nom || ""}`,
       status: "en_service",
       notes: `Remplacement de ${absent?.prenom || ""} ${absent?.nom || ""}`,
     });

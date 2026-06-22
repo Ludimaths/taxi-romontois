@@ -7,8 +7,23 @@ import type { Conducteur, Circuit, Incident, Alerte, AbsenceEnfant, Reparation }
 
 type Periode = "jour" | "semaine" | "mois";
 
+interface AbsenceConducteur {
+  id: number;
+  conducteur_id: number;
+  remplacant_id: number | null;
+  circuit_id: string | null;
+  date_absence: string;
+  motif: string | null;
+  status: string;
+  created_at: string;
+  conducteur?: { prenom: string; nom: string };
+  remplacant?: { prenom: string; nom: string };
+  circuit?: { emoji: string; nom: string; num: string };
+}
+
 const sevColor = (s: string) => ({ normale: "gray", haute: "amber", critique: "red" }[s] ?? "gray") as any;
 const sevLabel = (s: string) => ({ normale: "Normale", haute: "Haute", critique: "Critique" }[s] ?? s);
+const fmtDT = (d: string) => new Date(d).toLocaleString("fr-CH", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 export default function RapportPage() {
   const supabase = createClient();
@@ -19,6 +34,7 @@ export default function RapportPage() {
   const [alertes, setAlertes] = useState<Alerte[]>([]);
   const [absences, setAbsences] = useState<AbsenceEnfant[]>([]);
   const [reparations, setReparations] = useState<Reparation[]>([]);
+  const [remplacements, setRemplacements] = useState<AbsenceConducteur[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,14 +49,19 @@ export default function RapportPage() {
       } else {
         const d = new Date(now); d.setMonth(d.getMonth() - 1); since = d.toISOString();
       }
+      const sinceDate = since.slice(0, 10);
 
-      const [drv, cir, inc, alt, abs, rep] = await Promise.all([
+      const [drv, cir, inc, alt, abs, rep, rempl] = await Promise.all([
         supabase.from("conducteurs").select("*, circuit:circuits(*), vehicule:vehicules(*)").order("nom"),
         supabase.from("circuits").select("*, cercle:cercles_scolaires(*)").order("num"),
         supabase.from("incidents").select("*, vehicule:vehicules(*), conducteur:conducteurs(*), circuit:circuits(*)").gte("reported_at", since).order("reported_at", { ascending: false }),
         supabase.from("alertes").select("*").gte("created_at", since).order("created_at", { ascending: false }),
-        supabase.from("absences_enfants").select("*, enfant:enfants(*), circuit:circuits(*)").gte("date_absence", since.slice(0,10)).order("reported_at", { ascending: false }),
+        supabase.from("absences_enfants").select("*, enfant:enfants(*), circuit:circuits(*)").gte("date_absence", sinceDate).order("reported_at", { ascending: false }),
         supabase.from("reparations").select("*, vehicule:vehicules(*)").gte("created_at", since).order("created_at", { ascending: false }),
+        supabase.from("absences_conducteurs")
+          .select("*, conducteur:conducteurs!conducteur_id(prenom,nom), remplacant:conducteurs!remplacant_id(prenom,nom), circuit:circuits(emoji,nom,num)")
+          .gte("date_absence", sinceDate)
+          .order("created_at", { ascending: false }),
       ]);
       setDrivers(drv.data ?? []);
       setCircuits(cir.data ?? []);
@@ -48,6 +69,7 @@ export default function RapportPage() {
       setAlertes(alt.data ?? []);
       setAbsences(abs.data ?? []);
       setReparations(rep.data ?? []);
+      setRemplacements((rempl.data ?? []) as AbsenceConducteur[]);
       setLoading(false);
     };
     load();
@@ -101,6 +123,82 @@ export default function RapportPage() {
           </div>
         ))}
       </div>
+
+      {/* ── Remplacements du jour (section dédiée, visible en mode "jour") ── */}
+      {periode === "jour" && (
+        <Card style={{ marginBottom: 22 }}>
+          <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.gray100}`,
+            fontWeight: 700, color: C.gray800, fontSize: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>🔄 Remplacements du jour ({remplacements.length})</span>
+            {remplacements.length > 0 && (
+              <span style={{ fontSize: 12, color: remplacements.every(r => r.remplacant_id) ? C.green : C.amber, fontWeight: 700 }}>
+                {remplacements.filter(r => r.status === "couvert").length}/{remplacements.length} couverts
+              </span>
+            )}
+          </div>
+          {remplacements.length === 0 ? (
+            <div style={{ padding: "20px 18px", textAlign: "center", color: C.green, fontWeight: 600, fontSize: 13 }}>
+              ✅ Aucun remplacement aujourd'hui
+            </div>
+          ) : remplacements.map(r => {
+            const circ = r.circuit as { emoji?: string; nom?: string; num?: string } | undefined;
+            const couvert = !!r.remplacant_id && r.status === "couvert";
+            return (
+              <div key={r.id} style={{ padding: "14px 18px", borderBottom: `1px solid ${C.gray100}`,
+                background: couvert ? C.white : C.amberL }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, alignItems: "center" }}>
+                  {/* Conducteur absent */}
+                  <div style={{ background: C.redL, borderRadius: 10, padding: "10px 14px" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.red, marginBottom: 3, textTransform: "uppercase" }}>
+                      Absent
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: C.gray800 }}>
+                      {r.conducteur?.prenom} {r.conducteur?.nom}
+                    </div>
+                    {r.motif && (
+                      <div style={{ fontSize: 12, color: C.gray600, marginTop: 3 }}>
+                        Motif : {r.motif}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Flèche + circuit */}
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 20, color: couvert ? C.green : C.amber }}>→</div>
+                    {circ && (
+                      <div style={{ fontSize: 11, color: C.gray600, fontWeight: 600, marginTop: 2 }}>
+                        {circ.emoji} {circ.nom}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Remplaçant */}
+                  <div style={{ background: couvert ? C.greenL : C.gray100, borderRadius: 10, padding: "10px 14px" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: couvert ? C.green : C.gray400, marginBottom: 3, textTransform: "uppercase" }}>
+                      {couvert ? "Remplaçant" : "Non couvert"}
+                    </div>
+                    {couvert ? (
+                      <>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: C.gray800 }}>
+                          {r.remplacant?.prenom} {r.remplacant?.nom}
+                        </div>
+                        <div style={{ fontSize: 12, color: C.green, marginTop: 3 }}>✅ En service</div>
+                      </>
+                    ) : (
+                      <div style={{ fontWeight: 700, fontSize: 13, color: C.amber }}>⚠️ À assigner</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Horodatage */}
+                <div style={{ marginTop: 10, fontSize: 11, color: C.gray400 }}>
+                  Décision enregistrée à {fmtDT(r.created_at)}
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
 
