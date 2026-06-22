@@ -16,8 +16,7 @@ const NAV_ITEMS: Record<Role, { path: string; label: string; icon: string }[]> =
     { path: "/gestionnaire/export",     label: "Exports",         icon: "📁" },
   ],
   conducteur: [
-    { path: "/conducteur",          label: "Mon tableau de bord", icon: "📊" },
-    { path: "/conducteur/vehicules",label: "Scanner QR",          icon: "📱" },
+    { path: "/conducteur", label: "Mon tableau de bord", icon: "📊" },
   ],
   admin: [
     { path: "/admin",            label: "Administration", icon: "⚙️" },

@@ -21,6 +21,37 @@ export default function ProtectedLayoutClient({
     router.refresh();
   };
 
+  // Conducteur : layout sans sidebar, header toujours visible
+  if (profile.role === "conducteur") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: C.gray50, color: C.gray800 }}>
+        <header style={{
+          position: "sticky", top: 0, zIndex: 100,
+          background: C.navy, padding: "0 16px",
+          height: 56, display: "flex", alignItems: "center", justifyContent: "space-between",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.2)", flexShrink: 0,
+        }}>
+          <img src="/logo.png" alt="Taxi Romontois"
+            style={{ height: 32, width: "auto", display: "block" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ color: "rgba(255,255,255,0.85)", fontWeight: 700, fontSize: 14 }}>
+              {profile.prenom} {profile.nom}
+            </span>
+            <button onClick={handleSignOut}
+              style={{ padding: "7px 13px", borderRadius: 8, border: "none",
+                background: "rgba(220,38,38,0.2)", color: "#FCA5A5",
+                fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+              Déconnexion
+            </button>
+          </div>
+        </header>
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
+          {children}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.gray50, color: C.gray800 }}>
 
