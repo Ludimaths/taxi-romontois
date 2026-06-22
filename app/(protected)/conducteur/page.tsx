@@ -558,15 +558,40 @@ export default function ConducteurPage(){
             </div>
           )}
 
+          {/* Alerte remplacement en attente de confirmation */}
+          {messages.filter(m=>m.type==="remplacement"&&!m.read).slice(0,1).map(m=>(
+            <div key={m.id} style={{background:G.amberL,borderRadius:16,padding:16,marginBottom:16,
+              border:`2px solid ${G.amber}`,boxShadow:"0 2px 12px rgba(217,119,6,0.2)"}}>
+              <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:10}}>
+                <span style={{fontSize:28}}>🔄</span>
+                <div>
+                  <div style={{fontWeight:900,fontSize:15,color:G.amber}}>Mission de remplacement</div>
+                  <div style={{fontSize:11,color:G.gray,marginTop:1}}>{fdt(m.created_at)}</div>
+                </div>
+              </div>
+              <p style={{fontSize:14,color:"#1E293B",lineHeight:1.6,fontWeight:600,marginBottom:12}}>
+                {m.message}
+              </p>
+              <button onClick={()=>handleMarquerLu(m)}
+                style={{width:"100%",padding:"13px",borderRadius:12,background:G.green,
+                  color:"#fff",border:"none",fontWeight:900,fontSize:15,cursor:"pointer",
+                  boxShadow:"0 2px 8px rgba(22,163,74,0.3)"}}>
+                ✅ J'ai pris connaissance
+              </button>
+            </div>
+          ))}
+
           {/* Dernier message gestionnaire */}
-          {messages.length>0&&(
+          {messages.filter(m=>m.type!=="remplacement").length>0&&(
             <div style={{background:"#fff",borderRadius:16,padding:16,marginBottom:16,
               boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
               <div style={{fontWeight:800,color:G.navy,marginBottom:8,fontSize:14}}>
                 📨 Dernier message gestionnaire
               </div>
-              <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5}}>{messages[0].message}</p>
-              <div style={{fontSize:12,color:G.gray,marginTop:6}}>{fdt(messages[0].created_at)}</div>
+              {(()=>{const m=messages.filter(x=>x.type!=="remplacement")[0];return(<>
+                <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5}}>{m.message}</p>
+                <div style={{fontSize:12,color:G.gray,marginTop:6}}>{fdt(m.created_at)}</div>
+              </>);})()}
               {unreadMsg>0&&(
                 <button onClick={()=>setTab("messages")}
                   style={{marginTop:8,fontSize:13,color:G.green,background:"none",border:"none",
@@ -897,6 +922,44 @@ export default function ConducteurPage(){
               </div>
             ):messages.map(m=>{
               const isNew=!m.read;
+
+              // Alerte remplacement : carte spéciale avec "J'ai pris connaissance"
+              if(m.type==="remplacement"){
+                return(
+                  <div key={m.id} style={{background:isNew?G.amberL:G.grayL,borderRadius:16,
+                    padding:16,marginBottom:10,
+                    border:`2px solid ${isNew?G.amber:G.grayB}`,
+                    boxShadow:isNew?"0 2px 12px rgba(217,119,6,0.15)":"none",
+                    opacity:isNew?1:0.75}}>
+                    <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
+                      <span style={{fontSize:22}}>🔄</span>
+                      <div>
+                        <div style={{fontWeight:800,fontSize:14,color:isNew?G.amber:G.gray}}>
+                          Mission de remplacement
+                        </div>
+                        <div style={{fontSize:11,color:G.gray}}>{fdt(m.created_at)}</div>
+                      </div>
+                    </div>
+                    <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5,
+                      fontWeight:isNew?600:400,marginBottom:isNew?12:0}}>
+                      {m.message}
+                    </p>
+                    {isNew?(
+                      <button onClick={()=>handleMarquerLu(m)} style={{
+                        width:"100%",padding:"12px",borderRadius:10,
+                        background:G.green,color:"#fff",border:"none",
+                        fontWeight:800,fontSize:14,cursor:"pointer",
+                        boxShadow:"0 2px 8px rgba(22,163,74,0.25)"}}>
+                        ✅ J'ai pris connaissance
+                      </button>
+                    ):(
+                      <div style={{fontSize:12,color:G.green,fontWeight:700}}>✅ Prise en charge confirmée</div>
+                    )}
+                  </div>
+                );
+              }
+
+              // Message standard
               const sev=m.severity;
               const c=sev==="critique"?G.red:sev==="haute"?G.amber:G.navy;
               const bg=sev==="critique"?G.redL:sev==="haute"?G.amberL:"#EFF6FF";

@@ -10,20 +10,7 @@ import type {
 } from "@/lib/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type SB  = ReturnType<typeof createClient>;
-type Pill = "circuits" | "vehicules" | "conducteurs" | "absents" | "incidents" | "alertes";
-
-// ── Mobile nav ────────────────────────────────────────────────────────────────
-const NAV = [
-  { path: "/gestionnaire",             icon: "🏠", label: "Tableau de bord" },
-  { path: "/gestionnaire/rapport",     icon: "📋", label: "Rapport journalier" },
-  { path: "/gestionnaire/conducteurs", icon: "👤", label: "Conducteurs" },
-  { path: "/gestionnaire/vehicules",   icon: "🚌", label: "Véhicules" },
-  { path: "/gestionnaire/circuits",    icon: "🛣️", label: "Circuits" },
-  { path: "/gestionnaire/incidents",   icon: "🚨", label: "Incidents" },
-  { path: "/gestionnaire/alertes",     icon: "🔔", label: "Alertes" },
-  { path: "/gestionnaire/export",      icon: "📊", label: "Exports" },
-];
+type SB = ReturnType<typeof createClient>;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const isoToday = () => new Date().toISOString().slice(0, 10);
@@ -79,7 +66,7 @@ function AssignModal({ driver, drivers, circuits, onClose, onAssign }: {
         </div>
         {circ
           ? <div style={{ background: C.amberL, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, border: `1px solid #FDE68A` }}>
-              ⚠️ Circuit <strong>{circ.nom}</strong> non couvert. Assignez un remplaçant.
+              ⚠️ Circuit <strong>{circ.nom}</strong> non couvert — assignez un remplaçant.
             </div>
           : <div style={{ background: C.gray100, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
               Ce conducteur n'a pas de circuit assigné.
@@ -126,7 +113,9 @@ function AssignModal({ driver, drivers, circuits, onClose, onAssign }: {
         <div style={{ textAlign: "center", padding: "32px 0" }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
           <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>Circuit attribué !</div>
-          <div style={{ fontSize: 13, color: C.gray600, marginTop: 8 }}>Le conducteur remplaçant a été notifié.</div>
+          <div style={{ fontSize: 13, color: C.gray600, marginTop: 8 }}>
+            Le remplaçant a été notifié et doit confirmer sa prise en charge.
+          </div>
           <div style={{ marginTop: 20 }}><Btn onClick={onClose} outline color={C.navyL}>Fermer</Btn></div>
         </div>
       )}
@@ -161,14 +150,13 @@ function ChildAbsModal({ absence, enfants, drivers, circuits, onClose, onTransmi
         </div>
         <div style={{ fontSize: 13, color: C.gray800 }}>Motif : <strong>{absence.reason}</strong></div>
         <div style={{ fontSize: 12, color: C.gray600, marginTop: 4 }}>
-          Signalé par {absence.reported_by} à {fmtTime(absence.reported_at)}
+          Signalé à {fmtTime(absence.reported_at)}
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-        <InfoBox label="Circuit"   value={circ ? `${circ.emoji} ${circ.nom}` : "—"} />
-        <InfoBox label="École"     value={circ?.cercle?.nom || "—"} />
-        <InfoBox label="Conducteur" value={drv ? `${drv.prenom} ${drv.nom}` : "—"} />
-        <InfoBox label="Parent"    value={child?.parent_nom || "—"} />
+        <InfoBox label="Circuit"     value={circ ? `${circ.emoji} ${circ.nom}` : "—"} />
+        <InfoBox label="École"       value={circ?.cercle?.nom || "—"} />
+        <InfoBox label="Conducteur"  value={drv ? `${drv.prenom} ${drv.nom}` : "—"} />
         <InfoBox label="Tél. parent" value={child?.parent_tel || "—"} />
       </div>
       {!done
@@ -223,17 +211,15 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
     onClose();
   };
 
-  const btnRow: React.CSSProperties = {
-    display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-    borderRadius: 10, border: `1px solid ${C.gray200}`, marginBottom: 8,
-    background: C.white, cursor: "pointer", fontSize: 13, fontWeight: 600,
-    color: C.gray800, width: "100%", textAlign: "left",
+  const qBtn: React.CSSProperties = {
+    display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderRadius: 10,
+    border: `1px solid ${C.gray200}`, marginBottom: 8, background: C.white,
+    cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.gray800, width: "100%", textAlign: "left",
   };
 
   return (
     <Modal title="Traiter l'incident" onClose={onClose} wide>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-        {/* Left: details */}
         <div>
           <div style={{ fontWeight: 800, fontSize: 15, color: C.gray800, marginBottom: 6 }}>
             {TYPE_LABEL[incident.type] || incident.type}
@@ -245,63 +231,47 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
             {incident.description}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <InfoBox label="Signalé le"  value={fmtDT(incident.reported_at)} />
-            <InfoBox label="Conducteur"  value={drv  ? `${drv.prenom} ${drv.nom}` : "—"} />
-            <InfoBox label="Véhicule"    value={veh?.plaque || "—"} />
-            <InfoBox label="Circuit"     value={circ ? `${circ.emoji} ${circ.nom}` : "—"} />
+            <InfoBox label="Signalé le" value={fmtDT(incident.reported_at)} />
+            <InfoBox label="Conducteur" value={drv ? `${drv.prenom} ${drv.nom}` : "—"} />
+            <InfoBox label="Véhicule"   value={veh?.plaque || "—"} />
+            <InfoBox label="Circuit"    value={circ ? `${circ.emoji} ${circ.nom}` : "—"} />
             {drv?.tel && <InfoBox label="Tél." value={drv.tel} full />}
           </div>
         </div>
-
-        {/* Right: actions */}
         <div>
-          {/* Quick actions by type */}
           {isPanne && <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
-              Actions rapides
-            </div>
-            <button style={btnRow} onClick={() => quick(`Incident transmis au mécanicien pour véhicule ${veh?.plaque || ""}`, "transmis_meca")}>
+            <div style={{ ...labelSt, marginBottom: 8 }}>Actions rapides</div>
+            <button style={qBtn} onClick={() => quick(`Transmis au mécanicien — véhicule ${veh?.plaque || ""}`, "transmis_meca")}>
               🔧 Envoyer au mécanicien
             </button>
-            <button style={btnRow} onClick={() => quick(`Véhicule ${veh?.plaque || ""} immobilisé suite à l'incident.`, "immobiliser")}>
+            <button style={qBtn} onClick={() => quick(`Véhicule ${veh?.plaque || ""} immobilisé.`, "immobiliser")}>
               🚫 Immobiliser le véhicule
             </button>
           </>}
           {isRetard && <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
-              Actions rapides
-            </div>
-            <button style={btnRow} onClick={() => quick("L'école a été informée du retard.")}>
+            <div style={{ ...labelSt, marginBottom: 8 }}>Actions rapides</div>
+            <button style={qBtn} onClick={() => quick("École informée du retard.")}>
               🏫 Informer l'école
             </button>
-            <button style={btnRow} onClick={() => quick("Les parents ont été informés du retard.")}>
+            <button style={qBtn} onClick={() => quick("Parents informés du retard.")}>
               👨‍👩‍👧 Informer les parents
             </button>
           </>}
           {isPers && <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
-              Actions rapides
-            </div>
-            <button style={btnRow} onClick={() => quick("Le parent a été contacté.")}>
-              📞 Contacter le parent
-            </button>
-            <button style={btnRow} onClick={() => quick("L'école a été contactée.")}>
-              🏫 Contacter l'école
-            </button>
+            <div style={{ ...labelSt, marginBottom: 8 }}>Actions rapides</div>
+            <button style={qBtn} onClick={() => quick("Parent contacté.")}>📞 Contacter le parent</button>
+            <button style={qBtn} onClick={() => quick("École contactée.")}>🏫 Contacter l'école</button>
           </>}
-
-          {/* Response textarea */}
           <div style={{ marginTop: 12 }}>
             <label style={labelSt}>Réponse / note</label>
             <textarea value={response} onChange={e => setResponse(e.target.value)} rows={3}
-              style={{ ...inputSt, resize: "vertical" }} placeholder="Décrivez l'action prise..." />
+              style={{ ...inputSt, resize: "vertical" }} placeholder="Action prise..." />
           </div>
-
-          {/* Status toggle */}
           <div style={{ display: "flex", gap: 8, margin: "10px 0" }}>
             {(["en_cours", "resolu"] as const).map(s => (
               <button key={s} onClick={() => setStatus(s)}
-                style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `2px solid ${status === s ? C.green : C.gray200}`,
+                style={{ flex: 1, padding: "8px 0", borderRadius: 8,
+                  border: `2px solid ${status === s ? C.green : C.gray200}`,
                   background: status === s ? C.greenL : C.white,
                   fontWeight: 700, fontSize: 12, cursor: "pointer",
                   color: status === s ? C.green : C.gray600 }}>
@@ -309,9 +279,8 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
               </button>
             ))}
           </div>
-
           <Btn full onClick={save} color={status === "resolu" ? C.green : C.navyL} disabled={busy}>
-            {busy ? "Sauvegarde..." : status === "resolu" ? "✅ Résoudre l'incident" : "💾 Enregistrer"}
+            {busy ? "Sauvegarde..." : status === "resolu" ? "✅ Résoudre" : "💾 Enregistrer"}
           </Btn>
         </div>
       </div>
@@ -335,9 +304,7 @@ export default function GestionnaireDashboard() {
   const [reparations, setReparations] = useState<Reparation[]>([]);
   const [loading,     setLoading]     = useState(true);
 
-  const [pill,        setPill]        = useState<Pill>("circuits");
   const [drawerOpen,  setDrawerOpen]  = useState(false);
-  const [incFilter,   setIncFilter]   = useState("");
   const [absentModal, setAbsentModal] = useState<Conducteur | null>(null);
   const [childAbsM,   setChildAbsM]   = useState<AbsenceEnfant | null>(null);
   const [incModal,    setIncModal]    = useState<Incident | null>(null);
@@ -349,9 +316,7 @@ export default function GestionnaireDashboard() {
       const { data: p } = await sb.from("profiles").select("prenom").eq("id", user.id).single();
       if (p?.prenom) setGestPrenom(p.prenom);
     }
-
     const today = isoToday();
-
     const [drv, veh, cir, enf, absT, inc, alt, rep] = await Promise.all([
       sb.from("conducteurs")
         .select("*,circuit:circuits(*,cercle:cercles_scolaires(*)),vehicule:vehicules(*)")
@@ -379,7 +344,6 @@ export default function GestionnaireDashboard() {
         .order("created_at", { ascending: false })
         .limit(20),
     ]);
-
     setDrivers(drv.data ?? []);
     setVehicles(veh.data ?? []);
     setCircuits(cir.data ?? []);
@@ -394,12 +358,13 @@ export default function GestionnaireDashboard() {
   // ── Realtime ──────────────────────────────────────────────────────────────
   useEffect(() => {
     fetchAll();
-    const ch = sb.channel("gest-dashboard-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "incidents" },         fetchAll)
-      .on("postgres_changes", { event: "*", schema: "public", table: "conducteurs" },       fetchAll)
-      .on("postgres_changes", { event: "*", schema: "public", table: "vehicules" },         fetchAll)
-      .on("postgres_changes", { event: "*", schema: "public", table: "alertes" },           fetchAll)
-      .on("postgres_changes", { event: "*", schema: "public", table: "absences_enfants" }, fetchAll)
+    const ch = sb.channel("gest-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "incidents" },              fetchAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conducteurs" },            fetchAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "vehicules" },              fetchAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "alertes" },               fetchAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "absences_enfants" },      fetchAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "absences_conducteurs" },  fetchAll)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [fetchAll, sb]);
@@ -408,17 +373,49 @@ export default function GestionnaireDashboard() {
   const handleAssign = async (absentId: number, replacerId: number, circuitId: string) => {
     const absent   = drivers.find(d => d.id === absentId);
     const replacer = drivers.find(d => d.id === replacerId);
+    const circ     = circuits.find(c => c.id === circuitId);
+
+    // Mettre le remplaçant en service sur ce circuit
     await sb.from("conducteurs").update({ status: "en_service", circuit_id: circuitId }).eq("id", replacerId);
+
+    // Enregistrer l'absence gérée
     await sb.from("absences_conducteurs").insert({
-      conducteur_id: absentId, date_absence: isoToday(),
-      motif: absent?.absence_motif || "", remplacant_id: replacerId,
-      circuit_id: circuitId, status: "couvert",
+      conducteur_id: absentId,
+      date_absence: isoToday(),
+      motif: absent?.absence_motif || "",
+      remplacant_id: replacerId,
+      circuit_id: circuitId,
+      status: "couvert",
     });
+
+    // Log de service pour le remplaçant (historique)
+    await sb.from("service_logs").insert({
+      conducteur_id: replacerId,
+      circuit_id: circuitId,
+      vehicule_id: absent?.vehicule_id || null,
+      date_service: isoToday(),
+      is_replacement: true,
+      status: "en_service",
+      notes: `Remplacement de ${absent?.prenom || ""} ${absent?.nom || ""}`,
+    });
+
+    // Notification au remplaçant (type "remplacement" → conducteur voit un bouton "J'ai pris connaissance")
     await sb.from("alertes").insert({
-      type: "conducteur", severity: "normale",
-      message: `${replacer?.prenom || ""} ${replacer?.nom || ""} prend en charge le circuit de ${absent?.prenom} ${absent?.nom} (absent).`,
-      read: false, driver_id: replacerId,
+      type: "remplacement",
+      severity: "haute",
+      message: `Vous remplacez ${absent?.prenom || ""} ${absent?.nom || ""} aujourd'hui sur le circuit ${circ?.emoji || ""} ${circ?.nom || ""} (${circ?.num || ""}). Merci de confirmer votre prise en charge.`,
+      read: false,
+      driver_id: replacerId,
     });
+
+    // Notification globale gestionnaire/admin
+    await sb.from("alertes").insert({
+      type: "conducteur",
+      severity: "normale",
+      message: `${replacer?.prenom || ""} ${replacer?.nom || ""} remplace ${absent?.prenom || ""} ${absent?.nom || ""} — circuit ${circ?.nom || ""}.`,
+      read: false,
+    });
+
     fetchAll();
     setAbsentModal(null);
   };
@@ -437,9 +434,11 @@ export default function GestionnaireDashboard() {
     if (extra === "transmis_meca") {
       const inc = incidents.find(i => i.id === id);
       await sb.from("alertes").insert({
-        type: "transmis_meca", severity: "haute",
+        type: "transmis_meca",
+        severity: "haute",
         message: `Incident transmis au mécanicien : ${inc?.vehicule?.plaque || inc?.vehicule_id || ""} — ${inc?.description?.slice(0, 100) || ""}`,
-        read: false, vehicle_id: inc?.vehicule_id,
+        read: false,
+        vehicle_id: inc?.vehicule_id,
       });
     }
     if (extra === "immobiliser") {
@@ -458,45 +457,40 @@ export default function GestionnaireDashboard() {
   const unreadAlerts  = alerts;
   const newChildAbs   = todayAbs.filter(a => !a.read_by_gestionnaire);
   const coveredCirc   = circuits.filter(c => enServiceDrv.some(d => d.circuit_id === c.id));
-
-  const filteredInc = incFilter ? openInc.filter(i => i.type === incFilter) : openInc;
-
-  // ── Pills ─────────────────────────────────────────────────────────────────
-  type PillCfg = { id: Pill; icon: string; label: string; count: number; accent: string; urgent?: boolean };
-  const PILLS: PillCfg[] = [
-    { id: "circuits",    icon: "🛣️", label: "Circuits",   count: circuits.length,     accent: C.navyL },
-    { id: "vehicules",   icon: "🚌", label: "En service",  count: enServiceVeh.length, accent: enServiceVeh.length > 0 ? C.green : C.gray400 },
-    { id: "conducteurs", icon: "👤", label: "Présents",    count: enServiceDrv.length, accent: C.navyL },
-    { id: "absents",     icon: "⚠️", label: "Absents",     count: absents.length,      accent: absents.length > 0 ? C.amber : C.gray400, urgent: absents.length > 0 },
-    { id: "incidents",   icon: "🚨", label: "Incidents",   count: openInc.length,      accent: openInc.length > 0 ? C.red : C.green,   urgent: openInc.length > 0 },
-    { id: "alertes",     icon: "🔔", label: "Alertes",     count: unreadAlerts.length, accent: unreadAlerts.length > 0 ? C.amber : C.gray400 },
-  ];
+  const uncoveredCirc = circuits.filter(c => {
+    const drv = drivers.find(d => d.circuit_id === c.id);
+    return !drv || drv.status === "absent";
+  });
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh",
-      flexDirection: "column", gap: 12, color: C.gray400 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
+      height: "60vh", flexDirection: "column", gap: 12, color: C.gray400 }}>
       <div style={{ fontSize: 36 }}>⏳</div>
       <div style={{ fontWeight: 700, fontSize: 15 }}>Chargement…</div>
     </div>
   );
 
-  // ── Shared row style ──────────────────────────────────────────────────────
+  // Stat card helper
+  const stat = (
+    icon: string, label: string, value: number, sub: string,
+    borderColor: string, path: string, urgent = false
+  ) => (
+    <div onClick={() => router.push(path)}
+      style={{ background: C.white, borderRadius: 12, padding: "16px 18px", cursor: "pointer",
+        border: `1px solid ${C.gray200}`, borderTop: `3px solid ${borderColor}`,
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)", transition: "box-shadow .15s" }}>
+      <div style={{ fontSize: 20, marginBottom: 4 }}>{icon}</div>
+      <div style={{ fontSize: 24, fontWeight: 900, color: urgent ? borderColor : C.gray800 }}>{value}</div>
+      <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>{label}</div>
+      <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>{sub}</div>
+    </div>
+  );
+
   const row: React.CSSProperties = {
     padding: "11px 16px", borderBottom: `1px solid ${C.gray100}`,
     display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
   };
-
-  const sectionHeader = (title: string, link: string, linkLabel = "Voir tout →") => (
-    <div style={{ padding: "13px 16px", borderBottom: `1px solid ${C.gray200}`,
-      display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>{title}</span>
-      <button onClick={() => router.push(link)}
-        style={{ background: "none", border: "none", color: C.navyL, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-        {linkLabel}
-      </button>
-    </div>
-  );
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -516,7 +510,7 @@ export default function GestionnaireDashboard() {
           onClose={() => setIncModal(null)} onAction={handleIncidentAction} />
       )}
 
-      {/* ── Mobile header (hamburger) ────────────────────────────────────── */}
+      {/* ── Mobile header ─────────────────────────────────────────────────── */}
       <div className="tx-mobile-header" style={{
         position: "sticky", top: 0, zIndex: 200, background: C.white,
         borderBottom: `1px solid ${C.gray200}`, padding: "0 16px", height: 48,
@@ -535,16 +529,27 @@ export default function GestionnaireDashboard() {
         <div style={{ position: "fixed", inset: 0, zIndex: 500, display: "flex" }}>
           <div style={{ flex: 1, background: "rgba(0,0,0,0.4)" }} onClick={() => setDrawerOpen(false)} />
           <div style={{ width: 260, background: C.white, height: "100%", overflowY: "auto",
-            boxShadow: "-4px 0 20px rgba(0,0,0,0.15)", display: "flex", flexDirection: "column" }}>
+            boxShadow: "-4px 0 20px rgba(0,0,0,0.15)" }}>
             <div style={{ padding: "16px 16px 10px", borderBottom: `1px solid ${C.gray100}`,
               fontWeight: 800, fontSize: 15, color: C.navy }}>
               Navigation
             </div>
-            {NAV.map(n => (
+            {[
+              { path: "/gestionnaire",             icon: "🏠", label: "Tableau de bord" },
+              { path: "/gestionnaire/rapport",     icon: "📋", label: "Rapport journalier" },
+              { path: "/gestionnaire/imprevus",    icon: "⚡", label: "Imprévus" },
+              { path: "/gestionnaire/conducteurs", icon: "👤", label: "Conducteurs" },
+              { path: "/gestionnaire/vehicules",   icon: "🚌", label: "Véhicules" },
+              { path: "/gestionnaire/circuits",    icon: "🛣️", label: "Circuits" },
+              { path: "/gestionnaire/incidents",   icon: "🚨", label: "Incidents" },
+              { path: "/gestionnaire/alertes",     icon: "🔔", label: "Alertes" },
+              { path: "/gestionnaire/export",      icon: "📊", label: "Exports" },
+            ].map(n => (
               <button key={n.path} onClick={() => { router.push(n.path); setDrawerOpen(false); }}
                 style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px",
                   border: "none", background: C.white, color: C.gray800, fontSize: 14,
-                  cursor: "pointer", textAlign: "left", borderBottom: `1px solid ${C.gray100}` }}>
+                  cursor: "pointer", textAlign: "left", borderBottom: `1px solid ${C.gray100}`,
+                  width: "100%" }}>
                 <span style={{ fontSize: 18 }}>{n.icon}</span>
                 <span>{n.label}</span>
               </button>
@@ -561,9 +566,7 @@ export default function GestionnaireDashboard() {
         alignItems: "center", flexWrap: "wrap", gap: 12,
       }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 2 }}>
-            Bonjour {gestPrenom} !
-          </div>
+          <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 2 }}>Bonjour {gestPrenom} !</div>
           <div style={{ fontSize: 12, opacity: 0.7 }}>{todayStr()}</div>
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -585,267 +588,43 @@ export default function GestionnaireDashboard() {
         </div>
       </div>
 
-      {/* ── 6 Pills ───────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-        {PILLS.map(p => {
-          const active = pill === p.id;
-          return (
-            <button key={p.id} onClick={() => setPill(p.id)}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "7px 14px", borderRadius: 100,
-                border: `2px solid ${active ? p.accent : C.gray200}`,
-                background: active ? p.accent : C.white,
-                color: active ? C.white : p.urgent ? p.accent : C.gray600,
-                fontWeight: 700, fontSize: 13, cursor: "pointer",
-                transition: "all .15s",
-                boxShadow: active ? `0 2px 8px ${p.accent}44` : "none",
-              }}>
-              <span style={{ fontSize: 15 }}>{p.icon}</span>
-              <span>{p.label}</span>
-              <span style={{
-                background: active ? "rgba(255,255,255,0.3)" : (p.urgent ? p.accent : C.gray200),
-                color: active ? C.white : (p.urgent ? C.white : C.gray600),
-                borderRadius: 100, fontSize: 11, fontWeight: 800,
-                padding: "1px 7px", minWidth: 18, textAlign: "center",
-              }}>
-                {p.count}
-              </span>
-            </button>
-          );
-        })}
+      {/* ── 6 Métriques (naviguent vers sous-pages) ───────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 20 }}>
+        {stat("🚌", "Véhicules en service", enServiceVeh.length,
+          `${vehicles.length - enServiceVeh.length} en atelier / hors service`,
+          enServiceVeh.length > 0 ? C.green : C.gray400, "/gestionnaire/vehicules")}
+        {stat("👤", "Conducteurs présents", enServiceDrv.length,
+          `${drivers.filter(d => d.status === "disponible").length} disponibles`,
+          C.navyL, "/gestionnaire/conducteurs")}
+        {stat("⚠️", "Absents du jour", absents.length,
+          `${absents.filter(d => !!d.circuit_id).length} circuits à couvrir`,
+          absents.length > 0 ? C.amber : C.gray400, "/gestionnaire/conducteurs", absents.length > 0)}
+        {stat("🚨", "Incidents ouverts", openInc.length,
+          `Temps réel · màj automatique`,
+          openInc.length > 0 ? C.red : C.green, "/gestionnaire/incidents", openInc.length > 0)}
+        {stat("🔔", "Alertes non lues", unreadAlerts.length,
+          `${newChildAbs.length} nouvelles absences enfants`,
+          unreadAlerts.length > 0 ? C.amber : C.gray400, "/gestionnaire/alertes")}
+        {stat("🛣️", "Circuits couverts", coveredCirc.length,
+          `sur ${circuits.length} circuits · ${uncoveredCirc.length} non couverts`,
+          uncoveredCirc.length > 0 ? C.red : C.green, "/gestionnaire/circuits", uncoveredCirc.length > 0)}
       </div>
 
-      {/* ── Content area ──────────────────────────────────────────────────── */}
-      <Card>
+      {/* ── Panels urgents ────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-        {/* CIRCUITS ─────────────────────────────────────────────────────── */}
-        {pill === "circuits" && <>
-          {sectionHeader(`🛣️ Circuits du jour (${coveredCirc.length}/${circuits.length} couverts)`, "/gestionnaire/circuits")}
-          <div style={{ maxHeight: 520, overflowY: "auto" }}>
-            {circuits.length === 0 && (
-              <div style={{ padding: 32, textAlign: "center", color: C.gray400 }}>Aucun circuit configuré</div>
-            )}
-            {circuits.map(circ => {
-              const drv      = drivers.find(d => d.circuit_id === circ.id && d.status !== "absent");
-              const absDrv   = drivers.find(d => d.circuit_id === circ.id && d.status === "absent");
-              const uncovered = !drv;
-              return (
-                <div key={circ.id} style={{
-                  ...row, background: uncovered ? "#FFF5F5" : C.white,
-                }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 20, flexShrink: 0 }}>{circ.emoji}</span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>{circ.num} · {circ.nom}</div>
-                      <div style={{ fontSize: 11, color: C.gray400, marginTop: 1 }}>
-                        {circ.cercle?.nom} · {circ.enfants_count} enfants
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                    {drv && (
-                      <span style={{ fontSize: 12, color: C.gray600 }}>{drv.prenom} {drv.nom}</span>
-                    )}
-                    {!drv && absDrv && (
-                      <button onClick={() => setAbsentModal(absDrv)}
-                        style={{ background: C.redL, border: `1px solid #FCA5A5`, color: C.red,
-                          borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                        ⚠️ Gérer l'absence
-                      </button>
-                    )}
-                    <Badge color={drv ? (drv.status === "en_service" ? "green" : "amber") : "red"}>
-                      {drv ? statusLabel(drv.status) : "Non couvert"}
-                    </Badge>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {/* Absences enfants du jour */}
-          {todayAbs.length > 0 && (
-            <>
-              <div style={{ padding: "12px 16px", borderTop: `2px solid ${C.gray100}`, borderBottom: `1px solid ${C.gray200}`,
-                fontWeight: 700, fontSize: 13, color: C.gray800 }}>
-                👶 Absences enfants du jour ({todayAbs.length})
-                {newChildAbs.length > 0 && <span style={{ color: C.red, marginLeft: 6 }}>{newChildAbs.length} nouvelles</span>}
-              </div>
-              {todayAbs.slice(0, 5).map(a => {
-                const child = a.enfant || enfants.find(e => e.id === a.enfant_id);
-                const circ  = circuits.find(c => c.id === a.circuit_id);
-                return (
-                  <div key={a.id} onClick={() => setChildAbsM(a)}
-                    style={{ ...row, cursor: "pointer", background: a.read_by_gestionnaire ? C.white : C.amberL }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>{child?.prenom} {child?.nom}</div>
-                      <div style={{ fontSize: 11, color: C.gray400, marginTop: 1 }}>
-                        {a.reason} · {circ?.emoji} {circ?.nom} · {fmtTime(a.reported_at)}
-                      </div>
-                    </div>
-                    <Badge color={a.transmitted_to_driver ? "green" : "amber"}>
-                      {a.transmitted_to_driver ? "Transmis" : "À transmettre"}
-                    </Badge>
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </>}
-
-        {/* VÉHICULES ────────────────────────────────────────────────────── */}
-        {pill === "vehicules" && <>
-          {sectionHeader("🚌 Véhicules en service", "/gestionnaire/vehicules")}
-          <div style={{ maxHeight: 520, overflowY: "auto" }}>
-            {vehicles.length === 0 && (
-              <div style={{ padding: 32, textAlign: "center", color: C.gray400 }}>Aucun véhicule</div>
-            )}
-            {vehicles.map(v => {
-              const drv  = drivers.find(d => d.vehicule_id === v.id);
-              const etat = (v.etat as string);
-              const color = etat === "bon" ? C.green : etat === "atelier" ? C.red : C.amber;
-              const bg    = etat === "bon" ? C.greenL : etat === "atelier" ? C.redL : C.amberL;
-              return (
-                <div key={v.id} style={{ ...row }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", flex: 1 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 8, background: bg,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 18, flexShrink: 0 }}>
-                      🚌
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>{v.plaque}</div>
-                      <div style={{ fontSize: 11, color: C.gray400, marginTop: 1 }}>
-                        {v.marque} {v.modele} · {v.places} pl.
-                        {drv && ` · ${drv.prenom} ${drv.nom}`}
-                      </div>
-                    </div>
-                  </div>
-                  <Badge color={etat === "bon" ? "green" : etat === "atelier" ? "red" : "amber"}>
-                    {etat === "bon" ? "En service" : etat === "atelier" ? "Atelier" : "Attention"}
-                  </Badge>
-                </div>
-              );
-            })}
-          </div>
-          {reparations.length > 0 && (
-            <>
-              <div style={{ padding: "12px 16px", borderTop: `2px solid ${C.gray100}`, borderBottom: `1px solid ${C.gray200}`,
-                fontWeight: 700, fontSize: 13, color: C.gray800 }}>
-                🔧 Réparations en cours ({reparations.length})
-              </div>
-              {reparations.map(r => (
-                <div key={r.id} style={row}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{r.vehicule?.plaque || r.vehicule_id}</div>
-                    <div style={{ fontSize: 11, color: C.gray400, marginTop: 1 }}>{r.description?.slice(0, 60)}</div>
-                  </div>
-                  {r.cout && <span style={{ fontSize: 12, color: C.amber, fontWeight: 700 }}>{r.cout} CHF</span>}
-                </div>
-              ))}
-            </>
-          )}
-        </>}
-
-        {/* CONDUCTEURS PRÉSENTS ─────────────────────────────────────────── */}
-        {pill === "conducteurs" && <>
-          {sectionHeader(`👤 Conducteurs en service aujourd'hui (${enServiceDrv.length})`, "/gestionnaire/conducteurs")}
-          <div style={{ maxHeight: 520, overflowY: "auto" }}>
-            {enServiceDrv.length === 0 && (
-              <div style={{ padding: 32, textAlign: "center", color: C.gray400 }}>Aucun conducteur en service aujourd'hui</div>
-            )}
-            {enServiceDrv.map(d => {
-              const circ = circuits.find(c => c.id === d.circuit_id);
-              const veh  = vehicles.find(v => v.id === d.vehicule_id);
-              return (
-                <div key={d.id} style={row}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <Avatar initials={d.photo_initials} size={36} />
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>{d.prenom} {d.nom}</div>
-                      <div style={{ fontSize: 11, color: C.gray400, marginTop: 1 }}>
-                        {circ ? `${circ.emoji} ${circ.nom}` : "Sans circuit"}
-                        {veh && ` · ${veh.plaque}`}
-                        {d.tel && ` · ${d.tel}`}
-                      </div>
-                    </div>
-                  </div>
-                  <Badge color="green">En service</Badge>
-                </div>
-              );
-            })}
-          </div>
-        </>}
-
-        {/* ABSENTS ─────────────────────────────────────────────────────── */}
-        {pill === "absents" && <>
-          {sectionHeader(`⚠️ Absents du jour (${absents.length})`, "/gestionnaire/conducteurs")}
-          <div style={{ maxHeight: 520, overflowY: "auto" }}>
-            {absents.length === 0 && (
-              <div style={{ padding: 32, textAlign: "center", color: C.gray400 }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
-                Aucune absence aujourd'hui
-              </div>
-            )}
-            {absents.map(d => {
-              const circ = circuits.find(c => c.id === d.circuit_id);
-              return (
-                <div key={d.id} style={{ ...row, background: C.redL }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", flex: 1 }}>
-                    <Avatar initials={d.photo_initials} size={36} color={C.red} />
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: C.red }}>{d.prenom} {d.nom}</div>
-                      <div style={{ fontSize: 11, color: C.gray600, marginTop: 1 }}>
-                        {d.absence_motif || "Motif non renseigné"}
-                        {circ && ` · Circuit : ${circ.emoji} ${circ.nom}`}
-                      </div>
-                    </div>
-                  </div>
-                  <button onClick={() => setAbsentModal(d)}
-                    style={{ background: C.navyL, color: C.white, border: "none", borderRadius: 8,
-                      padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-                    Gérer →
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </>}
-
-        {/* INCIDENTS ───────────────────────────────────────────────────── */}
-        {pill === "incidents" && <>
-          <div style={{ padding: "13px 16px", borderBottom: `1px solid ${C.gray200}`,
-            display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>
-              🚨 Incidents ouverts ({openInc.length})
-            </span>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <select value={incFilter} onChange={e => setIncFilter(e.target.value)}
-                style={{ padding: "5px 10px", borderRadius: 8, border: `1px solid ${C.gray200}`,
-                  fontSize: 12, color: C.gray600, background: C.white, cursor: "pointer" }}>
-                <option value="">Tous les types</option>
-                <option value="panne">Panne</option>
-                <option value="voyant">Voyant</option>
-                <option value="accident">Accident</option>
-                <option value="retard">Retard</option>
-                <option value="degradation">Dégradation</option>
-                <option value="enfant">Enfant</option>
-                <option value="parent">Parent</option>
-                <option value="autre">Autre</option>
-              </select>
+        {/* Incidents ouverts */}
+        {openInc.length > 0 && (
+          <Card>
+            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.gray200}`,
+              display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: C.red }}>🚨 Incidents ouverts</span>
               <button onClick={() => router.push("/gestionnaire/incidents")}
                 style={{ background: "none", border: "none", color: C.navyL, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                Voir tout →
+                Gérer tout →
               </button>
             </div>
-          </div>
-          <div style={{ maxHeight: 520, overflowY: "auto" }}>
-            {filteredInc.length === 0 && (
-              <div style={{ padding: 32, textAlign: "center", color: C.gray400 }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
-                Aucun incident ouvert
-              </div>
-            )}
-            {filteredInc.map(i => {
+            {openInc.slice(0, 5).map(i => {
               const TYPE_ICON: Record<string, string> = {
                 panne: "🔧", voyant: "💡", accident: "🚨", retard: "⏰",
                 degradation: "🪟", enfant: "👶", parent: "👨‍👩‍👧", autre: "❓",
@@ -853,13 +632,13 @@ export default function GestionnaireDashboard() {
               return (
                 <div key={i.id} onClick={() => setIncModal(i)}
                   style={{ ...row, cursor: "pointer" }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }}>{TYPE_ICON[i.type] || "❓"}</span>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>{TYPE_ICON[i.type] || "❓"}</span>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800, marginBottom: 2 }}>
-                        {i.description.slice(0, 80)}{i.description.length > 80 ? "…" : ""}
+                      <div style={{ fontWeight: 600, fontSize: 13, color: C.gray800 }}>
+                        {i.description.slice(0, 70)}{i.description.length > 70 ? "…" : ""}
                       </div>
-                      <div style={{ fontSize: 11, color: C.gray400 }}>
+                      <div style={{ fontSize: 11, color: C.gray400, marginTop: 1 }}>
                         {i.conducteur ? `${i.conducteur.prenom} ${i.conducteur.nom}` : "—"}
                         {i.vehicule ? ` · ${i.vehicule.plaque}` : ""}
                         {" · "}{fmtDT(i.reported_at)}
@@ -872,60 +651,118 @@ export default function GestionnaireDashboard() {
                 </div>
               );
             })}
-          </div>
-        </>}
+          </Card>
+        )}
 
-        {/* ALERTES ─────────────────────────────────────────────────────── */}
-        {pill === "alertes" && <>
-          {sectionHeader(`🔔 Alertes non lues (${unreadAlerts.length})`, "/gestionnaire/alertes")}
-          <div style={{ maxHeight: 520, overflowY: "auto" }}>
-            {unreadAlerts.length === 0 && (
-              <div style={{ padding: 32, textAlign: "center", color: C.gray400 }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
-                Aucune alerte non lue
-              </div>
-            )}
-            {unreadAlerts.map(a => {
-              const SEVER_COLOR: Record<string, string> = {
-                haute: C.red, normale: C.amber, basse: C.gray400,
-              };
-              const SEVER_BG: Record<string, string> = {
-                haute: C.redL, normale: C.amberL, basse: C.gray100,
-              };
-              const TYPE_ICON: Record<string, string> = {
-                conducteur: "👤", vehicule: "🚌", incident: "🚨", transmis_meca: "🔧",
-                rapport_admin: "📋", alerte: "🔔", absence: "👶", autre: "❓",
-              };
+        {/* Absents du jour */}
+        {absents.length > 0 && (
+          <Card>
+            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.gray200}`,
+              display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: C.amber }}>⚠️ Conducteurs absents du jour</span>
+              <button onClick={() => router.push("/gestionnaire/conducteurs")}
+                style={{ background: "none", border: "none", color: C.navyL, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                Voir tout →
+              </button>
+            </div>
+            {absents.map(d => {
+              const circ = circuits.find(c => c.id === d.circuit_id);
               return (
-                <div key={a.id} style={{
-                  ...row, background: SEVER_BG[a.severity] || C.white,
-                  alignItems: "flex-start",
-                }}>
-                  <span style={{ fontSize: 18, flexShrink: 0, marginTop: 2 }}>
-                    {TYPE_ICON[a.type] || "🔔"}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800, marginBottom: 2 }}>
-                      {a.message.slice(0, 100)}{a.message.length > 100 ? "…" : ""}
+                <div key={d.id} style={{ ...row, background: C.amberL }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flex: 1 }}>
+                    <Avatar initials={d.photo_initials} size={34} color={C.amber} />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>{d.prenom} {d.nom}</div>
+                      <div style={{ fontSize: 11, color: C.gray600 }}>
+                        {d.absence_motif || "Motif non renseigné"}
+                        {circ && ` · ${circ.emoji} ${circ.nom}`}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 11, color: C.gray400 }}>{fmtDT(a.created_at)}</div>
                   </div>
-                  <button onClick={async e => {
-                    e.stopPropagation();
-                    await sb.from("alertes").update({ read: true, read_at: new Date().toISOString() }).eq("id", a.id);
-                    fetchAll();
-                  }} style={{ background: "none", border: `1px solid ${C.gray200}`, borderRadius: 6,
-                    padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
-                    color: C.gray600, flexShrink: 0 }}>
-                    ✓ Lu
+                  <button onClick={() => setAbsentModal(d)}
+                    style={{ background: C.navyL, color: C.white, border: "none", borderRadius: 8,
+                      padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                    Gérer →
                   </button>
                 </div>
               );
             })}
-          </div>
-        </>}
+          </Card>
+        )}
 
-      </Card>
+        {/* Circuits non couverts */}
+        {uncoveredCirc.length > 0 && (
+          <Card>
+            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.gray200}`,
+              display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: C.red }}>🛣️ Circuits non couverts</span>
+            </div>
+            {uncoveredCirc.map(circ => {
+              const absDrv = drivers.find(d => d.circuit_id === circ.id && d.status === "absent");
+              return (
+                <div key={circ.id} style={{ ...row }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <span style={{ fontSize: 20 }}>{circ.emoji}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{circ.num} · {circ.nom}</div>
+                      <div style={{ fontSize: 11, color: C.gray400 }}>{circ.enfants_count} enfants · {circ.cercle?.nom}</div>
+                    </div>
+                  </div>
+                  {absDrv && (
+                    <button onClick={() => setAbsentModal(absDrv)}
+                      style={{ background: C.redL, color: C.red, border: `1px solid #FCA5A5`, borderRadius: 8,
+                        padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      ⚠️ Remplaçant
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </Card>
+        )}
+
+        {/* Absences enfants du jour */}
+        {todayAbs.length > 0 && (
+          <Card>
+            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.gray200}`,
+              display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>
+                👶 Absences enfants aujourd'hui
+                {newChildAbs.length > 0 && (
+                  <span style={{ marginLeft: 6, color: C.red, fontSize: 12 }}>({newChildAbs.length} non transmises)</span>
+                )}
+              </span>
+            </div>
+            {todayAbs.slice(0, 6).map(a => {
+              const child = a.enfant || enfants.find(e => e.id === a.enfant_id);
+              const circ  = circuits.find(c => c.id === a.circuit_id);
+              return (
+                <div key={a.id} onClick={() => setChildAbsM(a)}
+                  style={{ ...row, cursor: "pointer", background: a.read_by_gestionnaire ? C.white : C.amberL }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>{child?.prenom} {child?.nom}</div>
+                    <div style={{ fontSize: 11, color: C.gray400 }}>
+                      {a.reason} · {circ?.emoji} {circ?.nom} · {fmtTime(a.reported_at)}
+                    </div>
+                  </div>
+                  <Badge color={a.transmitted_to_driver ? "green" : "amber"}>
+                    {a.transmitted_to_driver ? "Transmis" : "À transmettre"}
+                  </Badge>
+                </div>
+              );
+            })}
+          </Card>
+        )}
+
+        {/* All good */}
+        {openInc.length === 0 && absents.length === 0 && uncoveredCirc.length === 0 && newChildAbs.length === 0 && (
+          <div style={{ textAlign: "center", padding: "32px 0", color: C.gray400 }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Tout est en ordre aujourd'hui</div>
+            <div style={{ fontSize: 13, marginTop: 4 }}>Aucun incident · Aucune absence · Tous les circuits couverts</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
