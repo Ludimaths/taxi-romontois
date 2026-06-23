@@ -318,3 +318,187 @@ $utf8NoBOM = New-Object System.Text.UTF8Encoding $false
 4. Inline styles uniquement — pas de classes Tailwind dans les composants.
 5. Jointures Supabase avec FK multiples sur la même table : utiliser l'alias avec le nom de colonne FK : `conducteur:conducteurs!conducteur_id(prenom,nom)`.
 6. Toujours filtrer les incidents actifs avec `.neq("status","resolu")` (pas `.eq("status","en_attente")`).
+
+---
+
+## ROADMAP TAXI ROMONTOIS — Version complète
+
+Mise à jour : 23 juin 2026
+
+---
+
+### PHASE 1 — Finir et stabiliser
+
+#### 1. Fix en cours (Claude Code est dessus)
+
+- [x] Badges notifications sidebar (incidentsCount + alertesCount) via Realtime Supabase
+- [x] Stabilisation shadcn + globals.css + layout.tsx
+
+#### 2. Compte Mécanicien
+
+- [ ] Fiche réception véhicule (infos véhicule, description, photos téléversables, date/heure)
+- [ ] Statuts réparation progressifs : Réceptionné → Réparation en cours → En attente de pièces → En attente de validation admin (si montant > seuil) → Véhicule prêt → En service → clôture
+- [ ] Saisie montant réparation
+- [ ] Si montant > seuil → notification admin pour validation
+- [ ] Vue budget total réparations (mécanicien + gestionnaire + admin)
+- [ ] Historique réparations visible gestionnaire et admin
+
+#### 3. Compte Admin
+
+- [ ] Tableau de bord global : conducteurs actifs, véhicules en service/réparation, montant total réparations, incidents ouverts, alertes en attente validation budget
+- [ ] Seuil validation budget réparations (configurable par l'admin)
+- [ ] Rapports journaliers / hebdomadaires automatiques
+- [ ] Vue consolidée tous comptes (conducteurs, véhicules, circuits, incidents)
+- [ ] Statistiques mensuelles : accidents, retards, remplacements, réparations + coûts, classement par mois → détail par jour au clic
+
+#### 4. Onglet Parents
+
+- [ ] Fiche parent complète : nom/prénom, téléphone(s)/email, enfant(s) avec classe/école/circuit/adresse, notes, statut compte, photo conducteur visible par le parent
+- [ ] Saisie manuelle par le gestionnaire
+- [ ] Communication parent ↔ gestionnaire
+
+#### 5. Génération mots de passe conducteurs
+
+- [ ] Le gestionnaire génère les mots de passe depuis la fiche conducteur
+- [ ] Distribution manuelle un par un
+- [ ] Réinitialisation mot de passe si oublié
+- [ ] Activation / désactivation compte conducteur
+
+#### 6. Fiche Conducteur — améliorations
+
+- [ ] Historique remplacements (date, qui remplacé, motif)
+- [ ] Historique trajets par année → mois → jour
+- [ ] Clarifier statut "en service" : Disponible / En trajet / Absent / En congé
+- [ ] Synchronisation gestionnaire ↔ fiche conducteur pour les remplacements
+
+#### 7. Véhicules — clarification statuts
+
+- [ ] Statuts clarifiés : En service / En trajet / En réparation / En attente contrôle technique / Hors service
+- [ ] Lien avec fiche réparation mécanicien
+
+#### 8. Incidents — organisation
+
+- [ ] Classement par catégorie : conducteur / véhicule / parent / enfant
+- [ ] Statuts : En cours / Résolu
+- [ ] Affichage : incidents du jour en premier, puis historique par année → mois → jour
+- [ ] Lien avec fiche réparation si véhicule concerné
+
+#### 9. Alertes — coordination
+
+- [ ] Alertes automatiques : tachymètre non à jour, permis expiré/manquant, contrôle technique dépassé, assurance expirée
+- [ ] Coordonner avec ce qui existe déjà dans le code, compléter si manquant
+
+#### 10. Imprévus — destinataires
+
+- [ ] Sélection destinataire par rôle (pas saisie manuelle) : parents (recherche par nom enfant/circuit), conducteurs, mécanicien, administrateur
+- [ ] Fiche imprévu complète avec actions à mener
+
+#### 11. Rapport journalier automatique
+
+- [ ] Génération automatique à minuit (bascule J → J+1)
+- [ ] Export Excel structuré : circuits réalisés, conducteurs présents/absents/remplacés, incidents du jour, alertes, réparations, graphiques récapitulatifs
+- [ ] Couleurs, mise en forme professionnelle, classé par catégories
+
+#### 12. Exports
+
+- [ ] Sélection par rubrique : rapport journalier, imprévus, conducteurs, véhicules, circuits, incidents, réparations
+- [ ] Sélection période : aujourd'hui / cette semaine / ce mois / période personnalisée
+- [ ] Téléchargement PDF ou Excel
+
+#### 13. Tableau de bord gestionnaire — optimisation visuelle
+
+- [ ] Conducteurs absents du jour bien mis en avant
+- [ ] Stat cards modernisées (shadcn + Lucide)
+- [ ] Vision immédiate dès ouverture
+- [ ] Remplacer emojis par icônes Lucide
+
+---
+
+### PHASE 2 — Tests et visuel
+
+#### 14. Tests avec vrais conducteurs
+
+- [ ] Générer mots de passe pour les comptes existants
+- [ ] Activer les comptes
+- [ ] Tester tous les flux avec de vrais utilisateurs
+- [ ] Valider que toute la logique fonctionne
+
+#### 15. Nettoyage données simulation
+
+> ⚠️ À faire APRÈS validation des tests
+
+**Garder :** conducteurs (réels), véhicules (réels), circuits (54 réels), comptes parents (à créer)
+
+**Supprimer :** absences simulées, incidents fictifs, alertes de test, remplacements fictifs, réparations fictives
+
+#### 16. Modernisation visuelle complète
+
+- [ ] Remplacer tous les emojis par icônes Lucide
+- [ ] Stat cards redesignées avec shadcn/ui
+- [ ] Animations Magic UI sur les éléments clés
+- [ ] Sidebar affinée
+- [ ] Style global 2026 — épuré, professionnel, vibrant
+
+#### 17. PowerPoint de présentation
+
+- [ ] Présentation de la plateforme
+- [ ] Fonctionnalités par compte (gestionnaire, conducteur, mécanicien, admin, parent)
+- [ ] Captures d'écran
+- [ ] Vision future (agents IA, optimisation circuits, suivi enfants)
+
+---
+
+### POUR PLUS TARD — À proposer au patron
+
+**Agents IA**
+- Agent suivi prise en charge enfants par conducteur (validation arrêt par arrêt)
+- Notifications parents en temps réel ("votre enfant a été récupéré")
+- Notification si enfant non récupéré → gestionnaire + parent
+- Agent localisation estimée conducteur (basé adresses + heure départ, s'appuie sur Maps)
+- Agent optimisation circuits (meilleur trajet selon adresses)
+- Réaffectation automatique enfants si conducteur absent
+- Notification parent "conducteur remplaçant = X + photo"
+
+**Architecture communications entre rôles**
+
+```
+         ADMIN
+           |
+    ───────────────
+    |              |
+GESTIONNAIRE  MÉCANICIEN
+    |              |
+CONDUCTEURS   (réparations,
+    |          montants,
+PARENTS        validation)
+```
+
+- Mécanicien → Gestionnaire : statuts réparation
+- Mécanicien → Admin : validation budget si > seuil
+- Conducteur → Gestionnaire : signalements, absences
+- Gestionnaire → Conducteur : remplacements, alertes
+- Gestionnaire → Parent : notifications
+- Parent → Gestionnaire : messages
+- Admin : vision globale + validation budget
+
+---
+
+### Ordre de travail recommandé pour Claude Code
+
+1. Fix sidebar notifications ✅
+2. Compte mécanicien complet
+3. Compte admin
+4. Onglet parents
+5. Génération mots de passe
+6. Fiche conducteur (historique + statuts)
+7. Statuts véhicules
+8. Incidents (classement + statuts)
+9. Alertes (coordination)
+10. Imprévus (destinataires par rôle)
+11. Rapport journalier automatique
+12. Exports
+13. Optimisation tableau de bord gestionnaire
+14. Tests
+15. Nettoyage données
+16. Visuel
+17. PowerPoint

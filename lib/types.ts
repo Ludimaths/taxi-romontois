@@ -59,6 +59,7 @@ export interface Vehicule {
   conducteur_id?: number;
   conducteur?: Conducteur;
   ct_date?: string;
+  date_vidange?: string;
   assurance_date?: string;
   km: number;
   notes?: string;
