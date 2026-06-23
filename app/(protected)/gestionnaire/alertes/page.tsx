@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
 import { Btn } from "@/components/ui";
-import type { Alerte, Conducteur, Vehicule } from "@/lib/types";
+import type { Alerte } from "@/lib/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDTLong = (d: string) => {
@@ -52,8 +52,8 @@ const inp: React.CSSProperties = {
 export default function AlertesPage() {
   const sb = createClient();
   const [alertes,  setAlertes]  = useState<Alerte[]>([]);
-  const [drivers,  setDrivers]  = useState<Conducteur[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicule[]>([]);
+  const [drivers,  setDrivers]  = useState<{ id: number; prenom: string; nom: string }[]>([]);
+  const [vehicles, setVehicles] = useState<{ id: string; plaque: string }[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [selId,    setSelId]    = useState<number | null>(null);
 
