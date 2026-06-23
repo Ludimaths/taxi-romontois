@@ -3,7 +3,11 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
 import { Badge, InfoBox, Btn, Modal } from "@/components/ui";
-import type { Incident, Conducteur, Vehicule, Circuit } from "@/lib/types";
+import type { Incident } from "@/lib/types";
+
+type DrvMin = { id: number; prenom: string; nom: string; tel?: string };
+type VehMin = { id: string; plaque: string };
+type CirMin = { id: string; nom: string; emoji: string; num: string };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const isoToday  = () => new Date().toISOString().slice(0, 10);
@@ -54,7 +58,7 @@ const inp: React.CSSProperties = {
 
 // ── Action Modal ──────────────────────────────────────────────────────────────
 function ActionModal({ inc, drivers, vehicles, circuits, onClose, onSave }: {
-  inc: Incident; drivers: Conducteur[]; vehicles: Vehicule[]; circuits: Circuit[];
+  inc: Incident; drivers: DrvMin[]; vehicles: VehMin[]; circuits: CirMin[];
   onClose: () => void;
   onSave: (id: number, response: string, status: "en_cours"|"resolu", extra?: string) => Promise<void>;
 }) {
@@ -183,9 +187,9 @@ function ActionModal({ inc, drivers, vehicles, circuits, onClose, onSave }: {
 export default function IncidentsPage() {
   const sb = createClient();
   const [incidents,  setIncidents]  = useState<Incident[]>([]);
-  const [drivers,    setDrivers]    = useState<Conducteur[]>([]);
-  const [vehicles,   setVehicles]   = useState<Vehicule[]>([]);
-  const [circuits,   setCircuits]   = useState<Circuit[]>([]);
+  const [drivers,    setDrivers]    = useState<DrvMin[]>([]);
+  const [vehicles,   setVehicles]   = useState<VehMin[]>([]);
+  const [circuits,   setCircuits]   = useState<CirMin[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [sel,        setSel]        = useState<Incident | null>(null);
 

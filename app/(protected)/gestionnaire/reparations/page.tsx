@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
 import { Badge, Btn } from "@/components/ui";
-import type { Reparation, Vehicule, Conducteur } from "@/lib/types";
+import type { Reparation } from "@/lib/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDTLong = (d: string) => {
@@ -45,8 +45,8 @@ const iso1Y = () => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); 
 export default function ReparationsGestPage() {
   const sb = createClient();
   const [reparations, setReparations] = useState<Reparation[]>([]);
-  const [vehicles,    setVehicles]    = useState<Vehicule[]>([]);
-  const [drivers,     setDrivers]     = useState<Conducteur[]>([]);
+  const [vehicles,    setVehicles]    = useState<{ id: string; plaque: string }[]>([]);
+  const [drivers,     setDrivers]     = useState<{ id: number; prenom: string; nom: string }[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [sel,         setSel]         = useState<Reparation | null>(null);
 
