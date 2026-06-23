@@ -544,15 +544,17 @@ export default function GestionnaireDashboard() {
               Navigation
             </div>
             {[
-              { path: "/gestionnaire",             icon: "🏠", label: "Tableau de bord" },
-              { path: "/gestionnaire/rapport",     icon: "📋", label: "Rapport journalier" },
-              { path: "/gestionnaire/imprevus",    icon: "⚡", label: "Imprévus" },
-              { path: "/gestionnaire/conducteurs", icon: "👤", label: "Conducteurs" },
-              { path: "/gestionnaire/vehicules",   icon: "🚌", label: "Véhicules" },
-              { path: "/gestionnaire/circuits",    icon: "🛣️", label: "Circuits" },
-              { path: "/gestionnaire/incidents",   icon: "🚨", label: "Incidents" },
-              { path: "/gestionnaire/alertes",     icon: "🔔", label: "Alertes" },
-              { path: "/gestionnaire/export",      icon: "📊", label: "Exports" },
+              { path: "/gestionnaire",               icon: "🏠", label: "Tableau de bord" },
+              { path: "/gestionnaire/rapport",       icon: "📋", label: "Rapport journalier" },
+              { path: "/gestionnaire/imprevus",      icon: "⚡", label: "Imprévus" },
+              { path: "/gestionnaire/conducteurs",   icon: "👤", label: "Conducteurs" },
+              { path: "/gestionnaire/vehicules",     icon: "🚌", label: "Véhicules" },
+              { path: "/gestionnaire/circuits",      icon: "🛣️", label: "Circuits" },
+              { path: "/gestionnaire/incidents",     icon: "🚨", label: "Incidents" },
+              { path: "/gestionnaire/alertes",       icon: "🔔", label: "Alertes" },
+              { path: "/gestionnaire/reparations",   icon: "🔧", label: "Réparations" },
+              { path: "/gestionnaire/parents",       icon: "👪", label: "Parents" },
+              { path: "/gestionnaire/export",        icon: "📊", label: "Exports" },
             ].map(n => (
               <button key={n.path} onClick={() => { router.push(n.path); setDrawerOpen(false); }}
                 style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px",

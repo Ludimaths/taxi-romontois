@@ -6,15 +6,17 @@ import type { Role } from "@/lib/types";
 
 const NAV_ITEMS: Record<Role, { path: string; label: string; icon: string }[]> = {
   gestionnaire: [
-    { path: "/gestionnaire",             label: "Tableau de bord",   icon: "🏠" },
-    { path: "/gestionnaire/rapport",     label: "Rapport journalier",icon: "📋" },
-    { path: "/gestionnaire/imprevus",    label: "Imprévus",          icon: "⚡" },
-    { path: "/gestionnaire/conducteurs", label: "Conducteurs",       icon: "👤" },
-    { path: "/gestionnaire/vehicules",   label: "Véhicules",         icon: "🚌" },
-    { path: "/gestionnaire/circuits",    label: "Circuits",          icon: "🛣️" },
-    { path: "/gestionnaire/incidents",   label: "Incidents",         icon: "🚨" },
-    { path: "/gestionnaire/alertes",     label: "Alertes",           icon: "🔔" },
-    { path: "/gestionnaire/export",      label: "Exports",           icon: "📊" },
+    { path: "/gestionnaire",               label: "Tableau de bord",   icon: "🏠" },
+    { path: "/gestionnaire/rapport",       label: "Rapport journalier",icon: "📋" },
+    { path: "/gestionnaire/imprevus",      label: "Imprévus",          icon: "⚡" },
+    { path: "/gestionnaire/conducteurs",   label: "Conducteurs",       icon: "👤" },
+    { path: "/gestionnaire/vehicules",     label: "Véhicules",         icon: "🚌" },
+    { path: "/gestionnaire/circuits",      label: "Circuits",          icon: "🛣️" },
+    { path: "/gestionnaire/incidents",     label: "Incidents",         icon: "🚨" },
+    { path: "/gestionnaire/alertes",       label: "Alertes",           icon: "🔔" },
+    { path: "/gestionnaire/reparations",   label: "Réparations",       icon: "🔧" },
+    { path: "/gestionnaire/parents",       label: "Parents",           icon: "👪" },
+    { path: "/gestionnaire/export",        label: "Exports",           icon: "📊" },
   ],
   conducteur: [
     { path: "/conducteur", label: "Mon tableau de bord", icon: "📊" },
