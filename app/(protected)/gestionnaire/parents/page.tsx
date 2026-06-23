@@ -14,7 +14,7 @@ interface Parent {
   email?: string;
   civilite?: "mere" | "pere" | null;
   enfant_id?: number;
-  enfant?: Enfant;
+  enfant?: Enfant[] | null;
 }
 interface Enfant {
   id: number;
@@ -144,8 +144,8 @@ export default function ParentsPage() {
         .order("created_at", { ascending: false })
         .limit(50),
     ]);
-    setParents((par.data ?? []) as Parent[]);
-    setEnfants((enf.data ?? []) as Enfant[]);
+    setParents((par.data ?? []) as unknown as Parent[]);
+    setEnfants((enf.data ?? []) as unknown as Enfant[]);
     setMessages(msg.data ?? []);
     setLoading(false);
   }, [sb]);
@@ -214,7 +214,7 @@ export default function ParentsPage() {
 
   // ── Detail view ────────────────────────────────────────────────────────────
   if (sel) {
-    const enfant = sel.enfant as Enfant | undefined;
+    const enfant = sel.enfant?.[0];
     const msgs = messages.filter(m => m.message?.includes(sel.prenom + " " + sel.nom));
     return (
       <div>
@@ -412,7 +412,7 @@ export default function ParentsPage() {
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
           {filtered.map(p => {
-            const enfant = p.enfant as Enfant | undefined;
+            const enfant = p.enfant?.[0];
             return (
               <div key={p.id} onClick={() => setSel(p)}
                 style={{ background: C.white, borderRadius: 14, padding: 18, cursor: "pointer",

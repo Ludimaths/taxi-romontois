@@ -233,11 +233,10 @@ export default function ReparationsGestPage() {
             const needsVal = r.statut === "en_attente_validation";
             return (
               <div key={r.id} onClick={() => setSel(isSelected ? null : r)}
-                style={{ background: C.white, borderRadius: 14, padding: "14px 18px", marginBottom: 10,
+                style={{ background: needsVal ? "#FFF5F5" : C.white, borderRadius: 14, padding: "14px 18px", marginBottom: 10,
                   cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
                   borderLeft: `4px solid ${RS[r.statut]?.color ?? C.gray600}`,
                   border: isSelected ? `2px solid ${C.navyL}` : undefined,
-                  background: needsVal ? "#FFF5F5" : C.white,
                 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start",
                   gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
