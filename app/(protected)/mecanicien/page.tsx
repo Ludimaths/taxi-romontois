@@ -2,24 +2,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { QRCodeSVG } from "qrcode.react";
+import { fmtDate, fmtDateTime } from "@/lib/constants";
 import type { Vehicule, Reparation, Alerte } from "@/lib/types";
 
-type Tab = "dashboard" | "flotte" | "alertes" | "atelier" | "prets" | "historique";
+type Tab = "dashboard" | "flotte" | "alertes" | "atelier" | "prets" | "messages";
 
 const M = {
   navy:"#0D3B7A", navyL:"#1565C0",
-  green:"#16A34A", greenL:"#DCFCE7",
+  green:"#16A34A", greenL:"#DCFCE7", greenD:"#15803D",
   amber:"#D97706", amberL:"#FEF3C7",
   red:"#DC2626",   redL:"#FEE2E2",
   blue:"#3B82F6",  blueL:"#DBEAFE",
   purple:"#7C3AED",purpleL:"#EDE9FE",
-  gray:"#64748B",  gray50:"#F8FAFC", gray100:"#F1F5F9",
+  gray:"#64748B",  gray50:"#F8FAFC", gray100:"#F1F5F9", grayB:"#E2E8F0",
   white:"#FFFFFF",
 };
 
-// Seuil configurable admin (TODO: charger depuis table settings)
 const BUDGET_SEUIL = 1000;
-const KM_ALERTE    = 200_000;
 
 const VS: Record<string,{l:string;c:string;bg:string}> = {
   en_service:       {l:"En service",     c:M.green,  bg:M.greenL},
@@ -28,16 +27,18 @@ const VS: Record<string,{l:string;c:string;bg:string}> = {
   en_reparation:    {l:"En réparation", c:M.navy,   bg:"#EFF6FF"},
   repare:           {l:"Réparé",        c:M.purple, bg:M.purpleL},
   attention:        {l:"Attention",     c:M.red,    bg:M.redL},
+  bon:              {l:"En service",    c:M.green,  bg:M.greenL},
+  atelier:          {l:"En atelier",    c:M.amber,  bg:M.amberL},
 };
 
 const RS: Record<string,{l:string;c:string}> = {
-  receptionne:           {l:"Réceptionné",         c:M.blue},
-  en_attente_validation: {l:"Attente validation",  c:M.amber},
-  en_attente_piece:      {l:"Attente pièce",       c:M.amber},
-  en_reparation:         {l:"En réparation",       c:M.navy},
-  repare:                {l:"Réparé",              c:M.purple},
-  remis_en_circulation:  {l:"Remis en circulation",c:M.green},
-  annulee:               {l:"Annulée",             c:M.gray},
+  receptionne:           {l:"Réceptionné",        c:M.blue},
+  en_attente_validation: {l:"Attente validation", c:M.amber},
+  en_attente_piece:      {l:"Attente pièce",      c:M.amber},
+  en_reparation:         {l:"En réparation",      c:M.navy},
+  repare:                {l:"Réparé — prêt",      c:M.purple},
+  remis_en_circulation:  {l:"Remis en service",   c:M.green},
+  annulee:               {l:"Annulée",            c:M.gray},
 };
 
 const URGENCES = [
@@ -47,45 +48,38 @@ const URGENCES = [
   {v:"bloquant",   l:"Bloquant (immobilisé)"},
 ];
 
-const fd  = (d?:string|null) => d ? new Date(d).toLocaleDateString("fr-CH") : "—";
-const iso = () => new Date().toISOString().slice(0,10);
-function nbJ(a:string,b:string){return Math.round((+new Date(b)-+new Date(a))/86400000);}
-function ctCheck(ct?:string|null):{label:string;c:string}|null {
+const iso = () => new Date().toISOString().slice(0, 10);
+function nbJ(a: string, b: string) { return Math.round((+new Date(b) - +new Date(a)) / 86400000); }
+function ctCheck(ct?: string | null): { label: string; c: string } | null {
   if (!ct) return null;
-  const [mm,yy]=ct.split(".");
-  if (!mm||!yy) return null;
-  const exp=new Date(+yy,+mm-1,1),now=new Date(),in3m=new Date();
-  in3m.setMonth(now.getMonth()+3);
-  if (exp<now)  return {label:`CT expiré (${ct})`,c:M.red};
-  if (exp<in3m) return {label:`CT bientôt (${ct})`,c:M.amber};
+  const [mm, yy] = ct.split(".");
+  if (!mm || !yy) return null;
+  const exp = new Date(+yy, +mm - 1, 1), now = new Date(), in3m = new Date();
+  in3m.setMonth(now.getMonth() + 3);
+  if (exp < now)  return { label: `CT expiré (${ct})`,  c: M.red };
+  if (exp < in3m) return { label: `CT bientôt (${ct})`, c: M.amber };
   return null;
 }
 
-// ── Micro-composants ─────────────────────────────────────────────────────────
+// ── Micro-composants ──────────────────────────────────────────────────────────
 
-function ChipV({s}:{s:string}) {
-  const v=VS[s]; if (!v) return null;
-  return <span style={{display:"inline-flex",padding:"4px 12px",borderRadius:20,
-    fontSize:12,fontWeight:700,background:v.bg,color:v.c}}>{v.l}</span>;
+function ChipV({ s }: { s: string }) {
+  const v = VS[s]; if (!v) return null;
+  return <span style={{ display:"inline-flex", padding:"4px 12px", borderRadius:20, fontSize:12, fontWeight:700, background:v.bg, color:v.c }}>{v.l}</span>;
 }
-function ChipR({s}:{s:string}) {
-  const r=RS[s]; if (!r) return null;
-  return <span style={{padding:"4px 12px",borderRadius:20,fontSize:12,
-    fontWeight:700,background:M.gray100,color:r.c}}>● {r.l}</span>;
+function ChipR({ s }: { s: string }) {
+  const r = RS[s]; if (!r) return null;
+  return <span style={{ padding:"4px 12px", borderRadius:20, fontSize:12, fontWeight:700, background:M.gray100, color:r.c }}>● {r.l}</span>;
 }
 
-function Sheet({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}) {
+function Sheet({ title, onClose, children }: { title:string; onClose:()=>void; children:React.ReactNode }) {
   return (
-    <div style={{position:"fixed",inset:0,zIndex:1000,display:"flex",alignItems:"flex-end",
-      background:"rgba(0,0,0,0.55)"}} onClick={onClose}>
-      <div style={{width:"100%",maxHeight:"94vh",overflowY:"auto",background:M.white,
-        borderRadius:"24px 24px 0 0",padding:"24px 20px 64px"}}
-        onClick={e=>e.stopPropagation()}>
-        <div style={{width:40,height:4,background:"#CBD5E1",borderRadius:4,margin:"0 auto 20px"}}/>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <h2 style={{fontSize:18,fontWeight:800,color:M.navy,margin:0}}>{title}</h2>
-          <button onClick={onClose} style={{fontSize:28,background:"none",border:"none",
-            cursor:"pointer",color:M.gray,lineHeight:1,padding:"0 4px",minWidth:44,minHeight:44}}>×</button>
+    <div style={{ position:"fixed", inset:0, zIndex:1000, display:"flex", alignItems:"flex-end", background:"rgba(0,0,0,0.55)" }} onClick={onClose}>
+      <div style={{ width:"100%", maxHeight:"94vh", overflowY:"auto", background:M.white, borderRadius:"24px 24px 0 0", padding:"24px 20px 80px" }} onClick={e => e.stopPropagation()}>
+        <div style={{ width:40, height:4, background:"#CBD5E1", borderRadius:4, margin:"0 auto 20px" }} />
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+          <h2 style={{ fontSize:18, fontWeight:800, color:M.navy, margin:0 }}>{title}</h2>
+          <button onClick={onClose} style={{ fontSize:28, background:"none", border:"none", cursor:"pointer", color:M.gray, lineHeight:1, padding:"0 4px", minWidth:44, minHeight:44 }}>×</button>
         </div>
         {children}
       </div>
@@ -93,92 +87,54 @@ function Sheet({title,onClose,children}:{title:string;onClose:()=>void;children:
   );
 }
 
-const inp: React.CSSProperties = {
-  width:"100%",padding:"14px 16px",borderRadius:12,
-  border:"1.5px solid #CBD5E1",fontSize:15,color:"#1E293B",
-  background:M.white,boxSizing:"border-box",
-};
+const inp: React.CSSProperties = { width:"100%", padding:"14px 16px", borderRadius:12, border:"1.5px solid #CBD5E1", fontSize:15, color:"#1E293B", background:M.white, boxSizing:"border-box" };
 
-function F({label,type="text",value,onChange,placeholder="",required=false}:{
-  label:string;type?:string;value:string;onChange:(v:string)=>void;
-  placeholder?:string;required?:boolean;
-}) {
+function F({ label, type="text", value, onChange, placeholder="", required=false }: { label:string; type?:string; value:string; onChange:(v:string)=>void; placeholder?:string; required?:boolean }) {
   return (
-    <div style={{marginBottom:16}}>
-      <label style={{display:"block",fontSize:13,fontWeight:700,color:M.gray,marginBottom:6}}>
-        {label}{required&&<span style={{color:M.red}}> *</span>}
+    <div style={{ marginBottom:16 }}>
+      <label style={{ display:"block", fontSize:13, fontWeight:700, color:M.gray, marginBottom:6 }}>
+        {label}{required && <span style={{ color:M.red }}> *</span>}
       </label>
-      <input type={type} value={value} onChange={e=>onChange(e.target.value)}
-        placeholder={placeholder} style={inp as React.CSSProperties}/>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={inp} />
     </div>
   );
 }
-function TA({label,value,onChange,rows=3,placeholder=""}:{
-  label:string;value:string;onChange:(v:string)=>void;rows?:number;placeholder?:string;
-}) {
+function TA({ label, value, onChange, rows=3, placeholder="" }: { label:string; value:string; onChange:(v:string)=>void; rows?:number; placeholder?:string }) {
   return (
-    <div style={{marginBottom:16}}>
-      <label style={{display:"block",fontSize:13,fontWeight:700,color:M.gray,marginBottom:6}}>{label}</label>
-      <textarea value={value} onChange={e=>onChange(e.target.value)} rows={rows}
-        placeholder={placeholder} style={{...inp,resize:"vertical"} as React.CSSProperties}/>
+    <div style={{ marginBottom:16 }}>
+      <label style={{ display:"block", fontSize:13, fontWeight:700, color:M.gray, marginBottom:6 }}>{label}</label>
+      <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows} placeholder={placeholder} style={{ ...inp, resize:"vertical" }} />
     </div>
   );
 }
-function Sel({label,value,onChange,opts}:{
-  label:string;value:string;onChange:(v:string)=>void;opts:{v:string;l:string}[];
-}) {
+function Sel({ label, value, onChange, opts }: { label:string; value:string; onChange:(v:string)=>void; opts:{v:string;l:string}[] }) {
   return (
-    <div style={{marginBottom:16}}>
-      <label style={{display:"block",fontSize:13,fontWeight:700,color:M.gray,marginBottom:6}}>{label}</label>
-      <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{...inp,appearance:"none"} as React.CSSProperties}>
-        {opts.map(o=><option key={o.v} value={o.v}>{o.l}</option>)}
-      </select>
+    <div style={{ marginBottom:16 }}>
+      <label style={{ display:"block", fontSize:13, fontWeight:700, color:M.gray, marginBottom:6 }}>{label}</label>
+      <select value={value} onChange={e => onChange(e.target.value)} style={{ ...inp, appearance:"none" } as React.CSSProperties}>{opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}</select>
     </div>
   );
 }
-function DL({l,v}:{l:string;v:string}) {
+function DL({ l, v }: { l:string; v:string }) {
   return (
-    <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",
-      borderBottom:`1px solid ${M.gray100}`,fontSize:14}}>
-      <span style={{color:M.gray,fontWeight:600}}>{l}</span>
-      <span style={{color:"#1E293B",fontWeight:700,textAlign:"right",maxWidth:"65%"}}>{v}</span>
+    <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${M.gray100}`, fontSize:14 }}>
+      <span style={{ color:M.gray, fontWeight:600 }}>{l}</span>
+      <span style={{ color:"#1E293B", fontWeight:700, textAlign:"right", maxWidth:"65%" }}>{v}</span>
     </div>
   );
 }
-
-function BigBtn({icon="",label,onClick,color=M.navy,outline=false,disabled=false}:{
-  icon?:string;label:string;onClick:()=>void;color?:string;outline?:boolean;disabled?:boolean;
-}) {
+function BigBtn({ icon="", label, onClick, color=M.navy, outline=false, disabled=false }: { icon?:string; label:string; onClick:()=>void; color?:string; outline?:boolean; disabled?:boolean }) {
   return (
-    <button onClick={onClick} disabled={disabled} style={{
-      width:"100%",padding:"16px 20px",marginBottom:10,borderRadius:16,
-      fontWeight:800,fontSize:15,cursor:disabled?"not-allowed":"pointer",
-      border:outline?`2px solid ${color}`:"none",
-      background:outline?M.white:disabled?"#CBD5E1":color,
-      color:outline?color:M.white,opacity:disabled?0.6:1,
-      display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-      minHeight:52,
-    }}>
-      {icon&&<span style={{fontSize:18}}>{icon}</span>}{label}
+    <button onClick={onClick} disabled={disabled} style={{ width:"100%", padding:"16px 20px", marginBottom:10, borderRadius:16, fontWeight:800, fontSize:15, cursor:disabled?"not-allowed":"pointer", border:outline?`2px solid ${color}`:"none", background:outline?M.white:disabled?"#CBD5E1":color, color:outline?color:M.white, opacity:disabled?0.6:1, display:"flex", alignItems:"center", justifyContent:"center", gap:8, minHeight:52 }}>
+      {icon && <span style={{ fontSize:18 }}>{icon}</span>}{label}
     </button>
   );
 }
-function SmBtn({label,onClick,color=M.navy,outline=false}:{
-  label:string;onClick:()=>void;color?:string;outline?:boolean;
-}) {
-  return (
-    <button onClick={onClick} style={{
-      padding:"10px 16px",borderRadius:12,fontWeight:700,fontSize:13,
-      cursor:"pointer",marginRight:6,marginBottom:6,
-      border:outline?`2px solid ${color}`:"none",
-      background:outline?M.white:color,color:outline?color:M.white,
-    }}>{label}</button>
-  );
+function SmBtn({ label, onClick, color=M.navy, outline=false }: { label:string; onClick:()=>void; color?:string; outline?:boolean }) {
+  return <button onClick={onClick} style={{ padding:"10px 16px", borderRadius:12, fontWeight:700, fontSize:13, cursor:"pointer", marginRight:6, marginBottom:6, border:outline?`2px solid ${color}`:"none", background:outline?M.white:color, color:outline?color:M.white }}>{label}</button>;
 }
-function Box({msg,color=M.amber,bg=M.amberL}:{msg:string;color?:string;bg?:string}) {
-  return <div style={{background:bg,borderRadius:12,padding:14,marginBottom:16,
-    fontSize:14,color,fontWeight:700,lineHeight:1.5}}>{msg}</div>;
+function InfoBox({ msg, color=M.amber, bg=M.amberL }: { msg:string; color?:string; bg?:string }) {
+  return <div style={{ background:bg, borderRadius:12, padding:14, marginBottom:16, fontSize:14, color, fontWeight:700, lineHeight:1.5 }}>{msg}</div>;
 }
 
 // ── Page principale ───────────────────────────────────────────────────────────
@@ -186,453 +142,428 @@ function Box({msg,color=M.amber,bg=M.amberL}:{msg:string;color?:string;bg?:strin
 export default function MecanicienPage() {
   const sb = createClient();
 
-  const [vehicules,   setVehicules]   = useState<Vehicule[]>([]);
-  const [reparations, setReparations] = useState<Reparation[]>([]);
-  const [alertes,     setAlertes]     = useState<Alerte[]>([]);
-  const [luAlerts,    setLuAlerts]    = useState<Alerte[]>([]);
-  const [enCoursA,    setEnCoursA]    = useState<Alerte[]>([]);
-  const [tab,         setTab]         = useState<Tab>("dashboard");
-  const [loading,     setLoading]     = useState(true);
+  const [vehicules,      setVehicules]      = useState<Vehicule[]>([]);
+  const [reparations,    setReparations]    = useState<Reparation[]>([]);
+  const [vehicleAlerts,  setVehicleAlerts]  = useState<Alerte[]>([]);
+  const [messages,       setMessages]       = useState<Alerte[]>([]);
+  const [conducteurs,    setConducteurs]    = useState<{ id:number; prenom:string; nom:string }[]>([]);
+  const [tab,            setTab]            = useState<Tab>("dashboard");
+  const [loading,        setLoading]        = useState(true);
+  const [showMsgHistory, setShowMsgHistory] = useState(false);
 
-  // ── Modals ──────────────────────────────────────────────────────────────────
-  const [alertSheet,  setAlertSheet]  = useState<Alerte|null>(null);
-
-  type ReceptionInit = {alerteId?:number;vehicule_id:string;description:string};
-  const [recepOpen,   setRecepOpen]   = useState<ReceptionInit|null>(null);
-  const [recepF,      setRecepF]      = useState({vehicule_id:"",description:"",km_reception:"",date_reception:iso(),etat_visuel:""});
+  // Modals
+  const [alertSheet,  setAlertSheet]  = useState<Alerte | null>(null);
+  const [recepOpen,   setRecepOpen]   = useState<{ alerteId?:number; vehicule_id:string; description:string } | null>(null);
+  const [recepF,      setRecepF]      = useState({ vehicule_id:"", description:"", km_reception:"", date_reception:iso(), etat_visuel:"" });
   const [photos,      setPhotos]      = useState<File[]>([]);
   const [uploading,   setUploading]   = useState(false);
 
-  const [createRep,   setCreateRep]   = useState<Reparation|null>(null);
-  const freshCRF = () => ({type_intervention:"interne" as "interne"|"externe"|"piece",nom_garage:"",piece_nom:"",piece_fournisseur:"",date_commande_piece:"",date_reception_piece_estimee:"",urgence:"normal",cout_estime:"",date_debut_reparation:iso(),notes:""});
-  const [crF,         setCrF]         = useState(freshCRF());
+  const freshCRF = () => ({ type_intervention:"interne" as "interne"|"externe"|"piece", nom_garage:"", piece_nom:"", piece_fournisseur:"", date_commande_piece:"", date_reception_piece_estimee:"", urgence:"normal", cout_estime:"", date_debut_reparation:iso(), notes:"" });
+  const [createRep, setCreateRep] = useState<Reparation | null>(null);
+  const [crF,       setCrF]       = useState(freshCRF());
 
-  const [pieceOpen,   setPieceOpen]   = useState<Reparation|null>(null);
-  const [pieceF,      setPieceF]      = useState({date_reception_piece_reelle:iso(),date_debut_reparation:iso()});
+  const [pieceOpen, setPieceOpen] = useState<Reparation | null>(null);
+  const [pieceF,    setPieceF]    = useState({ date_reception_piece_reelle:iso(), date_debut_reparation:iso() });
 
-  const [repareOpen,  setRepareOpen]  = useState<Reparation|null>(null);
-  const [repareF,     setRepareF]     = useState({date_fin_reparation:iso(),cout:"",km_sortie:"",commentaire_mecanicien:""});
+  const [repareOpen, setRepareOpen] = useState<Reparation | null>(null);
+  const [repareF,    setRepareF]    = useState({ date_fin_reparation:iso(), cout:"", km_sortie:"", commentaire_mecanicien:"" });
 
-  const [remettreRep, setRemettreRep] = useState<Reparation|null>(null);
+  const [remettreRep, setRemettreRep] = useState<Reparation | null>(null);
   const [remettreD,   setRemettreD]   = useState(iso());
+  const [recupPar,    setRecupPar]    = useState<"conducteur"|"personnel"|"autre">("conducteur");
+  const [recupNom,    setRecupNom]    = useState("");
 
-  const [veSheet,     setVeSheet]     = useState<Vehicule|null>(null);
-  const [veF,         setVeF]         = useState({km:"",ct_date:"",date_vidange:"",etat:"",notes:""});
+  const [veSheet, setVeSheet] = useState<Vehicule | null>(null);
+  const [veF,     setVeF]     = useState({ km:"", ct_date:"", date_vidange:"", etat:"", notes:"" });
 
-  const [histDetail,  setHistDetail]  = useState<Reparation|null>(null);
-  const [histVeh,     setHistVeh]     = useState("all");
-  const [histPer,     setHistPer]     = useState("all");
-
-  // ── Load ────────────────────────────────────────────────────────────────────
+  // ── Load ──────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
-    const [v,r,a] = await Promise.all([
-      sb.from("vehicules")
-        .select("*,circuit:circuits(*),conducteur:conducteurs(prenom,nom)")
-        .order("plaque"),
-      sb.from("reparations")
-        .select("*,vehicule:vehicules(plaque,marque,modele)")
-        .order("created_at",{ascending:false}),
-      sb.from("alertes").select("*")
-        .in("type",["vehicule","reparation","validation_requise","remise_circulation","transmis_meca"])
-        .eq("read",false).order("created_at",{ascending:false}),
+    const [v, r, va, msgs, cond] = await Promise.all([
+      sb.from("vehicules").select("*,circuit:circuits(*),conducteur:conducteurs(prenom,nom)").order("plaque"),
+      sb.from("reparations").select("*,vehicule:vehicules(plaque,marque,modele)").order("created_at", { ascending:false }),
+      sb.from("alertes").select("*").in("type", ["vehicule","reparation","validation_requise","remise_circulation"]).order("created_at", { ascending:false }),
+      sb.from("alertes").select("*").eq("type", "transmis_meca").order("created_at", { ascending:false }),
+      sb.from("conducteurs").select("id,prenom,nom").order("nom"),
     ]);
-    if (v.data) setVehicules(v.data);
-    if (r.data) setReparations(r.data);
-    if (a.data) setAlertes(a.data);
+    if (v.data)    setVehicules(v.data);
+    if (r.data)    setReparations(r.data);
+    if (va.data)   setVehicleAlerts(va.data);
+    if (msgs.data) setMessages(msgs.data);
+    if (cond.data) setConducteurs(cond.data as { id:number; prenom:string; nom:string }[]);
     setLoading(false);
-  },[sb]);
+  }, [sb]);
 
-  useEffect(()=>{
+  useEffect(() => {
     load();
-    const ch = sb.channel("meca-rt")
-      .on("postgres_changes",{event:"*",schema:"public",table:"reparations"},load)
-      .on("postgres_changes",{event:"*",schema:"public",table:"vehicules"},load)
-      .on("postgres_changes",{event:"*",schema:"public",table:"alertes"},load)
+    const ch = sb.channel("meca-rt-v2")
+      .on("postgres_changes", { event:"*", schema:"public", table:"reparations" }, load)
+      .on("postgres_changes", { event:"*", schema:"public", table:"vehicules" },   load)
+      .on("postgres_changes", { event:"*", schema:"public", table:"alertes" },     load)
       .subscribe();
-    return ()=>{sb.removeChannel(ch);};
-  },[load,sb]);
+    return () => { sb.removeChannel(ch); };
+  }, [load, sb]);
 
-  // ── Computed ─────────────────────────────────────────────────────────────────
-  const m0 = new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString();
-  const luIds     = new Set(luAlerts.map(a=>a.id));
-  const ecIds     = new Set(enCoursA.map(a=>a.id));
+  // ── Computed ──────────────────────────────────────────────────────────────────
+  const m0 = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
 
-  const alertesNL = alertes.filter(a=>!luIds.has(a.id)&&!ecIds.has(a.id));
-  const repsAct   = reparations.filter(r=>["receptionne","en_attente_validation","en_attente_piece","en_reparation"].includes(r.statut));
-  const repsPret  = reparations.filter(r=>r.statut==="repare");
-  const repsHist  = reparations.filter(r=>r.statut==="remis_en_circulation");
-  const enAtelier = vehicules.filter(v=>["receptionne","en_attente_piece","en_reparation","repare"].includes(v.etat));
-  const urgents   = vehicules.filter(v=>ctCheck(v.ct_date)||v.km>=KM_ALERTE);
-  const budget    = reparations.filter(r=>["en_reparation","repare","remis_en_circulation"].includes(r.statut)&&r.created_at>=m0).reduce((s,r)=>s+(r.cout||0),0);
-
-  const flotteSorted = [...vehicules].sort((a,b)=>{
-    const o:Record<string,number>={en_reparation:0,en_attente_piece:1,receptionne:2,repare:3,attention:4,en_service:5};
-    return (o[a.etat]??9)-(o[b.etat]??9);
+  const alertesNL        = vehicleAlerts.filter(a => !a.read);
+  const alertesEnAttente = vehicleAlerts.filter(a => {
+    if (!a.read) return false;
+    if (!a.vehicle_id) return true;
+    return !reparations.some(r => r.vehicule_id === a.vehicle_id && !["remis_en_circulation","annulee"].includes(r.statut));
   });
 
-  const histF = repsHist.filter(r=>{
-    if (histVeh!=="all"&&r.vehicule_id!==histVeh) return false;
-    if (histPer==="mois"&&r.created_at<m0) return false;
-    if (histPer==="3mois"){const d=new Date();d.setMonth(d.getMonth()-3);if(r.created_at<d.toISOString())return false;}
-    if (histPer==="annee"){const d=new Date();d.setFullYear(d.getFullYear()-1);if(r.created_at<d.toISOString())return false;}
-    return true;
+  const repsAct  = reparations.filter(r => ["receptionne","en_attente_validation","en_attente_piece","en_reparation"].includes(r.statut));
+  const repsPret = reparations.filter(r => r.statut === "repare");
+  const enAtelier = vehicules.filter(v => ["receptionne","en_attente_piece","en_reparation","repare"].includes(v.etat as string));
+  const urgents   = vehicules.filter(v => ctCheck(v.ct_date));
+  const budget    = reparations.filter(r => ["en_reparation","repare","remis_en_circulation"].includes(r.statut) && r.created_at >= m0).reduce((s, r) => s + (r.cout || 0), 0);
+
+  const flotteSorted = [...vehicules].sort((a, b) => {
+    const o: Record<string,number> = { en_reparation:0, en_attente_piece:1, receptionne:2, repare:3, attention:4, en_service:5, bon:5, atelier:1 };
+    return (o[a.etat as string] ?? 9) - (o[b.etat as string] ?? 9);
   });
 
-  // ── Handlers ─────────────────────────────────────────────────────────────────
-  async function markLu(a:Alerte) {
-    await sb.from("alertes").update({read:true,read_at:new Date().toISOString()}).eq("id",a.id);
-    setLuAlerts(p=>[...p.filter(x=>x.id!==a.id),a]);
+  const todayStr   = iso();
+  const msgsToday  = messages.filter(m => m.created_at.startsWith(todayStr));
+  const msgsOlder  = messages.filter(m => !m.created_at.startsWith(todayStr));
+  const msgsUnread = messages.filter(m => !m.read).length;
+  const olderByDay: Record<string, Alerte[]> = {};
+  msgsOlder.forEach(m => { const d = m.created_at.slice(0,10); if (!olderByDay[d]) olderByDay[d]=[]; olderByDay[d].push(m); });
+
+  // ── Handlers ──────────────────────────────────────────────────────────────────
+  async function markLu(a: Alerte) {
+    await sb.from("alertes").update({ read:true, read_at:new Date().toISOString() }).eq("id", a.id);
     setAlertSheet(null);
   }
-
-  function mettrEnCours(a:Alerte) {
-    setEnCoursA(p=>[...p.filter(x=>x.id!==a.id),a]);
-    setLuAlerts(p=>p.filter(x=>x.id!==a.id));
+  async function markMsgLu(a: Alerte) {
+    await sb.from("alertes").update({ read:true, read_at:new Date().toISOString() }).eq("id", a.id);
+  }
+  function mettrEnCours(a: Alerte) {
+    sb.from("alertes").update({ read:true, read_at:new Date().toISOString() }).eq("id", a.id);
     setAlertSheet(null);
     if (a.vehicle_id) {
-      setRecepOpen({alerteId:a.id,vehicule_id:a.vehicle_id,description:a.message});
-      setRecepF({vehicule_id:a.vehicle_id,description:a.message,km_reception:"",date_reception:iso(),etat_visuel:""});
+      setRecepOpen({ alerteId:a.id, vehicule_id:a.vehicle_id, description:a.message });
+      setRecepF({ vehicule_id:a.vehicle_id, description:a.message, km_reception:"", date_reception:iso(), etat_visuel:"" });
       setPhotos([]);
     }
   }
 
   async function doReception() {
-    const {vehicule_id,description,km_reception,date_reception,etat_visuel}=recepF;
-    if (!vehicule_id||!description.trim()) return;
+    const { vehicule_id, description, km_reception, date_reception, etat_visuel } = recepF;
+    if (!vehicule_id || !description.trim()) return;
     setUploading(true);
-    const desc=etat_visuel?`${description}\nÉtat visuel : ${etat_visuel}`:description;
-    const {data:rep,error}=await sb.from("reparations").insert({
-      vehicule_id,description:desc,
-      km_reception:km_reception?+km_reception:null,
-      date_reception:date_reception||null,
-      statut:"receptionne",alerte_envoyee:false,
+    const desc = etat_visuel ? `${description}\nÉtat visuel : ${etat_visuel}` : description;
+    const { data:rep, error } = await sb.from("reparations").insert({
+      vehicule_id, description:desc,
+      km_reception: km_reception ? +km_reception : null,
+      date_reception: date_reception || null,
+      statut:"receptionne", alerte_envoyee:false,
     }).select().single();
-    if (error){console.error(error);setUploading(false);return;}
-    // Upload photos vers Supabase Storage bucket "reparations-photos"
-    if (rep&&photos.length>0){
-      const urls:string[]=[];
-      for (const f of photos){
-        const path=`${rep.id}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9.]/g,"_")}`;
-        const {error:ue}=await sb.storage.from("reparations-photos").upload(path,f);
-        if (!ue){
-          const {data:pub}=sb.storage.from("reparations-photos").getPublicUrl(path);
+    if (error) { console.error(error); setUploading(false); return; }
+    if (rep && photos.length > 0) {
+      const urls: string[] = [];
+      for (const f of photos) {
+        const path = `${rep.id}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9.]/g,"_")}`;
+        const { error:ue } = await sb.storage.from("reparations-photos").upload(path, f);
+        if (!ue) {
+          const { data:pub } = sb.storage.from("reparations-photos").getPublicUrl(path);
           if (pub?.publicUrl) urls.push(pub.publicUrl);
         }
       }
-      if (urls.length>0)
-        await sb.from("reparations").update({commentaire_mecanicien:`Photos: ${urls.join(" | ")}`}).eq("id",rep.id);
+      if (urls.length > 0) await sb.from("reparations").update({ commentaire_mecanicien:`Photos: ${urls.join(" | ")}` }).eq("id", rep.id);
     }
-    await sb.from("vehicules").update({etat:"receptionne"}).eq("id",vehicule_id);
-    if (recepOpen?.alerteId) setEnCoursA(p=>p.filter(x=>x.id!==recepOpen.alerteId));
+    await sb.from("vehicules").update({ etat:"receptionne" }).eq("id", vehicule_id);
+    const veh = vehicules.find(x => x.id === vehicule_id);
+    await sb.from("alertes").insert({ type:"reparation", severity:"normale", message:`🚌 Véhicule ${veh?.plaque || vehicule_id} réceptionné à l'atelier`, vehicle_id:vehicule_id, read:false });
     setRecepOpen(null);
-    setRecepF({vehicule_id:"",description:"",km_reception:"",date_reception:iso(),etat_visuel:""});
+    setRecepF({ vehicule_id:"", description:"", km_reception:"", date_reception:iso(), etat_visuel:"" });
     setPhotos([]);
     setUploading(false);
   }
 
   async function doCreateRep() {
     if (!createRep) return;
-    const f=crF; const cout=f.cout_estime?+f.cout_estime:0;
-    let nextSt:string,nextVe:string;
-    if (f.type_intervention==="piece"){nextSt="en_attente_piece";nextVe="en_attente_piece";}
-    else if (cout>=BUDGET_SEUIL){nextSt="en_attente_validation";nextVe="receptionne";}
-    else {nextSt="en_reparation";nextVe="en_reparation";}
+    const f = crF; const cout = f.cout_estime ? +f.cout_estime : 0;
+    let nextSt: string, nextVe: string;
+    if (f.type_intervention === "piece")         { nextSt="en_attente_piece";      nextVe="en_attente_piece"; }
+    else if (cout >= BUDGET_SEUIL)               { nextSt="en_attente_validation"; nextVe="receptionne"; }
+    else                                          { nextSt="en_reparation";         nextVe="en_reparation"; }
     await sb.from("reparations").update({
-      statut:nextSt,type_intervention:f.type_intervention,
-      nom_garage:f.type_intervention==="externe"?f.nom_garage:null,
-      piece_nom:f.type_intervention==="piece"?f.piece_nom:null,
-      piece_fournisseur:f.type_intervention==="piece"?f.piece_fournisseur:null,
-      date_commande_piece:f.date_commande_piece||null,
-      date_reception_piece_estimee:f.date_reception_piece_estimee||null,
-      cout_estime:cout||null,
-      date_debut_reparation:f.type_intervention!=="piece"?(f.date_debut_reparation||null):null,
-      commentaire_mecanicien:f.notes||null,
-      responsable:`${f.type_intervention}|${f.urgence}`,
-    }).eq("id",createRep.id);
-    await sb.from("vehicules").update({etat:nextVe}).eq("id",createRep.vehicule_id);
-    if (nextSt==="en_attente_validation"){
-      const plaque=(createRep.vehicule as {plaque?:string}|undefined)?.plaque||createRep.vehicule_id;
-      await sb.from("alertes").insert({
-        type:"validation_requise",severity:"haute",
-        message:`Réparation ${plaque} en attente de validation — Coût estimé : ${cout.toLocaleString("fr-CH")} CHF`,
-        vehicle_id:createRep.vehicule_id,read:false,
-      });
+      statut:nextSt, type_intervention:f.type_intervention,
+      nom_garage: f.type_intervention==="externe" ? f.nom_garage : null,
+      piece_nom: f.type_intervention==="piece" ? f.piece_nom : null,
+      piece_fournisseur: f.type_intervention==="piece" ? f.piece_fournisseur : null,
+      date_commande_piece: f.date_commande_piece || null,
+      date_reception_piece_estimee: f.date_reception_piece_estimee || null,
+      cout_estime: cout || null,
+      date_debut_reparation: f.type_intervention!=="piece" ? (f.date_debut_reparation||null) : null,
+      commentaire_mecanicien: f.notes || null,
+      responsable: `${f.type_intervention}|${f.urgence}`,
+    }).eq("id", createRep.id);
+    await sb.from("vehicules").update({ etat:nextVe }).eq("id", createRep.vehicule_id);
+    if (nextSt === "en_attente_validation") {
+      const plaque = (createRep.vehicule as { plaque?:string } | undefined)?.plaque || createRep.vehicule_id;
+      await sb.from("alertes").insert({ type:"validation_requise", severity:"haute", message:`Réparation ${plaque} en attente de validation — Coût estimé : ${cout.toLocaleString("fr-CH")} CHF`, vehicle_id:createRep.vehicule_id, read:false });
     }
-    setCreateRep(null);setCrF(freshCRF());
+    setCreateRep(null); setCrF(freshCRF());
   }
 
   async function doPiece() {
     if (!pieceOpen) return;
-    await sb.from("reparations").update({statut:"en_reparation",date_reception_piece_reelle:pieceF.date_reception_piece_reelle||null,date_debut_reparation:pieceF.date_debut_reparation||null}).eq("id",pieceOpen.id);
-    await sb.from("vehicules").update({etat:"en_reparation"}).eq("id",pieceOpen.vehicule_id);
+    await sb.from("reparations").update({ statut:"en_reparation", date_reception_piece_reelle:pieceF.date_reception_piece_reelle||null, date_debut_reparation:pieceF.date_debut_reparation||null }).eq("id", pieceOpen.id);
+    await sb.from("vehicules").update({ etat:"en_reparation" }).eq("id", pieceOpen.vehicule_id);
     setPieceOpen(null);
   }
 
   async function doRepare() {
     if (!repareOpen) return;
-    const f=repareF;
-    const upd:Record<string,unknown>={statut:"repare",date_fin_reparation:f.date_fin_reparation||null,cout:f.cout?+f.cout:null,km_sortie:f.km_sortie?+f.km_sortie:null,commentaire_mecanicien:f.commentaire_mecanicien||repareOpen.commentaire_mecanicien||null};
-    if (repareOpen.date_debut_reparation&&f.date_fin_reparation) upd.duree_jours=nbJ(repareOpen.date_debut_reparation,f.date_fin_reparation);
-    await sb.from("reparations").update(upd).eq("id",repareOpen.id);
-    await sb.from("vehicules").update({etat:"repare"}).eq("id",repareOpen.vehicule_id);
-    setRepareOpen(null);setRepareF({date_fin_reparation:iso(),cout:"",km_sortie:"",commentaire_mecanicien:""});
+    const f = repareF;
+    const upd: Record<string,unknown> = { statut:"repare", date_fin_reparation:f.date_fin_reparation||null, cout:f.cout?+f.cout:null, km_sortie:f.km_sortie?+f.km_sortie:null, commentaire_mecanicien:f.commentaire_mecanicien||repareOpen.commentaire_mecanicien||null };
+    if (repareOpen.date_debut_reparation && f.date_fin_reparation) upd.duree_jours = nbJ(repareOpen.date_debut_reparation, f.date_fin_reparation);
+    await sb.from("reparations").update(upd).eq("id", repareOpen.id);
+    await sb.from("vehicules").update({ etat:"repare" }).eq("id", repareOpen.vehicule_id);
+    setRepareOpen(null);
+    setRepareF({ date_fin_reparation:iso(), cout:"", km_sortie:"", commentaire_mecanicien:"" });
   }
 
   async function doRemettre() {
     if (!remettreRep) return;
-    const plaque=(remettreRep.vehicule as {plaque?:string}|undefined)?.plaque||remettreRep.vehicule_id;
-    await sb.from("reparations").update({statut:"remis_en_circulation",date_remise_circulation:remettreD||null}).eq("id",remettreRep.id);
-    const vu:Record<string,unknown>={etat:"en_service"};
-    if (remettreRep.km_sortie) vu.km=remettreRep.km_sortie;
-    await sb.from("vehicules").update(vu).eq("id",remettreRep.vehicule_id);
-    await sb.from("alertes").insert({type:"remise_circulation",severity:"normale",message:`✅ Véhicule ${plaque} remis en service le ${fd(remettreD)}`,vehicle_id:remettreRep.vehicule_id,read:false});
-    setRemettreRep(null);setRemettreD(iso());
+    const plaque = (remettreRep.vehicule as { plaque?:string } | undefined)?.plaque || remettreRep.vehicule_id;
+    let recupLabel = "";
+    if (recupPar === "conducteur") {
+      const c = conducteurs.find(x => String(x.id) === recupNom);
+      recupLabel = c ? `${c.prenom} ${c.nom}` : "";
+    } else {
+      recupLabel = recupNom;
+    }
+    await sb.from("reparations").update({ statut:"remis_en_circulation", date_remise_circulation:remettreD||null }).eq("id", remettreRep.id);
+    const vu: Record<string,unknown> = { etat:"en_service" };
+    if (remettreRep.km_sortie) vu.km = remettreRep.km_sortie;
+    await sb.from("vehicules").update(vu).eq("id", remettreRep.vehicule_id);
+    const msg = recupLabel
+      ? `✅ Véhicule ${plaque} remis en service le ${fmtDate(remettreD)} — Récupéré par ${recupLabel}`
+      : `✅ Véhicule ${plaque} remis en service le ${fmtDate(remettreD)}`;
+    await sb.from("alertes").insert({ type:"remise_circulation", severity:"normale", message:msg, vehicle_id:remettreRep.vehicule_id, read:false });
+    setRemettreRep(null); setRemettreD(iso()); setRecupPar("conducteur"); setRecupNom("");
   }
 
   async function doVeSave() {
     if (!veSheet) return;
     await sb.from("vehicules").update({
-      km:veF.km?+veF.km:veSheet.km,
-      ct_date:veF.ct_date||null,
-      date_vidange:veF.date_vidange||null,
-      etat:(veF.etat||veSheet.etat) as Vehicule["etat"],
-      notes:veF.notes||null,
-    }).eq("id",veSheet.id);
+      km: veF.km ? +veF.km : veSheet.km,
+      ct_date: veF.ct_date || null,
+      date_vidange: veF.date_vidange || null,
+      etat: (veF.etat || veSheet.etat) as Vehicule["etat"],
+      notes: veF.notes || null,
+    }).eq("id", veSheet.id);
     setVeSheet(null);
   }
 
-  function openVe(v:Vehicule){
+  function openVe(v: Vehicule) {
     setVeSheet(v);
-    setVeF({km:String(v.km),ct_date:v.ct_date||"",date_vidange:v.date_vidange||"",etat:v.etat,notes:v.notes||""});
+    setVeF({ km:String(v.km), ct_date:v.ct_date||"", date_vidange:v.date_vidange||"", etat:v.etat as string, notes:v.notes||"" });
   }
 
-  // ── RepCard ──────────────────────────────────────────────────────────────────
-  function RepCard({rep,actions=true}:{rep:Reparation;actions?:boolean}) {
-    type VM={plaque?:string;marque?:string;modele?:string};
-    const vv=rep.vehicule as VM|undefined;
-    const [type,urgence]=(rep.responsable||"").split("|");
-    const uc=urgence==="bloquant"?M.red:urgence==="tres_urgent"?M.amber:urgence==="urgent"?M.blue:undefined;
-    const duree=rep.date_debut_reparation&&rep.date_fin_reparation?nbJ(rep.date_debut_reparation,rep.date_fin_reparation):null;
-    const veh=vehicules.find(x=>x.id===rep.vehicule_id);
+  // ── RepCard ───────────────────────────────────────────────────────────────────
+  function RepCard({ rep, actions=true }: { rep:Reparation; actions?:boolean }) {
+    type VM = { plaque?:string; marque?:string; modele?:string };
+    const vv = rep.vehicule as VM | undefined;
+    const [type, urgence] = (rep.responsable || "").split("|");
+    const uc = urgence==="bloquant" ? M.red : urgence==="tres_urgent" ? M.amber : urgence==="urgent" ? M.blue : undefined;
+    const duree = rep.date_debut_reparation && rep.date_fin_reparation ? nbJ(rep.date_debut_reparation, rep.date_fin_reparation) : null;
+    const veh = vehicules.find(x => x.id === rep.vehicule_id);
     return (
-      <div style={{background:M.white,borderRadius:16,padding:16,marginBottom:12,
-        boxShadow:"0 2px 8px rgba(0,0,0,0.06)",borderLeft:`4px solid ${RS[rep.statut]?.c??M.gray}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
+      <div style={{ background:M.white, borderRadius:16, padding:16, marginBottom:12, boxShadow:"0 2px 8px rgba(0,0,0,0.06)", borderLeft:`4px solid ${RS[rep.statut]?.c ?? M.gray}` }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, flexWrap:"wrap", gap:8 }}>
           <div>
-            <div style={{fontWeight:800,fontSize:16,color:M.navy}}>
-              {vv?.plaque||rep.vehicule_id}{" "}
-              <span style={{fontWeight:400,color:M.gray,fontSize:14}}>{vv?.marque} {vv?.modele}</span>
+            <div style={{ fontWeight:800, fontSize:16, color:M.navy }}>
+              {vv?.plaque || rep.vehicule_id} <span style={{ fontWeight:400, color:M.gray, fontSize:14 }}>{vv?.marque} {vv?.modele}</span>
             </div>
-            <div style={{display:"flex",gap:8,alignItems:"center",marginTop:5,flexWrap:"wrap"}}>
-              <ChipR s={rep.statut}/>
-              {urgence&&uc&&<span style={{fontSize:12,fontWeight:700,color:uc}}>{urgence==="bloquant"?"🔴 Bloquant":urgence==="tres_urgent"?"🟠 Très urgent":"🟡 Urgent"}</span>}
+            <div style={{ display:"flex", gap:8, alignItems:"center", marginTop:5, flexWrap:"wrap" }}>
+              <ChipR s={rep.statut} />
+              {urgence && uc && <span style={{ fontSize:12, fontWeight:700, color:uc }}>{urgence==="bloquant" ? "🔴 Bloquant" : urgence==="tres_urgent" ? "🟠 Très urgent" : "🟡 Urgent"}</span>}
             </div>
           </div>
-          {rep.cout!=null&&<div style={{fontWeight:800,color:M.navy,fontSize:16}}>{rep.cout.toLocaleString("fr-CH")} CHF</div>}
+          {rep.cout != null && <div style={{ fontWeight:800, color:M.navy, fontSize:16 }}>{rep.cout.toLocaleString("fr-CH")} CHF</div>}
         </div>
-        <p style={{fontSize:14,color:"#1E293B",marginBottom:10,lineHeight:1.5}}>{rep.description}</p>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px",marginBottom:10}}>
-          {rep.date_reception             &&<DL l="Réceptionné"     v={fd(rep.date_reception)}/>}
-          {rep.km_reception!=null         &&<DL l="Km réception"    v={`${rep.km_reception.toLocaleString()} km`}/>}
-          {type                           &&<DL l="Type"             v={type==="externe"?`Externe${rep.nom_garage?` — ${rep.nom_garage}`:""}`:type==="piece"?"Pièce détachée":"Interne atelier"}/>}
-          {rep.cout_estime!=null          &&<DL l="Coût estimé"     v={`${rep.cout_estime.toLocaleString("fr-CH")} CHF`}/>}
-          {rep.piece_nom                  &&<DL l="Pièce"            v={`${rep.piece_nom}${rep.piece_fournisseur?` — ${rep.piece_fournisseur}`:""}`}/>}
-          {rep.date_commande_piece        &&<DL l="Commandée le"    v={fd(rep.date_commande_piece)}/>}
-          {rep.date_reception_piece_estimee&&<DL l="Réception est." v={fd(rep.date_reception_piece_estimee)}/>}
-          {rep.date_reception_piece_reelle&&<DL l="Pièce reçue"    v={fd(rep.date_reception_piece_reelle)}/>}
-          {rep.date_debut_reparation      &&<DL l="Début"           v={fd(rep.date_debut_reparation)}/>}
-          {rep.date_fin_reparation        &&<DL l="Fin"             v={fd(rep.date_fin_reparation)}/>}
-          {duree!=null                    &&<DL l="Durée"            v={`${duree} jour${duree>1?"s":""}`}/>}
-          {rep.km_sortie!=null            &&<DL l="Km sortie"        v={`${rep.km_sortie.toLocaleString()} km`}/>}
-          {rep.date_remise_circulation    &&<DL l="Remis en service" v={fd(rep.date_remise_circulation)}/>}
+        <p style={{ fontSize:14, color:"#1E293B", marginBottom:10, lineHeight:1.5 }}>{rep.description}</p>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px", marginBottom:10 }}>
+          {rep.date_reception               && <DL l="Réceptionné"      v={fmtDate(rep.date_reception)} />}
+          {rep.km_reception != null         && <DL l="Km réception"     v={`${rep.km_reception.toLocaleString()} km`} />}
+          {type                             && <DL l="Type"              v={type==="externe" ? `Externe${rep.nom_garage ? ` — ${rep.nom_garage}` : ""}` : type==="piece" ? "Pièce détachée" : "Interne atelier"} />}
+          {rep.cout_estime != null          && <DL l="Coût estimé"      v={`${rep.cout_estime.toLocaleString("fr-CH")} CHF`} />}
+          {rep.piece_nom                    && <DL l="Pièce"             v={`${rep.piece_nom}${rep.piece_fournisseur ? ` — ${rep.piece_fournisseur}` : ""}`} />}
+          {rep.date_commande_piece          && <DL l="Commandée le"     v={fmtDate(rep.date_commande_piece)} />}
+          {rep.date_reception_piece_estimee && <DL l="Réception est."   v={fmtDate(rep.date_reception_piece_estimee)} />}
+          {rep.date_reception_piece_reelle  && <DL l="Pièce reçue"     v={fmtDate(rep.date_reception_piece_reelle)} />}
+          {rep.date_debut_reparation        && <DL l="Début"            v={fmtDate(rep.date_debut_reparation)} />}
+          {rep.date_fin_reparation          && <DL l="Fin"              v={fmtDate(rep.date_fin_reparation)} />}
+          {duree != null                    && <DL l="Durée"             v={`${duree} jour${duree > 1 ? "s" : ""}`} />}
+          {rep.km_sortie != null            && <DL l="Km sortie"         v={`${rep.km_sortie.toLocaleString()} km`} />}
+          {rep.date_remise_circulation      && <DL l="Remis en service"  v={fmtDate(rep.date_remise_circulation)} />}
         </div>
-        {rep.commentaire_mecanicien&&!rep.commentaire_mecanicien.startsWith("Photos:")&&(
-          <div style={{padding:10,background:M.gray50,borderRadius:10,fontSize:13,fontStyle:"italic",marginBottom:10}}>
-            💬 {rep.commentaire_mecanicien}
-          </div>
+        {rep.commentaire_mecanicien && !rep.commentaire_mecanicien.startsWith("Photos:") && (
+          <div style={{ padding:10, background:M.gray50, borderRadius:10, fontSize:13, fontStyle:"italic", marginBottom:10 }}>💬 {rep.commentaire_mecanicien}</div>
         )}
-        {actions&&(
-          <div style={{marginTop:10}}>
-            {rep.statut==="receptionne"&&<BigBtn icon="🔧" label="Créer la réparation" onClick={()=>{setCreateRep(rep);setCrF(freshCRF());}}/>}
-            {rep.statut==="en_attente_validation"&&<Box msg="⏳ En attente de validation — gestionnaire/admin informé"/>}
-            {rep.statut==="en_attente_piece"&&<BigBtn icon="📦" label="Pièce reçue — Démarrer" color={M.blue} onClick={()=>{setPieceOpen(rep);setPieceF({date_reception_piece_reelle:iso(),date_debut_reparation:iso()});}}/>}
-            {rep.statut==="en_reparation"&&<BigBtn icon="✔️" label="Marquer réparé" color={M.purple} onClick={()=>{setRepareOpen(rep);setRepareF({date_fin_reparation:iso(),cout:"",km_sortie:"",commentaire_mecanicien:""}); }}/>}
-            {rep.statut==="repare"&&<BigBtn icon="🚌" label="Remettre en circulation" color={M.green} onClick={()=>{setRemettreRep(rep);setRemettreD(iso());}}/>}
-            {veh&&<SmBtn label="📋 Fiche véhicule" outline onClick={()=>openVe(veh)}/>}
+        {actions && (
+          <div style={{ marginTop:10 }}>
+            {rep.statut === "receptionne"          && <BigBtn icon="🔧" label="Créer la réparation"        onClick={() => { setCreateRep(rep); setCrF(freshCRF()); }} />}
+            {rep.statut === "en_attente_validation" && <InfoBox msg="⏳ En attente de validation — gestionnaire/admin informé" />}
+            {rep.statut === "en_attente_piece"      && <BigBtn icon="📦" label="Pièce reçue — Démarrer" color={M.blue} onClick={() => { setPieceOpen(rep); setPieceF({ date_reception_piece_reelle:iso(), date_debut_reparation:iso() }); }} />}
+            {rep.statut === "en_reparation"         && <BigBtn icon="✔️" label="Marquer réparé" color={M.purple} onClick={() => { setRepareOpen(rep); setRepareF({ date_fin_reparation:iso(), cout:"", km_sortie:"", commentaire_mecanicien:"" }); }} />}
+            {rep.statut === "repare"                && <BigBtn icon="🚌" label="Remettre en circulation" color={M.green} onClick={() => { setRemettreRep(rep); setRemettreD(iso()); setRecupPar("conducteur"); setRecupNom(""); }} />}
+            {veh && <SmBtn label="📋 Fiche véhicule" outline onClick={() => openVe(veh)} />}
           </div>
         )}
       </div>
     );
   }
 
-  // ── AlertCard ────────────────────────────────────────────────────────────────
-  function AlertCard({a}:{a:Alerte}) {
-    const sev=a.severity;
-    const sc=sev==="critique"?M.red:sev==="haute"?M.amber:M.blue;
-    const sb2=sev==="critique"?M.redL:sev==="haute"?M.amberL:M.blueL;
-    const v=vehicules.find(x=>x.id===a.vehicle_id);
+  // ── AlertCard ─────────────────────────────────────────────────────────────────
+  function AlertCard({ a }: { a:Alerte }) {
+    const sc  = a.severity==="critique" ? M.red : a.severity==="haute" ? M.amber : M.blue;
+    const sbg = a.severity==="critique" ? M.redL : a.severity==="haute" ? M.amberL : M.blueL;
+    const v = vehicules.find(x => x.id === a.vehicle_id);
     return (
-      <div style={{background:sb2,borderRadius:16,padding:16,marginBottom:12,
-        borderLeft:`4px solid ${sc}`,cursor:"pointer"}} onClick={()=>setAlertSheet(a)}>
-        <div style={{display:"flex",gap:8,marginBottom:6,flexWrap:"wrap"}}>
-          <span style={{fontSize:12,fontWeight:800,color:sc,textTransform:"uppercase"}}>
-            {sev==="critique"?"🔴 Critique":sev==="haute"?"🟠 Haute":"🔵 Normale"}
+      <div style={{ background:sbg, borderRadius:16, padding:16, marginBottom:12, borderLeft:`4px solid ${sc}`, cursor:"pointer" }} onClick={() => setAlertSheet(a)}>
+        <div style={{ display:"flex", gap:8, marginBottom:6, flexWrap:"wrap" }}>
+          <span style={{ fontSize:12, fontWeight:800, color:sc, textTransform:"uppercase" }}>
+            {a.severity==="critique" ? "🔴 Critique" : a.severity==="haute" ? "🟠 Haute" : "🔵 Normale"}
           </span>
-          {luIds.has(a.id)&&!ecIds.has(a.id)&&<span style={{fontSize:11,fontWeight:700,color:M.green,background:M.greenL,borderRadius:99,padding:"2px 8px"}}>✓ Lu</span>}
-          {ecIds.has(a.id)&&<span style={{fontSize:11,fontWeight:700,color:M.blue,background:M.blueL,borderRadius:99,padding:"2px 8px"}}>▶ En cours</span>}
+          {a.read && <span style={{ fontSize:11, fontWeight:700, color:M.amber, background:M.amberL, borderRadius:99, padding:"2px 8px" }}>⏳ En attente du véhicule</span>}
         </div>
-        <div style={{fontWeight:700,fontSize:14,color:"#1E293B",marginBottom:4}}>{a.message}</div>
-        <div style={{fontSize:12,color:M.gray}}>{new Date(a.created_at).toLocaleDateString("fr-CH")}</div>
-        {v&&<div style={{fontSize:13,color:M.navy,fontWeight:700,marginTop:6}}>🚌 {v.plaque} — {v.marque} {v.modele} · {v.km.toLocaleString()} km</div>}
+        <div style={{ fontWeight:700, fontSize:14, color:"#1E293B", marginBottom:4 }}>{a.message}</div>
+        <div style={{ fontSize:12, color:M.gray }}>{fmtDateTime(a.created_at)}</div>
+        {v && <div style={{ fontSize:13, color:M.navy, fontWeight:700, marginTop:6 }}>🚌 {v.plaque} — {v.marque} {v.modele} · {v.km.toLocaleString()} km</div>}
+        {a.read && a.vehicle_id && (
+          <button onClick={e => { e.stopPropagation(); setRecepOpen({ alerteId:a.id, vehicule_id:a.vehicle_id!, description:a.message }); setRecepF({ vehicule_id:a.vehicle_id!, description:a.message, km_reception:"", date_reception:iso(), etat_visuel:"" }); setPhotos([]); }}
+            style={{ marginTop:10, padding:"10px 16px", borderRadius:12, border:"none", background:M.navy, color:M.white, fontWeight:700, fontSize:13, cursor:"pointer", width:"100%" }}>
+            📋 Réceptionner ce véhicule
+          </button>
+        )}
       </div>
     );
   }
 
-  // ── Loading ──────────────────────────────────────────────────────────────────
-  if (loading) return (
-    <div style={{display:"flex",justifyContent:"center",alignItems:"center",minHeight:"60vh",color:M.gray,fontSize:15}}>
-      Chargement…
-    </div>
-  );
+  if (loading) return <div style={{ display:"flex", justifyContent:"center", alignItems:"center", minHeight:"60vh", color:M.gray, fontSize:15 }}>Chargement…</div>;
 
-  const TABS:{id:Tab;label:string;badge?:number}[] = [
-    {id:"dashboard", label:"🏠 Accueil"},
-    {id:"flotte",    label:"🚌 Flotte",   badge:enAtelier.length||undefined},
-    {id:"alertes",   label:"🔔 Alertes",  badge:alertesNL.length||undefined},
-    {id:"atelier",   label:"🔧 Atelier",  badge:repsAct.length||undefined},
-    {id:"prets",     label:"✅ Prêts",    badge:repsPret.length||undefined},
-    {id:"historique",label:"📋 Histo."},
+  const TABS: { id:Tab; label:string; badge?:number }[] = [
+    { id:"dashboard", label:"🏠 Accueil" },
+    { id:"flotte",    label:"🚌 Flotte",   badge:enAtelier.length || undefined },
+    { id:"alertes",   label:"🔔 Alertes",  badge:alertesNL.length || undefined },
+    { id:"atelier",   label:"🔧 Atelier",  badge:repsAct.length || undefined },
+    { id:"prets",     label:"✅ Prêts",    badge:repsPret.length || undefined },
+    { id:"messages",  label:"💬 Messages", badge:msgsUnread || undefined },
   ];
 
-  // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div style={{maxWidth:700,margin:"0 auto",paddingBottom:100}}>
+    <div style={{ maxWidth:700, margin:"0 auto", paddingBottom:100 }}>
 
       {/* Header */}
-      <div style={{marginBottom:20}}>
-        <h1 style={{fontSize:22,fontWeight:900,color:M.navy,margin:"0 0 4px"}}>🔧 Atelier</h1>
-        <p style={{color:M.gray,fontSize:13,margin:0}}>
-          {vehicules.length} véhicules · {enAtelier.length} en atelier
-          {" · "}<strong style={{color:M.navy}}>{budget.toLocaleString("fr-CH")} CHF</strong> ce mois
+      <div style={{ marginBottom:20 }}>
+        <h1 style={{ fontSize:22, fontWeight:900, color:M.navy, margin:"0 0 4px" }}>🔧 Atelier</h1>
+        <p style={{ color:M.gray, fontSize:13, margin:0 }}>
+          {vehicules.length} véhicules · {enAtelier.length} en atelier · <strong style={{ color:M.navy }}>{budget.toLocaleString("fr-CH")} CHF</strong> ce mois
         </p>
       </div>
 
       {/* Stats */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:16 }}>
         {([
-          {label:"Flotte",    val:vehicules.length,   c:M.navy,  bg:"#EFF6FF",  t:"flotte"},
-          {label:"Atelier",   val:enAtelier.length,   c:M.amber, bg:M.amberL,   t:"flotte"},
-          {label:"Alertes",   val:alertesNL.length,   c:M.red,   bg:M.redL,     t:"alertes"},
-          {label:"En cours",  val:repsAct.length,     c:M.blue,  bg:M.blueL,    t:"atelier"},
-        ] as {label:string;val:number;c:string;bg:string;t:Tab}[]).map(c=>(
-          <div key={c.label} onClick={()=>setTab(c.t)}
-            style={{background:c.bg,borderRadius:14,padding:"12px 8px",cursor:"pointer",
-              textAlign:"center",border:`1px solid ${c.c}22`}}>
-            <div style={{fontSize:24,fontWeight:900,color:c.c}}>{c.val}</div>
-            <div style={{fontSize:11,color:M.gray,marginTop:2,lineHeight:1.2}}>{c.label}</div>
+          { label:"Flotte",  val:vehicules.length,  c:M.navy,   bg:"#EFF6FF", t:"flotte"   as Tab },
+          { label:"Atelier", val:enAtelier.length,  c:M.amber,  bg:M.amberL,  t:"atelier"  as Tab },
+          { label:"Alertes", val:alertesNL.length,  c:M.red,    bg:M.redL,    t:"alertes"  as Tab },
+          { label:"Prêts",   val:repsPret.length,   c:M.purple, bg:M.purpleL, t:"prets"    as Tab },
+        ]).map(c => (
+          <div key={c.label} onClick={() => setTab(c.t)} style={{ background:c.bg, borderRadius:14, padding:"12px 8px", cursor:"pointer", textAlign:"center", border:`1px solid ${c.c}22` }}>
+            <div style={{ fontSize:24, fontWeight:900, color:c.c }}>{c.val}</div>
+            <div style={{ fontSize:11, color:M.gray, marginTop:2, lineHeight:1.2 }}>{c.label}</div>
           </div>
         ))}
       </div>
 
       {/* Tabs */}
-      <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:20,paddingBottom:4}}>
-        {TABS.map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{padding:"10px 14px",borderRadius:12,border:"none",cursor:"pointer",
-              fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:5,
-              whiteSpace:"nowrap",flexShrink:0,minHeight:44,
-              background:tab===t.id?M.navy:"#E2E8F0",
-              color:tab===t.id?M.white:M.gray}}>
+      <div style={{ display:"flex", gap:6, overflowX:"auto", marginBottom:20, paddingBottom:4 }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ padding:"10px 14px", borderRadius:12, border:"none", cursor:"pointer", fontWeight:700, fontSize:13, display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap", flexShrink:0, minHeight:44, background:tab===t.id ? M.navy : "#E2E8F0", color:tab===t.id ? M.white : M.gray }}>
             {t.label}
-            {t.badge!=null&&t.badge>0&&(
-              <span style={{background:tab===t.id?"rgba(255,255,255,0.25)":M.red,
-                color:M.white,borderRadius:20,padding:"1px 6px",fontSize:11,fontWeight:800}}>
-                {t.badge}
-              </span>
+            {t.badge != null && t.badge > 0 && (
+              <span style={{ background:tab===t.id ? "rgba(255,255,255,0.25)" : M.red, color:M.white, borderRadius:20, padding:"1px 6px", fontSize:11, fontWeight:800 }}>{t.badge}</span>
             )}
           </button>
         ))}
       </div>
 
-      {/* ════ DASHBOARD ════ */}
-      {tab==="dashboard"&&(
+      {/* ════ ACCUEIL ════ */}
+      {tab === "dashboard" && (
         <div>
-          {alertesNL.length>0&&(
-            <div style={{background:M.redL,borderRadius:14,padding:16,marginBottom:16,
-              border:"1px solid #FECACA",cursor:"pointer"}} onClick={()=>setTab("alertes")}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontWeight:800,color:M.red}}>🔔 {alertesNL.length} alerte(s) non lue(s)</span>
-                <span style={{fontSize:13,color:M.red,fontWeight:700}}>Voir →</span>
+          {alertesNL.length > 0 && (
+            <div style={{ background:M.redL, borderRadius:14, padding:16, marginBottom:16, border:"1px solid #FECACA", cursor:"pointer" }} onClick={() => setTab("alertes")}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span style={{ fontWeight:800, color:M.red }}>🔔 {alertesNL.length} alerte(s) non lue(s)</span>
+                <span style={{ fontSize:13, color:M.red, fontWeight:700 }}>Voir →</span>
               </div>
             </div>
           )}
-          {urgents.length>0&&(
-            <div style={{background:M.amberL,borderRadius:14,padding:14,marginBottom:16,border:"1px solid #FDE68A"}}>
-              <div style={{fontWeight:800,color:M.amber,marginBottom:10,fontSize:14}}>⚠️ {urgents.length} véhicule(s) à surveiller</div>
-              {urgents.map(v=>{
-                const ct=ctCheck(v.ct_date);
+          {msgsUnread > 0 && (
+            <div style={{ background:M.blueL, borderRadius:14, padding:16, marginBottom:16, border:"1px solid #BFDBFE", cursor:"pointer" }} onClick={() => setTab("messages")}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span style={{ fontWeight:800, color:M.blue }}>💬 {msgsUnread} message(s) non lu(s)</span>
+                <span style={{ fontSize:13, color:M.blue, fontWeight:700 }}>Voir →</span>
+              </div>
+            </div>
+          )}
+          {urgents.length > 0 && (
+            <div style={{ background:M.amberL, borderRadius:14, padding:14, marginBottom:16, border:"1px solid #FDE68A" }}>
+              <div style={{ fontWeight:800, color:M.amber, marginBottom:10, fontSize:14 }}>⚠️ {urgents.length} CT à surveiller</div>
+              {urgents.map(v => {
+                const ct = ctCheck(v.ct_date);
                 return (
-                  <div key={v.id} style={{fontSize:13,color:"#1E293B",padding:"7px 0",borderBottom:"1px solid #FDE68A",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div>
-                      <span style={{fontWeight:700}}>🚌 {v.plaque}</span>
-                      {ct&&<span style={{color:ct.c,marginLeft:8}}>— {ct.label}</span>}
-                      {v.km>=KM_ALERTE&&<span style={{color:M.amber,marginLeft:8}}>— {v.km.toLocaleString()} km</span>}
-                    </div>
-                    <button onClick={()=>openVe(v)}
-                      style={{fontSize:13,color:M.navy,background:"none",border:"none",cursor:"pointer",fontWeight:700,minWidth:44,minHeight:44}}>
-                      Modifier →
-                    </button>
+                  <div key={v.id} style={{ fontSize:13, color:"#1E293B", padding:"7px 0", borderBottom:"1px solid #FDE68A", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div><span style={{ fontWeight:700 }}>🚌 {v.plaque}</span>{ct && <span style={{ color:ct.c, marginLeft:8 }}>— {ct.label}</span>}</div>
+                    <button onClick={() => openVe(v)} style={{ fontSize:13, color:M.navy, background:"none", border:"none", cursor:"pointer", fontWeight:700, minWidth:44, minHeight:44 }}>Modifier →</button>
                   </div>
                 );
               })}
             </div>
           )}
-          {repsAct.length===0?(
-            <div style={{textAlign:"center",padding:"40px 20px",color:M.gray}}>
-              <div style={{fontSize:48}}>✅</div>
-              <p style={{fontWeight:700,fontSize:16,marginTop:12}}>Atelier libre</p>
+          {repsAct.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"40px 20px", color:M.gray }}>
+              <div style={{ fontSize:48 }}>✅</div>
+              <p style={{ fontWeight:700, fontSize:16, marginTop:12 }}>Atelier libre</p>
             </div>
-          ):(
+          ) : (
             <>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <h2 style={{fontSize:15,fontWeight:800,color:M.navy,margin:0}}>En cours ({repsAct.length})</h2>
-                {repsAct.length>2&&<button onClick={()=>setTab("atelier")} style={{fontSize:13,color:M.navy,background:"none",border:"none",cursor:"pointer",fontWeight:700}}>Voir tout →</button>}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                <h2 style={{ fontSize:15, fontWeight:800, color:M.navy, margin:0 }}>En cours ({repsAct.length})</h2>
+                {repsAct.length > 2 && <button onClick={() => setTab("atelier")} style={{ fontSize:13, color:M.navy, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>Voir tout →</button>}
               </div>
-              {repsAct.slice(0,2).map(r=><RepCard key={r.id} rep={r}/>)}
+              {repsAct.slice(0, 2).map(r => <RepCard key={r.id} rep={r} />)}
             </>
           )}
         </div>
       )}
 
       {/* ════ FLOTTE ════ */}
-      {tab==="flotte"&&(
+      {tab === "flotte" && (
         <div>
-          <p style={{fontSize:13,color:M.gray,marginBottom:14}}>
-            {enAtelier.length} en atelier · {vehicules.length-enAtelier.length} en service
-          </p>
-          {flotteSorted.map(v=>{
-            const ct=ctCheck(v.ct_date);
-            const inA=["receptionne","en_attente_piece","en_reparation","repare"].includes(v.etat);
-            const cond=v.conducteur as {prenom?:string;nom?:string}|undefined;
+          <p style={{ fontSize:13, color:M.gray, marginBottom:14 }}>{enAtelier.length} en atelier · {vehicules.length - enAtelier.length} en service</p>
+          {flotteSorted.map(v => {
+            const ct   = ctCheck(v.ct_date);
+            const inA  = ["receptionne","en_attente_piece","en_reparation","repare"].includes(v.etat as string);
+            const cond = v.conducteur as { prenom?:string; nom?:string } | undefined;
             return (
-              <div key={v.id} onClick={()=>openVe(v)}
-                style={{background:M.white,borderRadius:16,padding:16,marginBottom:10,
-                  cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",
-                  borderLeft:`4px solid ${VS[v.etat]?.c??M.gray}`,
-                  display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,
-                  minHeight:64}}>
-                <div style={{flex:1}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5,flexWrap:"wrap"}}>
-                    <span style={{fontWeight:800,fontSize:16,color:M.navy}}>{v.plaque}</span>
-                    <ChipV s={v.etat}/>
+              <div key={v.id} onClick={() => openVe(v)} style={{ background:M.white, borderRadius:16, padding:16, marginBottom:10, cursor:"pointer", boxShadow:"0 2px 8px rgba(0,0,0,0.06)", borderLeft:`4px solid ${VS[v.etat as string]?.c ?? M.gray}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, minHeight:64 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:5, flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:800, fontSize:16, color:M.navy }}>{v.plaque}</span>
+                    <ChipV s={v.etat as string} />
                   </div>
-                  <div style={{fontSize:13,color:M.gray}}>
-                    {v.marque} {v.modele} · {v.km.toLocaleString()} km
-                    {cond?.nom&&` · ${cond.prenom} ${cond.nom}`}
-                  </div>
-                  {ct&&<div style={{fontSize:12,color:ct.c,fontWeight:700,marginTop:3}}>{ct.label}</div>}
+                  <div style={{ fontSize:13, color:M.gray }}>{v.marque} {v.modele} · {v.km.toLocaleString()} km{cond?.nom ? ` · ${cond.prenom} ${cond.nom}` : ""}</div>
+                  {ct && <div style={{ fontSize:12, color:ct.c, fontWeight:700, marginTop:3 }}>{ct.label}</div>}
                 </div>
-                <span style={{fontSize:22}}>{inA?"🔧":"✅"}</span>
+                <span style={{ fontSize:22 }}>{inA ? "🔧" : "✅"}</span>
               </div>
             );
           })}
@@ -640,31 +571,25 @@ export default function MecanicienPage() {
       )}
 
       {/* ════ ALERTES ════ */}
-      {tab==="alertes"&&(
+      {tab === "alertes" && (
         <div>
-          {alertesNL.length===0&&luAlerts.length===0&&enCoursA.length===0?(
-            <div style={{textAlign:"center",padding:"60px 20px",color:M.gray}}>
-              <div style={{fontSize:48}}>🔔</div>
-              <p style={{fontWeight:700,marginTop:12,fontSize:16}}>Aucune alerte</p>
+          {alertesNL.length === 0 && alertesEnAttente.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"60px 20px", color:M.gray }}>
+              <div style={{ fontSize:48 }}>🔔</div>
+              <p style={{ fontWeight:700, marginTop:12, fontSize:16 }}>Aucune alerte</p>
             </div>
-          ):(
+          ) : (
             <>
-              {alertesNL.length>0&&(
-                <section style={{marginBottom:24}}>
-                  <div style={{fontWeight:800,fontSize:13,color:M.red,textTransform:"uppercase",letterSpacing:0.5,marginBottom:10}}>🔴 Non lues ({alertesNL.length})</div>
-                  {alertesNL.map(a=><AlertCard key={a.id} a={a}/>)}
+              {alertesNL.length > 0 && (
+                <section style={{ marginBottom:24 }}>
+                  <div style={{ fontWeight:800, fontSize:13, color:M.red, textTransform:"uppercase", letterSpacing:0.5, marginBottom:10 }}>🔴 Nouvelles ({alertesNL.length})</div>
+                  {alertesNL.map(a => <AlertCard key={a.id} a={a} />)}
                 </section>
               )}
-              {luAlerts.length>0&&(
-                <section style={{marginBottom:24}}>
-                  <div style={{fontWeight:800,fontSize:13,color:M.amber,textTransform:"uppercase",letterSpacing:0.5,marginBottom:10}}>🟡 Lues — en attente ({luAlerts.length})</div>
-                  {luAlerts.map(a=><AlertCard key={a.id} a={a}/>)}
-                </section>
-              )}
-              {enCoursA.length>0&&(
+              {alertesEnAttente.length > 0 && (
                 <section>
-                  <div style={{fontWeight:800,fontSize:13,color:M.blue,textTransform:"uppercase",letterSpacing:0.5,marginBottom:10}}>🔵 En cours ({enCoursA.length})</div>
-                  {enCoursA.map(a=><AlertCard key={a.id} a={a}/>)}
+                  <div style={{ fontWeight:800, fontSize:13, color:M.amber, textTransform:"uppercase", letterSpacing:0.5, marginBottom:10 }}>⏳ En attente du véhicule ({alertesEnAttente.length})</div>
+                  {alertesEnAttente.map(a => <AlertCard key={a.id} a={a} />)}
                 </section>
               )}
             </>
@@ -673,293 +598,289 @@ export default function MecanicienPage() {
       )}
 
       {/* ════ ATELIER ════ */}
-      {tab==="atelier"&&(
+      {tab === "atelier" && (
         <div>
-          {repsAct.length===0?(
-            <div style={{textAlign:"center",padding:"60px 20px",color:M.gray}}><div style={{fontSize:48}}>✅</div><p style={{fontWeight:700,marginTop:12,fontSize:16}}>Atelier libre</p></div>
-          ):repsAct.map(r=><RepCard key={r.id} rep={r}/>)}
+          {repsAct.length === 0
+            ? <div style={{ textAlign:"center", padding:"60px 20px", color:M.gray }}><div style={{ fontSize:48 }}>✅</div><p style={{ fontWeight:700, marginTop:12, fontSize:16 }}>Atelier libre</p></div>
+            : repsAct.map(r => <RepCard key={r.id} rep={r} />)}
         </div>
       )}
 
       {/* ════ PRÊTS ════ */}
-      {tab==="prets"&&(
+      {tab === "prets" && (
         <div>
-          {repsPret.length===0?(
-            <div style={{textAlign:"center",padding:"60px 20px",color:M.gray}}><div style={{fontSize:48}}>✅</div><p style={{fontWeight:700,marginTop:12,fontSize:16}}>Aucun véhicule en attente de remise</p></div>
-          ):repsPret.map(r=><RepCard key={r.id} rep={r}/>)}
+          {repsPret.length === 0
+            ? <div style={{ textAlign:"center", padding:"60px 20px", color:M.gray }}><div style={{ fontSize:48 }}>✅</div><p style={{ fontWeight:700, marginTop:12, fontSize:16 }}>Aucun véhicule prêt</p></div>
+            : repsPret.map(r => <RepCard key={r.id} rep={r} />)}
         </div>
       )}
 
-      {/* ════ HISTORIQUE ════ */}
-      {tab==="historique"&&(
+      {/* ════ MESSAGES ════ */}
+      {tab === "messages" && (
         <div>
-          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-            <select value={histVeh} onChange={e=>setHistVeh(e.target.value)} style={{...inp,flex:1,minWidth:140} as React.CSSProperties}>
-              <option value="all">Tous les véhicules</option>
-              {vehicules.map(v=><option key={v.id} value={v.id}>{v.plaque} — {v.marque}</option>)}
-            </select>
-            <select value={histPer} onChange={e=>setHistPer(e.target.value)} style={{...inp,flex:1,minWidth:120} as React.CSSProperties}>
-              <option value="all">Toutes périodes</option>
-              <option value="mois">Ce mois</option>
-              <option value="3mois">3 derniers mois</option>
-              <option value="annee">Cette année</option>
-            </select>
-          </div>
-          <p style={{color:M.gray,fontSize:13,marginBottom:12}}>{histF.length} réparation(s) archivée(s)</p>
-          {histF.length===0?(
-            <div style={{textAlign:"center",padding:"60px 20px",color:M.gray}}><div style={{fontSize:48}}>📭</div><p style={{fontWeight:700,marginTop:12}}>Aucun historique</p></div>
-          ):histF.map(r=>{
-            type VM={plaque?:string;marque?:string;modele?:string};
-            const vv=r.vehicule as VM|undefined;
-            const duree=r.date_debut_reparation&&r.date_fin_reparation?nbJ(r.date_debut_reparation,r.date_fin_reparation):null;
-            return (
-              <div key={r.id} style={{background:M.white,borderRadius:16,padding:16,marginBottom:12,boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8,flexWrap:"wrap",gap:8}}>
-                  <div>
-                    <div style={{fontWeight:800,fontSize:15,color:M.navy}}>{vv?.plaque} <span style={{color:M.gray,fontWeight:400,fontSize:13}}>{vv?.marque} {vv?.modele}</span></div>
-                    <ChipR s={r.statut}/>
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    {r.cout!=null&&<div style={{fontWeight:800,color:M.navy}}>{r.cout.toLocaleString("fr-CH")} CHF</div>}
-                    <button onClick={()=>setHistDetail(r)} style={{fontSize:13,color:M.blue,background:"none",border:"none",cursor:"pointer",fontWeight:700,marginTop:4}}>Détails →</button>
-                  </div>
-                </div>
-                <p style={{fontSize:14,color:"#475569",marginBottom:8}}>{r.description}</p>
-                <div style={{display:"flex",gap:12,fontSize:12,color:M.gray,flexWrap:"wrap"}}>
-                  {r.date_reception&&<span>📥 {fd(r.date_reception)}</span>}
-                  {r.date_fin_reparation&&<span>✅ {fd(r.date_fin_reparation)}</span>}
-                  {duree!=null&&<span>⏱ {duree}j</span>}
-                  {r.date_remise_circulation&&<span>🚌 {fd(r.date_remise_circulation)}</span>}
-                </div>
-              </div>
-            );
-          })}
+          {messages.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"60px 20px", color:M.gray }}>
+              <div style={{ fontSize:48 }}>💬</div>
+              <p style={{ fontWeight:700, marginTop:12, fontSize:16 }}>Aucun message</p>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontWeight:800, fontSize:12, color:M.gray, textTransform:"uppercase", letterSpacing:0.5, marginBottom:12 }}>Aujourd'hui</div>
+              {msgsToday.length === 0
+                ? <div style={{ textAlign:"center", padding:"16px 0", color:M.gray, fontSize:13, marginBottom:16 }}>Aucun message aujourd'hui</div>
+                : msgsToday.map(m => {
+                  const isNew = !m.read;
+                  return (
+                    <div key={m.id} style={{ background:isNew ? M.blueL : M.gray50, borderRadius:16, padding:16, marginBottom:10, borderLeft:`4px solid ${isNew ? M.blue : M.grayB}` }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8, gap:8 }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:isNew ? M.blue : M.gray, background:isNew ? "#DBEAFE" : M.gray100, borderRadius:99, padding:"2px 8px" }}>
+                          {isNew ? "● Nouveau" : "✓ Lu"}
+                        </span>
+                        <span style={{ fontSize:11, color:M.gray }}>{fmtDateTime(m.created_at)}</span>
+                      </div>
+                      <p style={{ fontSize:14, color:"#1E293B", lineHeight:1.5, fontWeight:isNew ? 600 : 400, marginBottom:isNew ? 10 : 0 }}>{m.message}</p>
+                      {isNew && (
+                        <button onClick={() => markMsgLu(m)} style={{ padding:"8px 14px", borderRadius:10, border:`1px solid ${M.blue}`, background:M.blueL, color:M.blue, fontWeight:700, fontSize:12, cursor:"pointer" }}>
+                          ✓ Confirmer lecture
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+
+              {msgsOlder.length > 0 && (
+                <>
+                  <button onClick={() => setShowMsgHistory(p => !p)} style={{ width:"100%", padding:"12px", borderRadius:12, border:`1px solid ${M.grayB}`, background:M.gray50, color:M.gray, fontWeight:700, fontSize:13, cursor:"pointer", marginTop:8, marginBottom:12 }}>
+                    {showMsgHistory ? "Masquer l'historique" : `Voir l'historique (${msgsOlder.length})`}
+                  </button>
+                  {showMsgHistory && Object.entries(olderByDay).sort((a, b) => b[0].localeCompare(a[0])).map(([day, msgs]) => (
+                    <div key={day} style={{ marginBottom:16 }}>
+                      <div style={{ fontSize:12, fontWeight:800, color:M.gray, textTransform:"uppercase", letterSpacing:0.5, marginBottom:8, paddingBottom:4, borderBottom:`1px solid ${M.grayB}` }}>
+                        {fmtDate(day)}
+                      </div>
+                      {msgs.map(m => {
+                        const isNew = !m.read;
+                        return (
+                          <div key={m.id} style={{ background:isNew ? M.blueL : M.gray50, borderRadius:12, padding:12, marginBottom:8, borderLeft:`3px solid ${isNew ? M.blue : M.grayB}`, opacity:isNew ? 1 : 0.8 }}>
+                            <div style={{ display:"flex", justifyContent:"space-between", gap:8, marginBottom:4 }}>
+                              <span style={{ fontSize:11, color:isNew ? M.blue : M.gray, fontWeight:isNew ? 700 : 400 }}>{isNew ? "● Nouveau" : "✓ Lu"}</span>
+                              <span style={{ fontSize:11, color:M.gray }}>{fmtDateTime(m.created_at)}</span>
+                            </div>
+                            <p style={{ fontSize:13, color:"#1E293B", lineHeight:1.5, fontWeight:isNew ? 600 : 400, marginBottom:isNew ? 8 : 0 }}>{m.message}</p>
+                            {isNew && (
+                              <button onClick={() => markMsgLu(m)} style={{ padding:"6px 12px", borderRadius:8, border:`1px solid ${M.blue}`, background:M.blueL, color:M.blue, fontWeight:700, fontSize:11, cursor:"pointer" }}>✓ Lu</button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </>
+              )}
+            </>
+          )}
         </div>
       )}
 
       {/* FAB */}
-      <button onClick={()=>{setRecepOpen({vehicule_id:"",description:""});setRecepF({vehicule_id:"",description:"",km_reception:"",date_reception:iso(),etat_visuel:""});setPhotos([]);}}
-        style={{position:"fixed",bottom:24,right:24,zIndex:90,background:M.navy,color:M.white,
-          border:"none",borderRadius:20,padding:"16px 24px",fontSize:15,fontWeight:800,
-          cursor:"pointer",boxShadow:"0 4px 20px rgba(13,59,122,0.35)",
-          display:"flex",alignItems:"center",gap:8,minHeight:56}}>
-        <span style={{fontSize:20}}>+</span> Réceptionner
+      <button onClick={() => { setRecepOpen({ vehicule_id:"", description:"" }); setRecepF({ vehicule_id:"", description:"", km_reception:"", date_reception:iso(), etat_visuel:"" }); setPhotos([]); }}
+        style={{ position:"fixed", bottom:24, right:24, zIndex:90, background:M.navy, color:M.white, border:"none", borderRadius:20, padding:"16px 24px", fontSize:15, fontWeight:800, cursor:"pointer", boxShadow:"0 4px 20px rgba(13,59,122,0.35)", display:"flex", alignItems:"center", gap:8, minHeight:56 }}>
+        <span style={{ fontSize:20 }}>+</span> Réceptionner
       </button>
 
       {/* ════════════ MODALS ════════════ */}
 
       {/* Détail alerte */}
-      {alertSheet&&(()=>{
-        const a=alertSheet;
-        const isLu=luIds.has(a.id),isEC=ecIds.has(a.id);
-        const sc=a.severity==="critique"?M.red:a.severity==="haute"?M.amber:M.blue;
-        const sbg=a.severity==="critique"?M.redL:a.severity==="haute"?M.amberL:M.blueL;
-        const v=vehicules.find(x=>x.id===a.vehicle_id);
+      {alertSheet && (() => {
+        const a  = alertSheet;
+        const sc  = a.severity==="critique" ? M.red : a.severity==="haute" ? M.amber : M.blue;
+        const sbg = a.severity==="critique" ? M.redL : a.severity==="haute" ? M.amberL : M.blueL;
+        const v = vehicules.find(x => x.id === a.vehicle_id);
         return (
-          <Sheet title="Alerte" onClose={()=>setAlertSheet(null)}>
-            <div style={{background:sbg,borderRadius:12,padding:16,marginBottom:20,borderLeft:`4px solid ${sc}`}}>
-              <div style={{fontSize:13,fontWeight:800,color:sc,marginBottom:8}}>
-                {a.severity==="critique"?"🔴 Critique":a.severity==="haute"?"🟠 Haute":"🔵 Normale"}
-                {isLu&&!isEC&&<span style={{marginLeft:8,color:M.green}}>✓ Lue</span>}
-                {isEC&&<span style={{marginLeft:8,color:M.blue}}>▶ En cours</span>}
+          <Sheet title="Alerte" onClose={() => setAlertSheet(null)}>
+            <div style={{ background:sbg, borderRadius:12, padding:16, marginBottom:20, borderLeft:`4px solid ${sc}` }}>
+              <div style={{ fontSize:13, fontWeight:800, color:sc, marginBottom:8 }}>
+                {a.severity==="critique" ? "🔴 Critique" : a.severity==="haute" ? "🟠 Haute" : "🔵 Normale"}
+                {a.read && <span style={{ marginLeft:8, color:M.amber }}>⏳ En attente du véhicule</span>}
               </div>
-              <p style={{fontSize:15,fontWeight:700,color:"#1E293B",lineHeight:1.5,margin:0}}>{a.message}</p>
-              <div style={{fontSize:12,color:M.gray,marginTop:8}}>{new Date(a.created_at).toLocaleDateString("fr-CH")}</div>
+              <p style={{ fontSize:15, fontWeight:700, color:"#1E293B", lineHeight:1.5, margin:0 }}>{a.message}</p>
+              <div style={{ fontSize:12, color:M.gray, marginTop:8 }}>{fmtDateTime(a.created_at)}</div>
             </div>
-            {v&&(
-              <div style={{background:"#EFF6FF",borderRadius:12,padding:14,marginBottom:20}}>
-                <div style={{fontWeight:700,color:M.navy,marginBottom:8,fontSize:13}}>🚌 Véhicule</div>
-                <DL l="Plaque"       v={v.plaque}/>
-                <DL l="Modèle"       v={`${v.marque} ${v.modele}`}/>
-                <DL l="Kilométrage"  v={`${v.km.toLocaleString()} km`}/>
-                {v.ct_date&&<DL l="CT" v={v.ct_date}/>}
-                <div style={{marginTop:8}}><ChipV s={v.etat}/></div>
+            {v && (
+              <div style={{ background:"#EFF6FF", borderRadius:12, padding:14, marginBottom:20 }}>
+                <div style={{ fontWeight:700, color:M.navy, marginBottom:8, fontSize:13 }}>🚌 Véhicule</div>
+                <DL l="Plaque"      v={v.plaque} />
+                <DL l="Modèle"      v={`${v.marque} ${v.modele}`} />
+                <DL l="Kilométrage" v={`${v.km.toLocaleString()} km`} />
+                {v.ct_date && <DL l="CT" v={v.ct_date} />}
+                <div style={{ marginTop:8 }}><ChipV s={v.etat as string} /></div>
               </div>
             )}
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {!isLu&&!isEC&&<BigBtn icon="✓" label="Marquer comme lu" color={M.gray} outline onClick={()=>markLu(a)}/>}
-              {!isEC&&a.vehicle_id&&<BigBtn icon="▶" label="Mettre en cours" onClick={()=>mettrEnCours(a)}/>}
-              {isEC&&a.vehicle_id&&<BigBtn icon="👁️" label="Réceptionner le véhicule" color={M.green} onClick={()=>{setRecepOpen({alerteId:a.id,vehicule_id:a.vehicle_id!,description:a.message});setRecepF({vehicule_id:a.vehicle_id!,description:a.message,km_reception:"",date_reception:iso(),etat_visuel:""});setPhotos([]);setAlertSheet(null);}}/>}
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {!a.read && <BigBtn icon="✓" label="Marquer comme lu" color={M.gray} outline onClick={() => markLu(a)} />}
+              {a.vehicle_id && <BigBtn icon="📋" label={a.read ? "Réceptionner ce véhicule" : "Mettre en cours + Réceptionner"} onClick={() => mettrEnCours(a)} />}
             </div>
           </Sheet>
         );
       })()}
 
-      {/* Réception */}
-      {recepOpen&&(
-        <Sheet title="Réception véhicule" onClose={()=>setRecepOpen(null)}>
-          <Sel label="Véhicule *" value={recepF.vehicule_id} onChange={v=>setRecepF(p=>({...p,vehicule_id:v}))}
-            opts={[{v:"",l:"— Choisir un véhicule —"},...vehicules.map(v=>({v:v.id,l:`${v.plaque} — ${v.marque} ${v.modele}`}))]}/>
-          <TA label="Problème observé *" value={recepF.description} onChange={v=>setRecepF(p=>({...p,description:v}))} placeholder="Décrivez le problème…"/>
-          <F label="Kilométrage" type="number" value={recepF.km_reception} onChange={v=>setRecepF(p=>({...p,km_reception:v}))}/>
-          <F label="Date de réception" type="date" value={recepF.date_reception} onChange={v=>setRecepF(p=>({...p,date_reception:v}))}/>
-          <TA label="État visuel" value={recepF.etat_visuel} onChange={v=>setRecepF(p=>({...p,etat_visuel:v}))} rows={2} placeholder="Rayures, dommages, propreté…"/>
-          {/* Photo upload — requires bucket "reparations-photos" in Supabase Storage */}
-          <div style={{marginBottom:16}}>
-            <label style={{display:"block",fontSize:13,fontWeight:700,color:M.gray,marginBottom:6}}>📷 Photos (optionnel)</label>
-            <input type="file" accept="image/*" multiple
-              onChange={e=>setPhotos(Array.from(e.target.files||[]))}
-              style={{fontSize:14,width:"100%",padding:"12px 0",cursor:"pointer"}}/>
-            {photos.length>0&&<div style={{fontSize:13,color:M.green,marginTop:6,fontWeight:700}}>{photos.length} photo(s) sélectionnée(s)</div>}
+      {/* Fiche réception */}
+      {recepOpen && (
+        <Sheet title="Réception véhicule" onClose={() => setRecepOpen(null)}>
+          <Sel label="Véhicule *" value={recepF.vehicule_id} onChange={v => setRecepF(p => ({ ...p, vehicule_id:v }))}
+            opts={[{ v:"", l:"— Choisir un véhicule —" }, ...vehicules.map(v => ({ v:v.id, l:`${v.plaque} — ${v.marque} ${v.modele}` }))]} />
+          <TA label="Problème observé *" value={recepF.description} onChange={v => setRecepF(p => ({ ...p, description:v }))} placeholder="Décrivez le problème…" />
+          <F  label="Kilométrage" type="number" value={recepF.km_reception} onChange={v => setRecepF(p => ({ ...p, km_reception:v }))} />
+          <F  label="Date de réception" type="date" value={recepF.date_reception} onChange={v => setRecepF(p => ({ ...p, date_reception:v }))} />
+          <TA label="État visuel" value={recepF.etat_visuel} onChange={v => setRecepF(p => ({ ...p, etat_visuel:v }))} rows={2} placeholder="Rayures, dommages, propreté…" />
+          <div style={{ marginBottom:16 }}>
+            <label style={{ display:"block", fontSize:13, fontWeight:700, color:M.gray, marginBottom:6 }}>📷 Photos (optionnel)</label>
+            <input type="file" accept="image/*" multiple onChange={e => setPhotos(Array.from(e.target.files || []))} style={{ fontSize:14, width:"100%", padding:"12px 0", cursor:"pointer" }} />
+            {photos.length > 0 && <div style={{ fontSize:13, color:M.green, marginTop:6, fontWeight:700 }}>{photos.length} photo(s) sélectionnée(s)</div>}
           </div>
-          <BigBtn icon={uploading?"":"✅"} label={uploading?"Enregistrement…":"Réceptionner"}
-            color={M.green} disabled={!recepF.vehicule_id||!recepF.description.trim()||uploading}
-            onClick={doReception}/>
+          <BigBtn icon={uploading ? "" : "✅"} label={uploading ? "Enregistrement…" : "Réceptionner"} color={M.green} disabled={!recepF.vehicule_id || !recepF.description.trim() || uploading} onClick={doReception} />
         </Sheet>
       )}
 
       {/* Créer réparation */}
-      {createRep&&(
-        <Sheet title="Réparation" onClose={()=>setCreateRep(null)}>
-          <div style={{background:"#EFF6FF",borderRadius:12,padding:12,marginBottom:16,fontSize:13,color:M.navy,fontWeight:600}}>
-            🚌 {(createRep.vehicule as {plaque?:string}|undefined)?.plaque||createRep.vehicule_id}
+      {createRep && (
+        <Sheet title="Réparation" onClose={() => setCreateRep(null)}>
+          <div style={{ background:"#EFF6FF", borderRadius:12, padding:12, marginBottom:16, fontSize:13, color:M.navy, fontWeight:600 }}>
+            🚌 {(createRep.vehicule as { plaque?:string } | undefined)?.plaque || createRep.vehicule_id}
           </div>
-          <Sel label="Type d'intervention" value={crF.type_intervention}
-            onChange={v=>setCrF(p=>({...p,type_intervention:v as "interne"|"externe"|"piece"}))}
-            opts={[{v:"interne",l:"Interne (atelier)"},{v:"externe",l:"Externe (garage)"},{v:"piece",l:"Commande de pièce"}]}/>
-          {crF.type_intervention==="externe"&&<F label="Nom du garage" value={crF.nom_garage} onChange={v=>setCrF(p=>({...p,nom_garage:v}))} placeholder="ex: Garage Martin"/>}
-          {crF.type_intervention==="piece"&&(<>
-            <F label="Nom de la pièce" value={crF.piece_nom} onChange={v=>setCrF(p=>({...p,piece_nom:v}))} placeholder="ex: Filtre à huile"/>
-            <F label="Fournisseur" value={crF.piece_fournisseur} onChange={v=>setCrF(p=>({...p,piece_fournisseur:v}))}/>
-            <F label="Date commande" type="date" value={crF.date_commande_piece} onChange={v=>setCrF(p=>({...p,date_commande_piece:v}))}/>
-            <F label="Réception estimée" type="date" value={crF.date_reception_piece_estimee} onChange={v=>setCrF(p=>({...p,date_reception_piece_estimee:v}))}/>
+          <Sel label="Type d'intervention" value={crF.type_intervention} onChange={v => setCrF(p => ({ ...p, type_intervention:v as "interne"|"externe"|"piece" }))}
+            opts={[{ v:"interne", l:"Interne (atelier)" }, { v:"externe", l:"Externe (garage)" }, { v:"piece", l:"Commande de pièce" }]} />
+          {crF.type_intervention === "externe" && <F label="Nom du garage" value={crF.nom_garage} onChange={v => setCrF(p => ({ ...p, nom_garage:v }))} placeholder="ex: Garage Martin" />}
+          {crF.type_intervention === "piece" && (<>
+            <F label="Nom de la pièce" value={crF.piece_nom} onChange={v => setCrF(p => ({ ...p, piece_nom:v }))} placeholder="ex: Filtre à huile" />
+            <F label="Fournisseur" value={crF.piece_fournisseur} onChange={v => setCrF(p => ({ ...p, piece_fournisseur:v }))} />
+            <F label="Date commande" type="date" value={crF.date_commande_piece} onChange={v => setCrF(p => ({ ...p, date_commande_piece:v }))} />
+            <F label="Réception estimée" type="date" value={crF.date_reception_piece_estimee} onChange={v => setCrF(p => ({ ...p, date_reception_piece_estimee:v }))} />
           </>)}
-          <Sel label="Urgence" value={crF.urgence} onChange={v=>setCrF(p=>({...p,urgence:v}))} opts={URGENCES}/>
-          <F label="Coût estimé (CHF)" type="number" value={crF.cout_estime} onChange={v=>setCrF(p=>({...p,cout_estime:v}))} placeholder="0"/>
-          {crF.cout_estime&&+crF.cout_estime>=BUDGET_SEUIL&&(
-            <Box msg={`⚠️ Coût ≥ ${BUDGET_SEUIL.toLocaleString()} CHF → validation gestionnaire/admin requise`}/>
+          <Sel label="Urgence" value={crF.urgence} onChange={v => setCrF(p => ({ ...p, urgence:v }))} opts={URGENCES} />
+          <F label="Coût estimé (CHF)" type="number" value={crF.cout_estime} onChange={v => setCrF(p => ({ ...p, cout_estime:v }))} placeholder="0" />
+          {crF.cout_estime && +crF.cout_estime >= BUDGET_SEUIL && (
+            <InfoBox msg={`⚠️ Coût ≥ ${BUDGET_SEUIL.toLocaleString()} CHF → validation gestionnaire/admin requise`} />
           )}
-          {crF.type_intervention!=="piece"&&<F label="Date de début" type="date" value={crF.date_debut_reparation} onChange={v=>setCrF(p=>({...p,date_debut_reparation:v}))}/>}
-          <TA label="Notes" value={crF.notes} onChange={v=>setCrF(p=>({...p,notes:v}))} rows={2}/>
-          <BigBtn icon="✅" label="Confirmer la réparation" color={M.green} onClick={doCreateRep}/>
+          {crF.type_intervention !== "piece" && <F label="Date de début" type="date" value={crF.date_debut_reparation} onChange={v => setCrF(p => ({ ...p, date_debut_reparation:v }))} />}
+          <TA label="Notes" value={crF.notes} onChange={v => setCrF(p => ({ ...p, notes:v }))} rows={2} />
+          <BigBtn icon="✅" label="Confirmer la réparation" color={M.green} onClick={doCreateRep} />
         </Sheet>
       )}
 
       {/* Pièce reçue */}
-      {pieceOpen&&(
-        <Sheet title="Pièce reçue" onClose={()=>setPieceOpen(null)}>
-          <div style={{background:"#EFF6FF",borderRadius:12,padding:12,marginBottom:16,fontSize:13}}>
-            <span style={{fontWeight:700,color:M.navy}}>🔩 {pieceOpen.piece_nom||"Pièce"}</span>
-            {pieceOpen.piece_fournisseur&&<span style={{color:M.gray}}> — {pieceOpen.piece_fournisseur}</span>}
+      {pieceOpen && (
+        <Sheet title="Pièce reçue" onClose={() => setPieceOpen(null)}>
+          <div style={{ background:"#EFF6FF", borderRadius:12, padding:12, marginBottom:16, fontSize:13 }}>
+            <span style={{ fontWeight:700, color:M.navy }}>🔩 {pieceOpen.piece_nom || "Pièce"}</span>
+            {pieceOpen.piece_fournisseur && <span style={{ color:M.gray }}> — {pieceOpen.piece_fournisseur}</span>}
           </div>
-          <F label="Date de réception de la pièce" type="date" value={pieceF.date_reception_piece_reelle} onChange={v=>setPieceF(p=>({...p,date_reception_piece_reelle:v}))}/>
-          <F label="Date de début de réparation" type="date" value={pieceF.date_debut_reparation} onChange={v=>setPieceF(p=>({...p,date_debut_reparation:v}))}/>
-          <BigBtn icon="✅" label="Démarrer la réparation" color={M.green} onClick={doPiece}/>
+          <F label="Date de réception de la pièce" type="date" value={pieceF.date_reception_piece_reelle} onChange={v => setPieceF(p => ({ ...p, date_reception_piece_reelle:v }))} />
+          <F label="Date de début de réparation" type="date" value={pieceF.date_debut_reparation} onChange={v => setPieceF(p => ({ ...p, date_debut_reparation:v }))} />
+          <BigBtn icon="✅" label="Démarrer la réparation" color={M.green} onClick={doPiece} />
         </Sheet>
       )}
 
       {/* Marquer réparé */}
-      {repareOpen&&(
-        <Sheet title="Réparation terminée" onClose={()=>setRepareOpen(null)}>
-          <div style={{background:M.gray50,borderRadius:12,padding:12,marginBottom:16,fontSize:13}}>
-            <span style={{fontWeight:700,color:M.navy}}>🚌 {(repareOpen.vehicule as {plaque?:string}|undefined)?.plaque||repareOpen.vehicule_id}</span>
+      {repareOpen && (
+        <Sheet title="Réparation terminée" onClose={() => setRepareOpen(null)}>
+          <div style={{ background:M.gray50, borderRadius:12, padding:12, marginBottom:16, fontSize:13 }}>
+            <span style={{ fontWeight:700, color:M.navy }}>🚌 {(repareOpen.vehicule as { plaque?:string } | undefined)?.plaque || repareOpen.vehicule_id}</span>
           </div>
-          <F label="Date de fin" type="date" value={repareF.date_fin_reparation} onChange={v=>setRepareF(p=>({...p,date_fin_reparation:v}))}/>
-          {repareOpen.date_debut_reparation&&repareF.date_fin_reparation&&(
-            <Box msg={`⏱ Durée : ${nbJ(repareOpen.date_debut_reparation,repareF.date_fin_reparation)} jour(s)`} color={M.navy} bg="#EFF6FF"/>
+          <F label="Date de fin" type="date" value={repareF.date_fin_reparation} onChange={v => setRepareF(p => ({ ...p, date_fin_reparation:v }))} />
+          {repareOpen.date_debut_reparation && repareF.date_fin_reparation && (
+            <InfoBox msg={`⏱ Durée : ${nbJ(repareOpen.date_debut_reparation, repareF.date_fin_reparation)} jour(s)`} color={M.navy} bg="#EFF6FF" />
           )}
-          <F label="Coût final (CHF)" type="number" value={repareF.cout} onChange={v=>setRepareF(p=>({...p,cout:v}))} placeholder="0"/>
-          <F label="Kilométrage à la sortie" type="number" value={repareF.km_sortie} onChange={v=>setRepareF(p=>({...p,km_sortie:v}))}/>
-          <TA label="Observations" value={repareF.commentaire_mecanicien} onChange={v=>setRepareF(p=>({...p,commentaire_mecanicien:v}))} placeholder="Pièces remplacées, conseils de suivi…"/>
-          <BigBtn icon="✔️" label="Confirmer — Véhicule réparé" color={M.purple} onClick={doRepare}/>
+          <F label="Coût final (CHF)" type="number" value={repareF.cout} onChange={v => setRepareF(p => ({ ...p, cout:v }))} placeholder="0" />
+          <F label="Kilométrage à la sortie" type="number" value={repareF.km_sortie} onChange={v => setRepareF(p => ({ ...p, km_sortie:v }))} />
+          <TA label="Observations" value={repareF.commentaire_mecanicien} onChange={v => setRepareF(p => ({ ...p, commentaire_mecanicien:v }))} placeholder="Pièces remplacées, conseils de suivi…" />
+          <BigBtn icon="✔️" label="Confirmer — Véhicule réparé" color={M.purple} onClick={doRepare} />
         </Sheet>
       )}
 
       {/* Remettre en circulation */}
-      {remettreRep&&(
-        <Sheet title="Remettre en circulation" onClose={()=>setRemettreRep(null)}>
-          <div style={{background:M.greenL,borderRadius:12,padding:14,marginBottom:20}}>
-            <p style={{fontWeight:700,color:M.green,fontSize:15,margin:"0 0 4px"}}>
-              🚌 {(remettreRep.vehicule as {plaque?:string}|undefined)?.plaque||remettreRep.vehicule_id}
-            </p>
-            <p style={{fontSize:13,color:"#15803D",lineHeight:1.5,margin:0}}>Le gestionnaire sera notifié automatiquement.</p>
+      {remettreRep && (
+        <Sheet title="Remettre en circulation" onClose={() => setRemettreRep(null)}>
+          <div style={{ background:M.greenL, borderRadius:12, padding:14, marginBottom:20 }}>
+            <p style={{ fontWeight:700, color:M.green, fontSize:15, margin:"0 0 4px" }}>🚌 {(remettreRep.vehicule as { plaque?:string } | undefined)?.plaque || remettreRep.vehicule_id}</p>
+            <p style={{ fontSize:13, color:M.greenD, lineHeight:1.5, margin:0 }}>Le gestionnaire sera notifié automatiquement.</p>
           </div>
-          {remettreRep.cout!=null&&<Box msg={`Coût final : ${remettreRep.cout.toLocaleString("fr-CH")} CHF`} color={M.navy} bg="#EFF6FF"/>}
-          <F label="Date de remise en service" type="date" value={remettreD} onChange={setRemettreD}/>
-          <BigBtn icon="🚌" label="Remettre en circulation" color={M.green} onClick={doRemettre}/>
+          {remettreRep.cout != null && <InfoBox msg={`Coût final : ${remettreRep.cout.toLocaleString("fr-CH")} CHF`} color={M.navy} bg="#EFF6FF" />}
+          <F label="Date de remise en service" type="date" value={remettreD} onChange={setRemettreD} />
+          <div style={{ marginBottom:16 }}>
+            <label style={{ display:"block", fontSize:13, fontWeight:700, color:M.gray, marginBottom:8 }}>Récupéré par</label>
+            <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+              {(["conducteur","personnel","autre"] as const).map(opt => (
+                <button key={opt} onClick={() => { setRecupPar(opt); setRecupNom(""); }} style={{ flex:1, padding:"10px 8px", borderRadius:10, fontSize:12, fontWeight:700, cursor:"pointer", border:`2px solid ${recupPar===opt ? M.navy : M.grayB}`, background:recupPar===opt ? "#EFF6FF" : M.white, color:recupPar===opt ? M.navy : M.gray }}>
+                  {opt === "conducteur" ? "Conducteur" : opt === "personnel" ? "Personnel" : "Autre"}
+                </button>
+              ))}
+            </div>
+            {recupPar === "conducteur" ? (
+              <select value={recupNom} onChange={e => setRecupNom(e.target.value)} style={{ ...inp, appearance:"none" } as React.CSSProperties}>
+                <option value="">— Choisir —</option>
+                {conducteurs.map(c => <option key={c.id} value={String(c.id)}>{c.prenom} {c.nom}</option>)}
+              </select>
+            ) : (
+              <input value={recupNom} onChange={e => setRecupNom(e.target.value)} placeholder={recupPar === "personnel" ? "Nom de la personne…" : "Préciser…"} style={inp} />
+            )}
+          </div>
+          <BigBtn icon="🚌" label="Remettre en circulation" color={M.green} onClick={doRemettre} />
         </Sheet>
       )}
 
       {/* Fiche véhicule */}
-      {veSheet&&(()=>{
-        const qrUrl=typeof window!=="undefined"?`${window.location.origin}/scan/${veSheet.id}`:`/scan/${veSheet.id}`;
-        const cond=veSheet.conducteur as {prenom?:string;nom?:string}|undefined;
-        const circ=veSheet.circuit as {nom?:string;emoji?:string}|undefined;
+      {veSheet && (() => {
+        const qrUrl = typeof window !== "undefined" ? `${window.location.origin}/scan/${veSheet.id}` : `/scan/${veSheet.id}`;
+        const cond  = veSheet.conducteur as { prenom?:string; nom?:string } | undefined;
+        const circ  = veSheet.circuit   as { nom?:string; emoji?:string }   | undefined;
         return (
-          <Sheet title={veSheet.plaque} onClose={()=>setVeSheet(null)}>
-
-            {/* Infos verrouillées */}
-            <div style={{background:M.gray50,borderRadius:12,padding:14,marginBottom:20}}>
-              <div style={{fontSize:11,fontWeight:800,color:M.gray,marginBottom:10,textTransform:"uppercase",letterSpacing:0.5}}>
-                🔒 Informations verrouillées
+          <Sheet title={veSheet.plaque} onClose={() => setVeSheet(null)}>
+            <div style={{ background:M.gray50, borderRadius:12, padding:14, marginBottom:20 }}>
+              <div style={{ fontSize:11, fontWeight:800, color:M.gray, marginBottom:10, textTransform:"uppercase", letterSpacing:0.5 }}>🔒 Informations verrouillées</div>
+              <DL l="Immatriculation" v={veSheet.plaque} />
+              <DL l="Marque / Modèle" v={`${veSheet.marque} ${veSheet.modele}`} />
+              <DL l="Places"          v={`${veSheet.places}${veSheet.places_handi ? ` + ${veSheet.places_handi} PMR` : ""}`} />
+              <DL l="Conducteur"      v={cond?.nom ? `${cond.prenom} ${cond.nom}` : "Non assigné"} />
+              <DL l="Circuit"         v={circ?.nom ? `${circ.emoji || ""} ${circ.nom}` : "Non assigné"} />
+              <DL l="Assurance"       v={veSheet.assurance_date || "À compléter"} />
+            </div>
+            <div style={{ background:"#EFF6FF", borderRadius:12, padding:16, marginBottom:20, display:"flex", flexDirection:"column", alignItems:"center", gap:12 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:M.navy }}>QR Code — Scan véhicule</div>
+              <div style={{ background:M.white, padding:12, borderRadius:10, display:"inline-flex", boxShadow:"0 2px 8px rgba(0,0,0,0.08)" }}>
+                <QRCodeSVG value={qrUrl} size={148} level="M" imageSettings={{ src:"/logo.png", height:28, width:28, excavate:true }} />
               </div>
-              <DL l="Immatriculation" v={veSheet.plaque}/>
-              <DL l="Marque / Modèle" v={`${veSheet.marque} ${veSheet.modele}`}/>
-              <DL l="Places"          v={`${veSheet.places}${veSheet.places_handi?` + ${veSheet.places_handi} PMR`:""}`}/>
-              <DL l="Conducteur"      v={cond?.nom?`${cond.prenom} ${cond.nom}`:"Non assigné"}/>
-              <DL l="Circuit"         v={circ?.nom?`${circ.emoji||""} ${circ.nom}`:"Non assigné"}/>
-              <DL l="Assurance"       v={veSheet.assurance_date||"—"}/>
+              <div style={{ fontSize:11, color:M.gray, textAlign:"center", wordBreak:"break-all" }}>{qrUrl}</div>
+              <button onClick={() => window.print()} style={{ fontSize:13, color:M.navy, background:"none", border:`1.5px solid ${M.navy}`, borderRadius:10, padding:"8px 18px", cursor:"pointer", fontWeight:700 }}>🖨 Imprimer le QR</button>
             </div>
-
-            {/* QR Code */}
-            <div style={{background:"#EFF6FF",borderRadius:12,padding:16,marginBottom:20,
-              display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
-              <div style={{fontSize:13,fontWeight:700,color:M.navy}}>QR Code — Scan véhicule</div>
-              <div style={{background:M.white,padding:12,borderRadius:10,display:"inline-flex",boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-                <QRCodeSVG value={qrUrl} size={148} level="M"
-                  imageSettings={{src:"/logo.png",height:28,width:28,excavate:true}}/>
-              </div>
-              <div style={{fontSize:11,color:M.gray,textAlign:"center",wordBreak:"break-all"}}>{qrUrl}</div>
-              <button onClick={()=>window.print()}
-                style={{fontSize:13,color:M.navy,background:"none",border:`1.5px solid ${M.navy}`,
-                  borderRadius:10,padding:"8px 18px",cursor:"pointer",fontWeight:700}}>
-                🖨 Imprimer le QR
-              </button>
-            </div>
-
-            {/* Champs modifiables */}
-            <div style={{fontSize:11,fontWeight:800,color:M.gray,marginBottom:14,textTransform:"uppercase",letterSpacing:0.5}}>
-              ✏️ Modifier
-            </div>
-            <F label="Kilométrage actuel" type="number" value={veF.km} onChange={v=>setVeF(p=>({...p,km:v}))}/>
-            <F label="Prochain CT (MM.YYYY)" value={veF.ct_date} placeholder="ex: 06.2026" onChange={v=>setVeF(p=>({...p,ct_date:v}))}/>
-            <F label="Prochaine vidange (MM.YYYY)" value={veF.date_vidange} placeholder="ex: 09.2026" onChange={v=>setVeF(p=>({...p,date_vidange:v}))}/>
-            <Sel label="État général" value={veF.etat} onChange={v=>setVeF(p=>({...p,etat:v}))}
-              opts={Object.entries(VS).map(([k,c])=>({v:k,l:c.l}))}/>
-            <TA label="Notes techniques" value={veF.notes} onChange={v=>setVeF(p=>({...p,notes:v}))} placeholder="Observations, historique, alertes particulières…"/>
-
-            {/* Historique réparations */}
-            {(()=>{
-              const vr=reparations.filter(r=>r.vehicule_id===veSheet.id&&r.statut==="remis_en_circulation");
+            <div style={{ fontSize:11, fontWeight:800, color:M.gray, marginBottom:14, textTransform:"uppercase", letterSpacing:0.5 }}>✏️ Données mécanicien</div>
+            <F label="Kilométrage actuel" type="number" value={veF.km} onChange={v => setVeF(p => ({ ...p, km:v }))} />
+            <F label="Prochain CT (MM.YYYY)" value={veF.ct_date} placeholder="ex: 06.2026" onChange={v => setVeF(p => ({ ...p, ct_date:v }))} />
+            <F label="Prochaine vidange (MM.YYYY)" value={veF.date_vidange} placeholder="ex: 09.2026" onChange={v => setVeF(p => ({ ...p, date_vidange:v }))} />
+            <Sel label="État général" value={veF.etat} onChange={v => setVeF(p => ({ ...p, etat:v }))} opts={Object.entries(VS).map(([k, c]) => ({ v:k, l:c.l }))} />
+            <TA label="Notes techniques" value={veF.notes} onChange={v => setVeF(p => ({ ...p, notes:v }))} placeholder="Observations, historique, alertes particulières…" />
+            {(() => {
+              const vr = reparations.filter(r => r.vehicule_id === veSheet.id && r.statut === "remis_en_circulation");
               if (!vr.length) return null;
               return (
-                <div style={{marginBottom:16}}>
-                  <div style={{fontSize:13,fontWeight:700,color:M.gray,marginBottom:10}}>📋 Historique réparations ({vr.length})</div>
-                  {vr.slice(0,5).map(r=>(
-                    <div key={r.id} style={{fontSize:13,color:"#475569",padding:"8px 0",borderBottom:`1px solid ${M.gray100}`,display:"flex",justifyContent:"space-between",gap:8}}>
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:M.gray, marginBottom:10 }}>📋 Historique réparations ({vr.length})</div>
+                  {vr.slice(0, 5).map(r => (
+                    <div key={r.id} style={{ fontSize:13, color:"#475569", padding:"8px 0", borderBottom:`1px solid ${M.gray100}`, display:"flex", justifyContent:"space-between", gap:8 }}>
                       <div>
-                        <div style={{fontWeight:600}}>{r.description.slice(0,55)}</div>
-                        <div style={{fontSize:11,color:M.gray}}>{fd(r.date_remise_circulation)}</div>
+                        <div style={{ fontWeight:600 }}>{r.description.slice(0, 55)}</div>
+                        <div style={{ fontSize:11, color:M.gray }}>{fmtDate(r.date_remise_circulation)}</div>
                       </div>
-                      {r.cout!=null&&<span style={{fontWeight:700,color:M.navy,flexShrink:0}}>{r.cout.toLocaleString("fr-CH")} CHF</span>}
+                      {r.cout != null && <span style={{ fontWeight:700, color:M.navy, flexShrink:0 }}>{r.cout.toLocaleString("fr-CH")} CHF</span>}
                     </div>
                   ))}
                 </div>
               );
             })()}
-
-            <BigBtn icon="💾" label="Enregistrer" onClick={doVeSave}/>
+            <BigBtn icon="💾" label="Enregistrer" onClick={doVeSave} />
           </Sheet>
         );
       })()}
-
-      {/* Détail historique */}
-      {histDetail&&(
-        <Sheet title="Fiche réparation" onClose={()=>setHistDetail(null)}>
-          <RepCard rep={histDetail} actions={false}/>
-          <BigBtn icon="🖨" label="Imprimer" color={M.navy} outline onClick={()=>window.print()}/>
-        </Sheet>
-      )}
 
     </div>
   );
