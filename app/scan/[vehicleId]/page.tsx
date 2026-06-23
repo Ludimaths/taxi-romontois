@@ -9,7 +9,7 @@ const INCTYPES = ["Panne", "Voyant moteur", "Accident", "Retard", "Dégradation"
 
 export default function ScanPage() {
   const params = useParams();
-  const vehicleId = decodeURIComponent(String(params.vehicleId)).replace(/-/g, " ");
+  const vehicleId = decodeURIComponent(String(params.vehicleId));
   const supabase = createClient();
 
   const [vehicle, setVehicle] = useState<Vehicule | null>(null);
@@ -24,11 +24,13 @@ export default function ScanPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    console.log("[scan] vehicleId depuis URL:", vehicleId);
     supabase.from("vehicules")
       .select("*, circuit:circuits(*,cercle:cercles_scolaires(*)), conducteur:conducteurs(*)")
-      .eq("plaque", vehicleId)
+      .eq("id", vehicleId)
       .single()
       .then(({ data, error }) => {
+        console.log("[scan] résultat:", { data: data?.id, error: error?.message });
         if (error || !data) setNotFound(true);
         else setVehicle(data);
         setLoading(false);
@@ -104,7 +106,7 @@ export default function ScanPage() {
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🚫</div>
         <div style={{ fontSize: 18, fontWeight: 800, color: C.gray800, marginBottom: 8 }}>Véhicule non trouvé</div>
-        <div style={{ fontSize: 13, color: C.gray400 }}>Plaque : {vehicleId}</div>
+        <div style={{ fontSize: 13, color: C.gray400 }}>ID véhicule : {vehicleId}</div>
       </div>
     </div>
   );
