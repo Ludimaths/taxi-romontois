@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C, statusColor, statusLabel } from "@/lib/constants";
+import { C, statusColor, statusLabel, fmtDate, fmtDateTime, conducteurEmail } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal, TabBar } from "@/components/ui";
 import type { Conducteur, Circuit, Vehicule } from "@/lib/types";
 
@@ -37,6 +37,8 @@ const STATUTS = ["disponible","en_service","en_attente","absent","termine"] as c
 interface ServiceLog {
   id: number;
   date_service: string;
+  heure_debut?: string;
+  heure_fin?: string;
   circuit_id?: string;
   circuit?: { nom: string; emoji: string; num: string };
   vehicule_id?: string;
@@ -348,8 +350,12 @@ export default function ConducteursPage() {
               {profile ? (
                 <div>
                   <div style={{ padding: "6px 10px", background: C.greenL, borderRadius: 8,
-                    fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 12 }}>
-                    ✅ Compte actif (ID: {profile.id.slice(0,8)}…)
+                    fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 6 }}>
+                    ✅ Compte actif
+                  </div>
+                  <div style={{ fontSize: 12, color: C.gray600, marginBottom: 12, padding: "4px 10px",
+                    background: C.gray50, borderRadius: 6, fontFamily: "monospace" }}>
+                    {conducteurEmail(d.prenom, d.nom)}
                   </div>
                   {genPwd && (
                     <div style={{ background: C.amberL, borderRadius: 10, padding: 12, marginBottom: 12 }}>
@@ -401,7 +407,7 @@ export default function ConducteursPage() {
 
           {/* Right: tabs */}
           <Card style={{ padding: 22 }}>
-            <TabBar tabs={["infos","absences","remplacements","historique"]} active={tab} onChange={setTab} />
+            <TabBar tabs={["infos","absences","remplacements","services","historique"]} active={tab} onChange={setTab} />
 
             {tab === "infos" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -432,7 +438,7 @@ export default function ConducteursPage() {
                       display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>
-                          {new Date(a.date_absence).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                          {fmtDate(a.date_absence)}
                         </div>
                         <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>
                           {a.motif ? `Motif : ${a.motif}` : "Motif non renseigné"}
@@ -470,7 +476,7 @@ export default function ConducteursPage() {
                   return (
                     <div key={l.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.gray100}` }}>
                       <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>
-                        {new Date(l.date_service).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                        {fmtDate(l.date_service)}
                       </div>
                       <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>
                         A remplacé : {l.replacement_name}
@@ -482,6 +488,47 @@ export default function ConducteursPage() {
                 })}
               </div>
             )}
+
+            {tab === "services" && (() => {
+              const services = logs.filter(l => !l.is_replacement && l.status !== "absent");
+              return (
+                <div>
+                  <p style={{ fontSize: 13, color: C.gray600, marginBottom: 14 }}>
+                    {services.length} service(s) enregistré(s)
+                  </p>
+                  {services.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "40px 0", color: C.gray400 }}>
+                      <div style={{ fontSize: 36 }}>🚌</div>
+                      <p style={{ fontWeight: 700, marginTop: 10 }}>Aucun service enregistré</p>
+                    </div>
+                  ) : services.map(l => {
+                    const circ = l.circuit as { nom?: string; emoji?: string } | undefined;
+                    const veh  = l.vehicule as { plaque?: string } | undefined;
+                    const hDeb = l.heure_debut ? String(l.heure_debut).slice(0, 5) : null;
+                    const hFin = l.heure_fin   ? String(l.heure_fin).slice(0, 5)   : null;
+                    return (
+                      <div key={l.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.gray100}`,
+                        display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>
+                            {fmtDate(l.date_service)}
+                          </div>
+                          <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>
+                            {hDeb && hFin ? `${hDeb} → ${hFin}` : hDeb ? `Début : ${hDeb}` : "Horaire non enregistré"}
+                            {circ?.nom && ` · ${circ.emoji} ${circ.nom}`}
+                            {veh?.plaque && ` · ${veh.plaque}`}
+                          </div>
+                        </div>
+                        <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 700,
+                          flexShrink: 0, background: C.greenL, color: C.green }}>
+                          Effectué
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {tab === "historique" && (
               <div>

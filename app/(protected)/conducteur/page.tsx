@@ -959,6 +959,42 @@ export default function ConducteurPage(){
                 );
               }
 
+              // Alerte imprévu : confirmation explicite requise
+              if(m.type==="imprévu"){
+                return(
+                  <div key={m.id} style={{background:isNew?"#EFF6FF":G.grayL,borderRadius:16,
+                    padding:16,marginBottom:10,
+                    border:`2px solid ${isNew?"#3B82F6":G.grayB}`,
+                    boxShadow:isNew?"0 2px 12px rgba(59,130,246,0.15)":"none",
+                    opacity:isNew?1:0.75}}>
+                    <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
+                      <span style={{fontSize:22}}>⚡</span>
+                      <div>
+                        <div style={{fontWeight:800,fontSize:14,color:isNew?"#2563EB":G.gray}}>
+                          Message du gestionnaire
+                        </div>
+                        <div style={{fontSize:11,color:G.gray}}>{fdt(m.created_at)}</div>
+                      </div>
+                    </div>
+                    <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5,
+                      fontWeight:isNew?600:400,marginBottom:isNew?12:0}}>
+                      {m.message}
+                    </p>
+                    {isNew?(
+                      <button onClick={()=>handleMarquerLu(m)} style={{
+                        width:"100%",padding:"12px",borderRadius:10,
+                        background:"#2563EB",color:"#fff",border:"none",
+                        fontWeight:800,fontSize:14,cursor:"pointer",
+                        boxShadow:"0 2px 8px rgba(37,99,235,0.25)"}}>
+                        ✅ Confirmer lecture
+                      </button>
+                    ):(
+                      <div style={{fontSize:12,color:"#2563EB",fontWeight:700}}>✅ Lu et confirmé</div>
+                    )}
+                  </div>
+                );
+              }
+
               // Message standard
               const sev=m.severity;
               const c=sev==="critique"?G.red:sev==="haute"?G.amber:G.navy;

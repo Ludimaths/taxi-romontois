@@ -1,24 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C } from "@/lib/constants";
+import { C, fmtDateTime } from "@/lib/constants";
 import { Btn } from "@/components/ui";
 import type { Alerte } from "@/lib/types";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const fmtDTLong = (d: string) => {
-  const dt = new Date(d);
-  const date = dt.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const h = String(dt.getHours()).padStart(2, "0");
-  const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${date} à ${h}h${m}`;
-};
-const fmtDT = (d: string) => {
-  const dt = new Date(d);
-  const h = String(dt.getHours()).padStart(2, "0");
-  const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${dt.toLocaleDateString("fr-CH")} à ${h}h${m}`;
-};
 
 // ── Type config ───────────────────────────────────────────────────────────────
 const TYPE_CFG: Record<string, { label: string; icon: string; color: string }> = {
@@ -237,7 +222,7 @@ export default function AlertesPage() {
                             <div style={{ fontSize: 13, color: C.gray800, fontWeight: a.read ? 400 : 700,
                               lineHeight: 1.5, marginBottom: 4 }}>{a.message}</div>
                             <div style={{ fontSize: 11, color: C.gray400 }}>
-                              {fmtDTLong(a.created_at)}
+                              {fmtDateTime(a.created_at)}
                               {veh && ` · ${veh.plaque}`}
                               {drv && ` · ${drv.prenom} ${drv.nom}`}
                             </div>
@@ -289,10 +274,10 @@ export default function AlertesPage() {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
                   {[
-                    ["Date", fmtDTLong(sel.created_at)],
+                    ["Date", fmtDateTime(sel.created_at)],
                     ...(veh ? [["Véhicule", veh.plaque]] : []),
                     ...(drv ? [["Conducteur", `${drv.prenom} ${drv.nom}`]] : []),
-                    ...(sel.read_at ? [["Lu le", fmtDT(sel.read_at)]] : []),
+                    ...(sel.read_at ? [["Lu le", fmtDateTime(sel.read_at)]] : []),
                   ].map(([l,v]) => (
                     <div key={l} style={{ display: "flex", justifyContent: "space-between",
                       borderBottom: `1px solid ${C.gray100}`, paddingBottom: 8, fontSize: 13 }}>
@@ -306,7 +291,7 @@ export default function AlertesPage() {
                 )}
                 {sel.read && (
                   <div style={{ textAlign: "center", padding: "8px 0", color: C.green, fontWeight: 700, fontSize: 13 }}>
-                    ✓ Lu le {sel.read_at ? fmtDT(sel.read_at) : ""}
+                    ✓ Lu le {sel.read_at ? fmtDateTime(sel.read_at) : ""}
                   </div>
                 )}
               </div>

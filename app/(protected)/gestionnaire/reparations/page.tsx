@@ -1,19 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C } from "@/lib/constants";
+import { C, fmtDate, fmtDateTime } from "@/lib/constants";
 import { Badge, Btn } from "@/components/ui";
 import type { Reparation } from "@/lib/types";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const fmtDTLong = (d: string) => {
-  const dt = new Date(d);
-  const date = dt.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const h = String(dt.getHours()).padStart(2, "0");
-  const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${date} à ${h}h${m}`;
-};
-const fd = (d?: string | null) => d ? new Date(d).toLocaleDateString("fr-CH") : "—";
 const nbJ = (a: string, b: string) => Math.round((+new Date(b) - +new Date(a)) / 86400000);
 
 // ── Statut config ─────────────────────────────────────────────────────────────
@@ -266,11 +256,11 @@ export default function ReparationsGestPage() {
                   {r.description.slice(0, 100)}{r.description.length > 100 ? "…" : ""}
                 </p>
                 <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.gray400, flexWrap: "wrap" }}>
-                  {r.date_reception && <span>📥 Réceptionné le {fd(r.date_reception)}</span>}
-                  {r.date_debut_reparation && <span>🔧 Début {fd(r.date_debut_reparation)}</span>}
-                  {r.date_fin_reparation && <span>✅ Terminé {fd(r.date_fin_reparation)}</span>}
+                  {r.date_reception && <span>📥 Réceptionné le {fmtDate(r.date_reception)}</span>}
+                  {r.date_debut_reparation && <span>🔧 Début {fmtDate(r.date_debut_reparation)}</span>}
+                  {r.date_fin_reparation && <span>✅ Terminé {fmtDate(r.date_fin_reparation)}</span>}
                   {duree != null && <span>⏱ {duree}j</span>}
-                  {r.date_remise_circulation && <span>🚌 En service {fd(r.date_remise_circulation)}</span>}
+                  {r.date_remise_circulation && <span>🚌 En service {fmtDate(r.date_remise_circulation)}</span>}
                   {(r.cout_estime ?? 0) >= SEUIL && r.cout == null && (
                     <span style={{ color: C.red, fontWeight: 700 }}>⚠ Validation requise</span>
                   )}
@@ -306,19 +296,19 @@ export default function ReparationsGestPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 16 }}>
                 {[
                   ["Véhicule",       `${veh?.marque ?? ""} ${veh?.modele ?? ""}`.trim() || "—"],
-                  ["Réceptionné",    fd(sel.date_reception)],
+                  ["Réceptionné",    fmtDate(sel.date_reception)],
                   ["Km réception",   sel.km_reception != null ? `${sel.km_reception.toLocaleString()} km` : "—"],
                   ["Type interv.",   sel.type_intervention === "externe" ? `Externe${sel.nom_garage ? ` — ${sel.nom_garage}` : ""}` : sel.type_intervention === "piece" ? "Pièce détachée" : sel.type_intervention === "interne" ? "Interne atelier" : "—"],
                   ["Pièce",          sel.piece_nom ? `${sel.piece_nom}${sel.piece_fournisseur ? ` — ${sel.piece_fournisseur}` : ""}` : "—"],
-                  ["Commandée le",   fd(sel.date_commande_piece)],
-                  ["Réception est.", fd(sel.date_reception_piece_estimee)],
-                  ["Début réparat.", fd(sel.date_debut_reparation)],
-                  ["Fin réparat.",   fd(sel.date_fin_reparation)],
+                  ["Commandée le",   fmtDate(sel.date_commande_piece)],
+                  ["Réception est.", fmtDate(sel.date_reception_piece_estimee)],
+                  ["Début réparat.", fmtDate(sel.date_debut_reparation)],
+                  ["Fin réparat.",   fmtDate(sel.date_fin_reparation)],
                   ["Durée",          duree != null ? `${duree} jour${duree > 1 ? "s" : ""}` : "—"],
                   ["Km sortie",      sel.km_sortie != null ? `${sel.km_sortie.toLocaleString()} km` : "—"],
                   ["Coût estimé",    sel.cout_estime != null ? `${sel.cout_estime.toLocaleString("fr-CH")} CHF` : "—"],
                   ["Coût final",     sel.cout != null ? `${sel.cout.toLocaleString("fr-CH")} CHF` : "—"],
-                  ["Remis en serv.", fd(sel.date_remise_circulation)],
+                  ["Remis en serv.", fmtDate(sel.date_remise_circulation)],
                 ].filter(([,v]) => v !== "—").map(([l,v]) => (
                   <div key={l} style={{ display: "flex", justifyContent: "space-between",
                     padding: "7px 0", borderBottom: `1px solid ${C.gray100}`, fontSize: 13 }}>
@@ -344,7 +334,7 @@ export default function ReparationsGestPage() {
               )}
 
               <div style={{ fontSize: 11, color: C.gray400, marginBottom: 12 }}>
-                Enregistré {fmtDTLong(sel.created_at)}
+                Enregistré {fmtDateTime(sel.created_at)}
               </div>
 
               {/* Message au mécanicien */}

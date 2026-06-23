@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C } from "@/lib/constants";
+import { C, fmtDateTime } from "@/lib/constants";
 import { Badge, InfoBox, Btn, Modal } from "@/components/ui";
 import type { Incident } from "@/lib/types";
 
@@ -11,19 +11,6 @@ type CirMin = { id: string; nom: string; emoji: string; num: string };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const isoToday  = () => new Date().toISOString().slice(0, 10);
-const fmtDTLong = (d: string) => {
-  const dt = new Date(d);
-  const date = dt.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const h = String(dt.getHours()).padStart(2, "0");
-  const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${date} à ${h}h${m}`;
-};
-const fmtDT = (d: string) => {
-  const dt = new Date(d);
-  const h = String(dt.getHours()).padStart(2, "0");
-  const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${dt.toLocaleDateString("fr-CH")} à ${h}h${m}`;
-};
 
 // ── Severity map ──────────────────────────────────────────────────────────────
 const SEV: Record<string, { level: number; label: string; color: string; bg: string; icon: string }> = {
@@ -109,12 +96,12 @@ function ActionModal({ inc, drivers, vehicles, circuits, onClose, onSave }: {
             <p style={{ fontSize: 13, color: C.gray800, margin: 0, lineHeight: 1.5 }}>{inc.description}</p>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <InfoBox label="Signalé le"  value={fmtDT(inc.reported_at)} />
+            <InfoBox label="Signalé le"  value={fmtDateTime(inc.reported_at)} />
             <InfoBox label="Conducteur"  value={drv ? `${drv.prenom} ${drv.nom}` : "—"} />
             <InfoBox label="Véhicule"    value={veh?.plaque || "—"} />
             <InfoBox label="Circuit"     value={circ ? `${circ.emoji} ${circ.nom}` : "—"} />
             {drv?.tel && <InfoBox label="Téléphone" value={drv.tel} full />}
-            {inc.resolved_at && <InfoBox label="Résolu le" value={fmtDT(inc.resolved_at)} full />}
+            {inc.resolved_at && <InfoBox label="Résolu le" value={fmtDateTime(inc.resolved_at)} full />}
           </div>
           {inc.response && (
             <div style={{ marginTop: 10, background: C.skyL, borderRadius: 8, padding: "8px 12px",
@@ -425,7 +412,7 @@ function IncCard({ i, onOpen }: { i: Incident; onOpen: () => void }) {
         </div>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 11, color: C.gray400 }}>{fmtDTLong(i.reported_at)}</span>
+        <span style={{ fontSize: 11, color: C.gray400 }}>{fmtDateTime(i.reported_at)}</span>
         {i.response && (
           <span style={{ fontSize: 11, color: C.navyL, fontWeight: 600 }}>✔ {i.response.slice(0,50)}</span>
         )}

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C, statusLabel, todayStr } from "@/lib/constants";
+import { C, statusLabel, todayStr, fmtDate, fmtDateTime } from "@/lib/constants";
 import { Badge, Card, Avatar } from "@/components/ui";
 import type { Conducteur, Circuit, Incident, Alerte, AbsenceEnfant, Reparation } from "@/lib/types";
 
@@ -23,7 +23,6 @@ interface AbsenceConducteur {
 
 const sevColor = (s: string) => ({ normale: "gray", haute: "amber", critique: "red" }[s] ?? "gray") as any;
 const sevLabel = (s: string) => ({ normale: "Normale", haute: "Haute", critique: "Critique" }[s] ?? s);
-const fmtDT = (d: string) => new Date(d).toLocaleString("fr-CH", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 export default function RapportPage() {
   const supabase = createClient();
@@ -192,7 +191,7 @@ export default function RapportPage() {
 
                 {/* Horodatage */}
                 <div style={{ marginTop: 10, fontSize: 11, color: C.gray400 }}>
-                  Décision enregistrée à {fmtDT(r.created_at)}
+                  Décision enregistrée à {fmtDateTime(r.created_at)}
                 </div>
               </div>
             );
@@ -270,7 +269,7 @@ export default function RapportPage() {
               <div key={a.id} style={{ padding: "12px 18px", borderBottom: `1px solid ${C.gray100}` }}>
                 <div style={{ fontWeight: 700, fontSize: 13 }}>{(a as any).enfant?.prenom} {(a as any).enfant?.nom}</div>
                 <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>
-                  {(a as any).circuit?.emoji} {(a as any).circuit?.nom} · {a.reason} · {new Date(a.date_absence).toLocaleDateString("fr-FR")}
+                  {(a as any).circuit?.emoji} {(a as any).circuit?.nom} · {a.reason} · {fmtDate(a.date_absence)}
                 </div>
                 <div style={{ marginTop: 4, display: "flex", gap: 6 }}>
                   <Badge color={a.transmitted_to_driver ? "green" : "amber"}>
@@ -293,7 +292,7 @@ export default function RapportPage() {
               <div key={i.id} style={{ padding: "12px 18px", borderBottom: `1px solid ${C.gray100}` }}>
                 <div style={{ fontWeight: 700, fontSize: 13 }}>{i.description}</div>
                 <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>
-                  {i.conducteur?.prenom} {i.conducteur?.nom} · {i.vehicule?.plaque} · {new Date(i.reported_at).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  {i.conducteur?.prenom} {i.conducteur?.nom} · {i.vehicule?.plaque} · {fmtDateTime(i.reported_at)}
                 </div>
                 <div style={{ marginTop: 4 }}>
                   <Badge color={i.status === "resolu" ? "green" : i.status === "en_cours" ? "blue" : "amber"}>
@@ -320,7 +319,7 @@ export default function RapportPage() {
                   <Badge color={sevColor(a.severity)}>{sevLabel(a.severity)}</Badge>
                 </div>
                 <div style={{ fontSize: 11, color: C.gray400, marginTop: 4, display: "flex", gap: 10 }}>
-                  <span>{new Date(a.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                  <span>{fmtDateTime(a.created_at)}</span>
                   <Badge color={a.read ? "green" : "gray"}>{a.read ? "Lu" : "Non lu"}</Badge>
                 </div>
               </div>
@@ -341,7 +340,7 @@ export default function RapportPage() {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>{(r as any).vehicule?.plaque} — {r.description}</div>
                   <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>
-                    {r.date_reparation ? new Date(r.date_reparation).toLocaleDateString("fr-FR") : r.date_reception ? new Date(r.date_reception).toLocaleDateString("fr-FR") : "—"} · {r.cout != null ? r.cout.toFixed(2) : "—"} CHF
+                    {fmtDate(r.date_reparation ?? r.date_reception)} · {r.cout != null ? r.cout.toFixed(2) : "—"} CHF
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>

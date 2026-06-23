@@ -123,3 +123,26 @@ export const todayStr = () =>
   new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 
 export const SEUIL_REPARATION_CHF = 1000;
+
+// Format date standard : 2026/06/23
+export const fmtDate = (d?: string | null): string => {
+  if (!d) return "—";
+  return d.slice(0, 10).replace(/-/g, "/");
+};
+
+// Format date+heure standard : 2026/06/23 à 14h30
+export const fmtDateTime = (d?: string | null): string => {
+  if (!d) return "—";
+  const dt = new Date(d);
+  const date = dt.toISOString().slice(0, 10).replace(/-/g, "/");
+  const h = String(dt.getHours()).padStart(2, "0");
+  const m = String(dt.getMinutes()).padStart(2, "0");
+  return `${date} à ${h}h${m}`;
+};
+
+// Email conducteur depuis prenom + nom
+export const conducteurEmail = (prenom: string, nom: string): string => {
+  const clean = (s: string) =>
+    s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/[^a-z0-9]/g, ".");
+  return `${clean(prenom)}.${clean(nom)}@taxi-romontois.ch`;
+};
