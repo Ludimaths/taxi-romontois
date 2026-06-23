@@ -127,17 +127,21 @@ export const SEUIL_REPARATION_CHF = 1000;
 // Format date standard : 2026/06/23
 export const fmtDate = (d?: string | null): string => {
   if (!d) return "—";
-  return d.slice(0, 10).replace(/-/g, "/");
+  const p = d.slice(0, 10).split("-");
+  if (p.length !== 3) return d.slice(0, 10);
+  return `${p[2]}/${p[1]}/${p[0]}`;
 };
 
-// Format date+heure standard : 2026/06/23 à 14h30
+// Format date+heure : 23/06/2026 à 14h30
 export const fmtDateTime = (d?: string | null): string => {
   if (!d) return "—";
   const dt = new Date(d);
-  const date = dt.toISOString().slice(0, 10).replace(/-/g, "/");
-  const h = String(dt.getHours()).padStart(2, "0");
-  const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${date} à ${h}h${m}`;
+  const day   = String(dt.getDate()).padStart(2, "0");
+  const month = String(dt.getMonth() + 1).padStart(2, "0");
+  const year  = dt.getFullYear();
+  const h     = String(dt.getHours()).padStart(2, "0");
+  const m     = String(dt.getMinutes()).padStart(2, "0");
+  return `${day}/${month}/${year} à ${h}h${m}`;
 };
 
 // Email conducteur depuis prenom + nom
