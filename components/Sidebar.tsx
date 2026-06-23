@@ -43,9 +43,10 @@ interface SidebarProps {
   onSignOut: () => void;
   incidentsCount?: number;
   alertesCount?: number;
+  reparationsCount?: number;
 }
 
-export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount = 0, alertesCount = 0 }: SidebarProps) {
+export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount = 0, alertesCount = 0, reparationsCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [logoError, setLogoError] = useState(false);
@@ -88,7 +89,8 @@ export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount =
         {navItems.map(item => {
           const active = pathname === item.path || (pathname.startsWith(item.path + "/") && item.path !== "/" + role);
           const badge = item.path.includes("incidents") ? incidentsCount
-            : item.path.includes("alertes") ? alertesCount : 0;
+            : item.path.includes("alertes") ? alertesCount
+            : item.path.includes("reparations") ? reparationsCount : 0;
 
           return (
             <button key={item.path} onClick={() => router.push(item.path)}
@@ -101,7 +103,7 @@ export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount =
               <span style={{ fontSize: 15 }}>{item.icon}</span>
               <span style={{ flex: 1 }}>{item.label}</span>
               {badge > 0 && (
-                <span style={{ background: item.path.includes("incidents") ? C.red : C.navyL,
+                <span style={{ background: item.path.includes("incidents") ? C.red : item.path.includes("reparations") ? C.amber : C.navyL,
                   color: C.white, borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>
                   {badge}
                 </span>

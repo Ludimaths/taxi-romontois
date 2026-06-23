@@ -59,18 +59,19 @@ export default function ImprevusPage() {
   const [loading,    setLoading]    = useState(true);
 
   // Form state
-  const [type,       setType]       = useState<ImprevuType | "">("");
-  const [message,    setMessage]    = useState("");
-  const [useTemplate,setUseTemplate]= useState(false);
-  const [search,     setSearch]     = useState("");
-  const [selected,   setSelected]   = useState<Recipient[]>([]);
-  const [sending,    setSending]    = useState(false);
-  const [sent,       setSent]       = useState(false);
+  const [type,        setType]        = useState<ImprevuType | "">("");
+  const [message,     setMessage]     = useState("");
+  const [useTemplate, setUseTemplate] = useState(false);
+  const [category,    setCategory]    = useState<"conducteurs"|"mecanicien"|"admin"|"parents"|"">("");
+  const [selected,    setSelected]    = useState<Recipient[]>([]);
+  const [sending,     setSending]     = useState(false);
+  const [sent,        setSent]        = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const fetchData = useCallback(async () => {
     const [drv, prof, alt] = await Promise.all([
       sb.from("conducteurs").select("*").order("nom"),
-      sb.from("profiles").select("id,prenom,nom,role").in("role", ["mecanicien", "admin", "gestionnaire"]).order("nom"),
+      sb.from("profiles").select("id,prenom,nom,role").in("role", ["mecanicien", "admin", "gestionnaire", "parent"]).order("nom"),
       sb.from("alertes")
         .select("*")
         .eq("type", "imprévu")
@@ -96,29 +97,33 @@ export default function ImprevusPage() {
     if (useTemplate && type) setMessage(TEMPLATES[type as ImprevuType] || "");
   }, [useTemplate, type]);
 
-  // Recipient search
-  const allRecipients: Recipient[] = [
-    ...drivers.map(d => ({
-      id: `drv-${d.id}`,
-      label: `${d.prenom} ${d.nom}`,
-      type: "conducteur" as const,
-      driver_id: d.id,
-      subtitle: d.status === "en_service" ? "En service" : d.status === "absent" ? "Absent" : "Disponible",
-    })),
-    ...profiles.map(p => ({
-      id: `prof-${p.id}`,
-      label: `${p.prenom} ${p.nom}`,
-      type: p.role as "mecanicien" | "admin" | "gestionnaire",
-      subtitle: p.role === "mecanicien" ? "Mécanicien" : p.role === "admin" ? "Admin" : "Gestionnaire",
-    })),
+  // Recipients by category
+  const CATEGORIES: { id: "conducteurs"|"mecanicien"|"admin"|"parents"; label: string; icon: string }[] = [
+    { id: "conducteurs", label: "Conducteurs", icon: "👤" },
+    { id: "mecanicien",  label: "Mécanicien",  icon: "🔧" },
+    { id: "admin",       label: "Admin",        icon: "⚙️" },
+    { id: "parents",     label: "Parents",      icon: "👪" },
   ];
 
-  const filtered = search.trim().length >= 2
-    ? allRecipients.filter(r =>
-        r.label.toLowerCase().includes(search.toLowerCase()) ||
-        (r.subtitle?.toLowerCase() || "").includes(search.toLowerCase())
-      )
-    : [];
+  const recipientsForCategory = (cat: string): Recipient[] => {
+    if (cat === "conducteurs") return drivers.map(d => ({
+      id: `drv-${d.id}`, label: `${d.prenom} ${d.nom}`,
+      type: "conducteur" as const, driver_id: d.id,
+      subtitle: d.status === "en_service" ? "En service" : d.status === "absent" ? "Absent" : "Disponible",
+    }));
+    if (cat === "mecanicien") return profiles.filter(p => p.role === "mecanicien").map(p => ({
+      id: `prof-${p.id}`, label: `${p.prenom} ${p.nom}`, type: "mecanicien" as const, subtitle: "Mécanicien",
+    }));
+    if (cat === "admin") return profiles.filter(p => p.role === "admin").map(p => ({
+      id: `prof-${p.id}`, label: `${p.prenom} ${p.nom}`, type: "admin" as const, subtitle: "Administrateur",
+    }));
+    if (cat === "parents") return profiles.filter(p => p.role === "parent").map(p => ({
+      id: `prof-${p.id}`, label: `${p.prenom} ${p.nom}`, type: "conducteur" as const, subtitle: "Parent",
+    }));
+    return [];
+  };
+
+  const categoryRecipients = category ? recipientsForCategory(category) : [];
 
   const isSelected = (r: Recipient) => selected.some(s => s.id === r.id);
 
@@ -153,7 +158,7 @@ export default function ImprevusPage() {
     setType("");
     setMessage("");
     setSelected([]);
-    setSearch("");
+    setCategory("");
     setUseTemplate(false);
     setSending(false);
     setSent(true);
@@ -177,8 +182,9 @@ export default function ImprevusPage() {
     </div>
   );
 
-  // Group sent alerts by "batch" (same message+type, same minute)
-  const recentGroups: { key: string; alerts: typeof sentAlerts; type: string; message: string; at: string }[] = [];
+  // Group sent alerts by batch (same message+type, same minute)
+  type AlertGroup = { key: string; alerts: typeof sentAlerts; type: string; message: string; at: string };
+  const allGroups: AlertGroup[] = [];
   const seen = new Set<string>();
   for (const a of sentAlerts) {
     const key = `${a.message?.slice(0, 60)}-${a.created_at?.slice(0, 16)}`;
@@ -188,9 +194,13 @@ export default function ImprevusPage() {
         x.message?.slice(0, 60) === a.message?.slice(0, 60) &&
         x.created_at?.slice(0, 16) === a.created_at?.slice(0, 16)
       );
-      recentGroups.push({ key, alerts: group, type: a.type, message: a.message || "", at: a.created_at || "" });
+      allGroups.push({ key, alerts: group, type: a.type, message: a.message || "", at: a.created_at || "" });
     }
   }
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayGroups  = allGroups.filter(g => g.at.slice(0, 10) === todayISO);
+  const olderGroups  = allGroups.filter(g => g.at.slice(0, 10) !== todayISO);
+  const visibleGroups = showHistory ? allGroups : todayGroups;
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto" }}>
@@ -259,40 +269,49 @@ export default function ImprevusPage() {
             )}
           </div>
 
-          {/* Recherche destinataires */}
+          {/* Destinataires — sélection par catégorie */}
           <div style={{ marginBottom: 16 }}>
             <label style={labelSt}>Destinataires *</label>
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Recherche conducteur, mécanicien, admin…"
-              style={inputSt} />
-            {search.trim().length >= 2 && filtered.length > 0 && (
-              <div style={{ border: `1px solid ${C.gray200}`, borderRadius: 10, marginTop: 4,
+            {/* Catégories */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+              {CATEGORIES.map(cat => (
+                <button key={cat.id} onClick={() => setCategory(prev => prev === cat.id ? "" : cat.id)}
+                  style={{ padding: "6px 12px", borderRadius: 20, fontWeight: 700, fontSize: 12,
+                    cursor: "pointer", border: `2px solid ${category === cat.id ? C.navyL : C.gray200}`,
+                    background: category === cat.id ? C.navyL : C.white,
+                    color: category === cat.id ? C.white : C.gray600 }}>
+                  {cat.icon} {cat.label}
+                  {category === cat.id && ` (${categoryRecipients.length})`}
+                </button>
+              ))}
+            </div>
+            {/* Liste de la catégorie */}
+            {category && (
+              <div style={{ border: `1px solid ${C.gray200}`, borderRadius: 10,
                 maxHeight: 200, overflowY: "auto", background: C.white }}>
-                {filtered.map(r => {
-                  const sel = isSelected(r);
-                  const ROLE_ICON: Record<string, string> = {
-                    conducteur: "👤", mecanicien: "🔧", admin: "⚙️", gestionnaire: "👔",
-                  };
+                {categoryRecipients.length === 0 ? (
+                  <div style={{ padding: "12px 14px", fontSize: 12, color: C.gray400 }}>
+                    Aucun {CATEGORIES.find(c => c.id === category)?.label.toLowerCase()} trouvé
+                  </div>
+                ) : categoryRecipients.map(r => {
+                  const isSel = isSelected(r);
                   return (
                     <div key={r.id} onClick={() => toggleRecipient(r)}
                       style={{ display: "flex", gap: 10, alignItems: "center", padding: "9px 12px",
                         cursor: "pointer", borderBottom: `1px solid ${C.gray100}`,
-                        background: sel ? C.skyL : C.white }}>
-                      <span style={{ fontSize: 16 }}>{ROLE_ICON[r.type] || "👤"}</span>
+                        background: isSel ? C.skyL : C.white }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: C.gray800 }}>{r.label}</div>
                         <div style={{ fontSize: 11, color: C.gray400 }}>{r.subtitle}</div>
                       </div>
-                      <span style={{ color: sel ? C.navyL : C.gray400, fontWeight: 700, fontSize: 13 }}>
-                        {sel ? "✓ Ajouté" : "+"}
+                      <span style={{ fontWeight: 700, fontSize: 13,
+                        color: isSel ? C.green : C.gray200 }}>
+                        {isSel ? "✓" : "+"}
                       </span>
                     </div>
                   );
                 })}
               </div>
-            )}
-            {search.trim().length >= 2 && filtered.length === 0 && (
-              <div style={{ fontSize: 12, color: C.gray400, padding: "8px 4px" }}>Aucun résultat</div>
             )}
           </div>
 
@@ -328,16 +347,49 @@ export default function ImprevusPage() {
 
         {/* ── Historique des envois ─────────────────────────── */}
         <div>
-          <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 12 }}>
-            Envois récents
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: C.navy }}>
+              Imprévus du jour
+              {todayGroups.length > 0 && (
+                <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: C.gray400 }}>
+                  ({todayGroups.length} envoi{todayGroups.length > 1 ? "s" : ""})
+                </span>
+              )}
+            </div>
+            {olderGroups.length > 0 && (
+              <button onClick={() => setShowHistory(v => !v)}
+                style={{ fontSize: 12, fontWeight: 700, color: C.navyL, background: "none",
+                  border: `1px solid ${C.navyL}`, borderRadius: 20, padding: "4px 12px", cursor: "pointer" }}>
+                {showHistory ? "Masquer l'historique" : `Voir l'historique (${olderGroups.length})`}
+              </button>
+            )}
           </div>
-          {recentGroups.length === 0 ? (
+          {visibleGroups.length === 0 ? (
             <div style={{ background: C.white, borderRadius: 14, padding: 24,
               border: `1px solid ${C.gray200}`, textAlign: "center", color: C.gray400 }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
-              <div style={{ fontSize: 13 }}>Aucun imprévu envoyé</div>
+              <div style={{ fontSize: 13 }}>Aucun imprévu envoyé aujourd'hui</div>
             </div>
-          ) : recentGroups.map(g => {
+          ) : (() => {
+            // Group by day for separators
+            const byDay: Record<string, AlertGroup[]> = {};
+            visibleGroups.forEach(g => {
+              const day = g.at.slice(0, 10);
+              if (!byDay[day]) byDay[day] = [];
+              byDay[day].push(g);
+            });
+            return Object.entries(byDay).sort(([a],[b]) => b.localeCompare(a)).map(([day, groups]) => {
+              const dayLabel = new Date(day + "T12:00:00").toLocaleDateString("fr-FR", {
+                weekday: "long", day: "numeric", month: "long", year: "numeric",
+              });
+              return (
+                <div key={day}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: C.gray400, textTransform: "uppercase",
+                    letterSpacing: 0.5, padding: "10px 0 6px",
+                    borderBottom: `1px solid ${C.gray100}`, marginBottom: 10 }}>
+                    {day === todayISO ? `Aujourd'hui — ${dayLabel}` : dayLabel}
+                  </div>
+                  {groups.map(g => {
             const typeInfo = TYPES.find(t => t.id === g.type) || TYPES.find(t => t.id === "autre")!;
             const luCount  = g.alerts.filter(a => a.read).length;
             const totalCount = g.alerts.length;
@@ -385,6 +437,10 @@ export default function ImprevusPage() {
               </div>
             );
           })}
+                </div>
+              );
+            });
+          })()}
         </div>
       </div>
     </div>

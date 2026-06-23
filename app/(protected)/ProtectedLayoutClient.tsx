@@ -15,16 +15,19 @@ export default function ProtectedLayoutClient({
 }) {
   const router = useRouter();
   const sb = createClient();
-  const [incidentsCount, setIncidentsCount] = useState(0);
-  const [alertesCount,   setAlertesCount]   = useState(0);
+  const [incidentsCount,  setIncidentsCount]  = useState(0);
+  const [alertesCount,    setAlertesCount]    = useState(0);
+  const [reparationsCount,setReparationsCount]= useState(0);
 
   const fetchCounts = useCallback(async () => {
-    const [{ count: ic }, { count: ac }] = await Promise.all([
+    const [{ count: ic }, { count: ac }, { count: rc }] = await Promise.all([
       sb.from("incidents").select("id", { count: "exact", head: true }).neq("status", "resolu"),
       sb.from("alertes").select("id", { count: "exact", head: true }).eq("read", false),
+      sb.from("reparations").select("id", { count: "exact", head: true }).eq("statut", "en_attente_validation"),
     ]);
     setIncidentsCount(ic ?? 0);
     setAlertesCount(ac ?? 0);
+    setReparationsCount(rc ?? 0);
   }, [sb]);
 
   useEffect(() => {
@@ -33,6 +36,7 @@ export default function ProtectedLayoutClient({
     const ch = sb.channel("layout-counts")
       .on("postgres_changes", { event: "*", schema: "public", table: "incidents" }, fetchCounts)
       .on("postgres_changes", { event: "*", schema: "public", table: "alertes" }, fetchCounts)
+      .on("postgres_changes", { event: "*", schema: "public", table: "reparations" }, fetchCounts)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [fetchCounts, sb, profile.role]);
@@ -105,6 +109,7 @@ export default function ProtectedLayoutClient({
             onSignOut={handleSignOut}
             incidentsCount={incidentsCount}
             alertesCount={alertesCount}
+            reparationsCount={reparationsCount}
           />
         </div>
 

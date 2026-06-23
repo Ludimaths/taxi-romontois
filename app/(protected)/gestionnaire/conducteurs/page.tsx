@@ -351,26 +351,35 @@ export default function ConducteursPage() {
                     fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 12 }}>
                     ✅ Compte actif (ID: {profile.id.slice(0,8)}…)
                   </div>
-                  {pwdSet && genPwd && (
+                  {genPwd && (
                     <div style={{ background: C.amberL, borderRadius: 10, padding: 12, marginBottom: 12 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 6 }}>
-                        ⚠ Mot de passe généré — affiché une seule fois
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 8 }}>
+                        ⚠ Mot de passe généré — copiez-le maintenant
                       </div>
-                      <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 900,
-                        color: C.navy, letterSpacing: 2, marginBottom: 8 }}>{genPwd}</div>
-                      <button onClick={() => { navigator.clipboard.writeText(genPwd); setPwdCopied(true); setTimeout(() => setPwdCopied(false), 2000); }}
-                        style={{ fontSize: 12, color: C.navyL, background: "none", border: `1px solid ${C.navyL}`,
-                          borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontWeight: 700 }}>
-                        {pwdCopied ? "✓ Copié !" : "📋 Copier"}
-                      </button>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          type="text"
+                          readOnly
+                          value={genPwd}
+                          style={{ flex: 1, fontFamily: "monospace", fontSize: 15, fontWeight: 700,
+                            letterSpacing: 2, padding: "8px 10px", borderRadius: 8,
+                            border: `1px solid ${C.amber}`, background: C.white, color: C.navy }}
+                        />
+                        <button onClick={() => { navigator.clipboard.writeText(genPwd); setPwdCopied(true); setTimeout(() => setPwdCopied(false), 2000); }}
+                          style={{ padding: "8px 12px", borderRadius: 8, border: "none",
+                            background: pwdCopied ? C.green : C.navyL, color: C.white,
+                            cursor: "pointer", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
+                          {pwdCopied ? "✓ Copié" : "Copier"}
+                        </button>
+                      </div>
                     </div>
                   )}
-                  {!pwdSet && (
+                  {!genPwd && (
                     <Btn full onClick={handleGenPassword} disabled={pwdBusy} color={C.navyL}>
                       {pwdBusy ? "Génération…" : "🔑 Générer mot de passe"}
                     </Btn>
                   )}
-                  {pwdSet && (
+                  {genPwd && (
                     <Btn full outline onClick={handleResetPassword} disabled={pwdBusy} color={C.amber}>
                       🔄 Nouveau mot de passe
                     </Btn>
