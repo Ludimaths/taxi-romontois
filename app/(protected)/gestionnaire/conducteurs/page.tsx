@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, statusColor, statusLabel, fmtDate, fmtDateTime, conducteurEmail, isoToday } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal, TabBar } from "@/components/ui";
+import { CheckCircle2, AlertTriangle, Pen, Trash2, Key, RefreshCw, Link2, UserPlus, ClipboardCopy, Check, Bus, FileText, Users } from "lucide-react";
 import type { Conducteur, Circuit, Vehicule } from "@/lib/types";
 
 
@@ -118,7 +119,7 @@ function DriverForm({ init, circuits, vehicules, onSave, onCancel, saving }: {
       </div>
       <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
         <Btn full onClick={() => onSave(f)} disabled={saving || !f.nom || !f.prenom} color={C.green}>
-          {saving ? "Enregistrement…" : "✅ Enregistrer"}
+          {saving ? "Enregistrement…" : "Enregistrer"}
         </Btn>
         <Btn outline onClick={onCancel} color={C.gray600}>Annuler</Btn>
       </div>
@@ -377,8 +378,8 @@ export default function ConducteursPage() {
             ← Tous les conducteurs
           </button>
           <div style={{ display: "flex", gap: 8 }}>
-            <Btn small onClick={() => setEditModal(true)} color={C.navyL}>✏️ Modifier</Btn>
-            <Btn small onClick={handleDelete} color={C.red} outline>🗑 Supprimer</Btn>
+            <Btn small onClick={() => setEditModal(true)} color={C.navyL}>Modifier</Btn>
+            <Btn small onClick={handleDelete} color={C.red} outline>Supprimer</Btn>
           </div>
         </div>
 
@@ -396,7 +397,7 @@ export default function ConducteursPage() {
                   <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>
                     {isIncomplete && <Badge color="amber">Incomplet</Badge>}
-                    {permisExpireSoon && <Badge color="red">⚠ Permis bientôt</Badge>}
+                    {permisExpireSoon && <Badge color="red">Permis bientôt</Badge>}
                   </div>
                 </div>
               </div>
@@ -419,8 +420,9 @@ export default function ConducteursPage() {
               {profile ? (
                 <div>
                   <div style={{ padding: "6px 10px", background: C.greenL, borderRadius: 8,
-                    fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 6 }}>
-                    ✅ Compte actif
+                    fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 6,
+                    display: "flex", alignItems: "center", gap: 6 }}>
+                    <CheckCircle2 size={13} /> Compte actif
                   </div>
                   <div style={{ fontSize: 12, color: C.gray600, marginBottom: 12, padding: "4px 10px",
                     background: C.gray50, borderRadius: 6, fontFamily: "monospace" }}>
@@ -428,8 +430,9 @@ export default function ConducteursPage() {
                   </div>
                   {genPwd && (
                     <div style={{ background: C.amberL, borderRadius: 10, padding: 12, marginBottom: 12 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 8 }}>
-                        ⚠ Mot de passe généré — copiez-le maintenant
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 8,
+                        display: "flex", alignItems: "center", gap: 5 }}>
+                        <AlertTriangle size={12} /> Mot de passe généré — copiez-le maintenant
                       </div>
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                         <input
@@ -444,19 +447,19 @@ export default function ConducteursPage() {
                           style={{ padding: "8px 12px", borderRadius: 8, border: "none",
                             background: pwdCopied ? C.green : C.navyL, color: C.white,
                             cursor: "pointer", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
-                          {pwdCopied ? "✓ Copié" : "Copier"}
+                          {pwdCopied ? "Copié" : "Copier"}
                         </button>
                       </div>
                     </div>
                   )}
                   {!genPwd && (
                     <Btn full onClick={handleGenPassword} disabled={pwdBusy} color={C.navyL}>
-                      {pwdBusy ? "Génération…" : "🔑 Générer mot de passe"}
+                      {pwdBusy ? "Génération…" : "Générer mot de passe"}
                     </Btn>
                   )}
                   {genPwd && (
                     <Btn full outline onClick={handleResetPassword} disabled={pwdBusy} color={C.amber}>
-                      🔄 Nouveau mot de passe
+                      Nouveau mot de passe
                     </Btn>
                   )}
                 </div>
@@ -465,13 +468,15 @@ export default function ConducteursPage() {
                   {createResult ? (
                     <div>
                       <div style={{ padding: "8px 12px", background: C.greenL, borderRadius: 8,
-                        fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 12 }}>
-                        ✅ Compte créé avec succès
+                        fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 12,
+                        display: "flex", alignItems: "center", gap: 6 }}>
+                        <CheckCircle2 size={13} /> Compte créé avec succès
                       </div>
                       <div style={{ background: C.amberL, borderRadius: 10, padding: 14, marginBottom: 10,
                         border: `1px solid #FDE68A` }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 12 }}>
-                          ⚠ Copiez ces identifiants maintenant — ils ne seront plus affichés
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 12,
+                          display: "flex", alignItems: "center", gap: 5 }}>
+                          <AlertTriangle size={12} /> Copiez ces identifiants maintenant — ils ne seront plus affichés
                         </div>
                         <div style={{ marginBottom: 10 }}>
                           <div style={{ fontSize: 10, fontWeight: 700, color: C.gray600,
@@ -502,15 +507,16 @@ export default function ConducteursPage() {
                           style={{ width: "100%", padding: "9px", borderRadius: 8, border: "none",
                             background: createCopied ? C.green : C.navyL, color: C.white,
                             cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "background .2s" }}>
-                          {createCopied ? "✓ Copié !" : "📋 Copier email + mot de passe"}
+                          {createCopied ? "Copié !" : "Copier email + mot de passe"}
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div>
                       <div style={{ padding: "6px 10px", background: C.amberL, borderRadius: 8,
-                        fontSize: 12, color: C.amber, fontWeight: 700, marginBottom: 10 }}>
-                        ⚠ Aucun compte associé
+                        fontSize: 12, color: C.amber, fontWeight: 700, marginBottom: 10,
+                        display: "flex", alignItems: "center", gap: 6 }}>
+                        <AlertTriangle size={12} /> Aucun compte associé
                       </div>
                       {createError && (
                         <div style={{ padding: "8px 10px", background: C.redL, borderRadius: 8,
@@ -522,7 +528,7 @@ export default function ConducteursPage() {
                       {createError.includes("existe déjà") ? (
                         <div>
                           <Btn full onClick={handleLinkAccount} disabled={linkBusy} color={C.amber}>
-                            {linkBusy ? "Liaison en cours…" : "🔗 Lier le compte existant"}
+                            {linkBusy ? "Liaison en cours…" : "Lier le compte existant"}
                           </Btn>
                           {linkError && (
                             <div style={{ padding: "8px 10px", background: C.redL, borderRadius: 8,
@@ -534,7 +540,7 @@ export default function ConducteursPage() {
                         </div>
                       ) : (
                         <Btn full onClick={handleCreateAccount} disabled={createBusy} color={C.green}>
-                          {createBusy ? "Création en cours…" : "🆕 Créer le compte conducteur"}
+                          {createBusy ? "Création en cours…" : "Créer le compte conducteur"}
                         </Btn>
                       )}
                     </div>
@@ -566,8 +572,8 @@ export default function ConducteursPage() {
                 </p>
                 {absences.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "40px 0", color: C.gray400 }}>
-                    <div style={{ fontSize: 36 }}>✅</div>
-                    <p style={{ fontWeight: 700, marginTop: 10 }}>Aucune absence</p>
+                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><CheckCircle2 size={36} color={C.green} /></div>
+                    <p style={{ fontWeight: 700, marginTop: 0 }}>Aucune absence</p>
                   </div>
                 ) : absences.map(a => {
                   const circ = a.circuit as { nom?: string; emoji?: string } | undefined;
@@ -592,7 +598,7 @@ export default function ConducteursPage() {
                       <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 700,
                         background: a.status === "couvert" ? C.greenL : C.amberL,
                         color: a.status === "couvert" ? C.green : C.amber }}>
-                        {a.status === "couvert" ? "✅ Couvert" : "⚠ Non couvert"}
+                        {a.status === "couvert" ? "Couvert" : "Non couvert"}
                       </span>
                     </div>
                   );
@@ -607,8 +613,8 @@ export default function ConducteursPage() {
                 </p>
                 {replacementsDone.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "40px 0", color: C.gray400 }}>
-                    <div style={{ fontSize: 36 }}>🔄</div>
-                    <p style={{ fontWeight: 700, marginTop: 10 }}>Aucun remplacement effectué</p>
+                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><RefreshCw size={36} color={C.gray400} /></div>
+                    <p style={{ fontWeight: 700, marginTop: 0 }}>Aucun remplacement effectué</p>
                   </div>
                 ) : replacementsDone.map(l => {
                   const circ = l.circuit as { nom?: string; emoji?: string } | undefined;
@@ -637,8 +643,8 @@ export default function ConducteursPage() {
                   </p>
                   {services.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "40px 0", color: C.gray400 }}>
-                      <div style={{ fontSize: 36 }}>🚌</div>
-                      <p style={{ fontWeight: 700, marginTop: 10 }}>Aucun service enregistré</p>
+                      <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><Bus size={36} color={C.gray400} /></div>
+                      <p style={{ fontWeight: 700, marginTop: 0 }}>Aucun service enregistré</p>
                     </div>
                   ) : services.map(l => {
                     const circ = l.circuit as { nom?: string; emoji?: string } | undefined;
@@ -723,8 +729,8 @@ export default function ConducteursPage() {
                 })}
                 {logs.length === 0 && (
                   <div style={{ textAlign: "center", padding: "40px 0", color: C.gray400 }}>
-                    <div style={{ fontSize: 36 }}>📋</div>
-                    <p style={{ fontWeight: 700, marginTop: 10 }}>Aucun service enregistré en {curYear}</p>
+                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><FileText size={36} color={C.gray400} /></div>
+                    <p style={{ fontWeight: 700, marginTop: 0 }}>Aucun service enregistré en {curYear}</p>
                   </div>
                 )}
               </div>
@@ -766,8 +772,9 @@ export default function ConducteursPage() {
       {absents > 0 && (
         <div style={{ background: C.amberL, borderRadius: 12, padding: "12px 16px", marginBottom: 14,
           border: `1px solid #FDE68A` }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: C.amber, marginBottom: 8 }}>
-            ⚠️ {absents} conducteur(s) absent(s) aujourd'hui
+          <div style={{ fontWeight: 700, fontSize: 13, color: C.amber, marginBottom: 8,
+            display: "flex", alignItems: "center", gap: 6 }}>
+            <AlertTriangle size={14} /> {absents} conducteur(s) absent(s) aujourd'hui
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {drivers.filter(d => d.status === "absent").map(d => (
@@ -824,7 +831,7 @@ export default function ConducteursPage() {
                   <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>
                   {isIncomplete && <Badge color="amber">Incomplet</Badge>}
                 </div>
-                {permisExpireSoon && <Badge color="red">⚠ Permis</Badge>}
+                {permisExpireSoon && <Badge color="red">Permis exp.</Badge>}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, fontSize: 12 }}>
                 {[
