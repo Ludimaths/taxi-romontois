@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { C, fmtDate, fmtDateTime } from "@/lib/constants";
 import { Badge, Btn } from "@/components/ui";
 import type { Reparation } from "@/lib/types";
+import { AlertTriangle, Wrench, MessageSquare, Send } from "lucide-react";
 const nbJ = (a: string, b: string) => Math.round((+new Date(b) - +new Date(a)) / 86400000);
 
 // ── Statut config ─────────────────────────────────────────────────────────────
@@ -150,8 +151,8 @@ export default function ReparationsGestPage() {
       {avValidation.length > 0 && (
         <div style={{ background: C.redL, borderRadius: 14, padding: 16, marginBottom: 20,
           border: `1px solid #FCA5A5` }}>
-          <div style={{ fontWeight: 800, color: C.red, marginBottom: 10 }}>
-            ⚠️ {avValidation.length} réparation(s) en attente de validation budget
+          <div style={{ fontWeight: 800, color: C.red, marginBottom: 10, display: "flex", alignItems: "center", gap: 7 }}>
+            <AlertTriangle size={16} color={C.red} /> {avValidation.length} réparation(s) en attente de validation budget
           </div>
           {avValidation.map(r => {
             const veh = (r.vehicule as { plaque?: string } | undefined)?.plaque || r.vehicule_id;
@@ -212,7 +213,7 @@ export default function ReparationsGestPage() {
         <div>
           {filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "50px 0" }}>
-              <div style={{ fontSize: 48 }}>🔧</div>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><Wrench size={48} color={C.gray400} /></div>
               <p style={{ fontWeight: 700, color: C.gray600, marginTop: 12, fontSize: 15 }}>Aucune réparation</p>
             </div>
           ) : filtered.map(r => {
@@ -256,13 +257,13 @@ export default function ReparationsGestPage() {
                   {r.description.slice(0, 100)}{r.description.length > 100 ? "…" : ""}
                 </p>
                 <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.gray400, flexWrap: "wrap" }}>
-                  {r.date_reception && <span>📥 Réceptionné le {fmtDate(r.date_reception)}</span>}
-                  {r.date_debut_reparation && <span>🔧 Début {fmtDate(r.date_debut_reparation)}</span>}
-                  {r.date_fin_reparation && <span>✅ Terminé {fmtDate(r.date_fin_reparation)}</span>}
-                  {duree != null && <span>⏱ {duree}j</span>}
-                  {r.date_remise_circulation && <span>🚌 En service {fmtDate(r.date_remise_circulation)}</span>}
+                  {r.date_reception && <span>Réceptionné le {fmtDate(r.date_reception)}</span>}
+                  {r.date_debut_reparation && <span>Début {fmtDate(r.date_debut_reparation)}</span>}
+                  {r.date_fin_reparation && <span>Terminé {fmtDate(r.date_fin_reparation)}</span>}
+                  {duree != null && <span>{duree}j</span>}
+                  {r.date_remise_circulation && <span>En service {fmtDate(r.date_remise_circulation)}</span>}
                   {(r.cout_estime ?? 0) >= SEUIL && r.cout == null && (
-                    <span style={{ color: C.red, fontWeight: 700 }}>⚠ Validation requise</span>
+                    <span style={{ color: C.red, fontWeight: 700 }}>Validation requise</span>
                   )}
                 </div>
               </div>
@@ -321,14 +322,14 @@ export default function ReparationsGestPage() {
               {sel.commentaire_mecanicien && !sel.commentaire_mecanicien.startsWith("Photos:") && (
                 <div style={{ background: C.gray50, borderRadius: 10, padding: 12, marginBottom: 12,
                   fontSize: 12, fontStyle: "italic", color: C.gray600, lineHeight: 1.5 }}>
-                  💬 {sel.commentaire_mecanicien}
+                  {sel.commentaire_mecanicien}
                 </div>
               )}
 
               {sel.statut === "en_attente_validation" && (
                 <div style={{ background: C.amberL, borderRadius: 10, padding: 12, marginBottom: 12,
                   fontSize: 13, color: C.amber, fontWeight: 700, lineHeight: 1.5 }}>
-                  ⚠️ Cette réparation dépasse {SEUIL.toLocaleString()} CHF et nécessite une validation.
+                  Cette réparation dépasse {SEUIL.toLocaleString()} CHF et nécessite une validation.
                   L'administrateur a été notifié automatiquement.
                 </div>
               )}
@@ -340,7 +341,7 @@ export default function ReparationsGestPage() {
               {/* Message au mécanicien */}
               {!msgOpen ? (
                 <Btn full outline color={C.navyL} onClick={() => setMsgOpen(true)}>
-                  💬 Envoyer un message au mécanicien
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}><MessageSquare size={15} /> Envoyer un message au mécanicien</span>
                 </Btn>
               ) : (
                 <div>
@@ -350,7 +351,7 @@ export default function ReparationsGestPage() {
                       border: `1px solid ${C.gray200}`, fontSize: 13, resize: "vertical", marginBottom: 8 }} />
                   <div style={{ display: "flex", gap: 8 }}>
                     <Btn full onClick={sendMsg} disabled={!msgText.trim() || sending} color={C.navyL}>
-                      {sending ? "Envoi…" : "📤 Envoyer"}
+                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Send size={15} /> {sending ? "Envoi…" : "Envoyer"}</span>
                     </Btn>
                     <Btn outline color={C.gray600} onClick={() => { setMsgOpen(false); setMsgText(""); }}>
                       Annuler
