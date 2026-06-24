@@ -1,4 +1,5 @@
 "use client";
+import { Bell, Wrench, CheckCircle2, Archive, MessageSquare, Save, Bus, Package, AlertTriangle, Inbox, BarChart2, FileText, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDate, fmtDateTime, isoToday } from "@/lib/constants";
@@ -99,8 +100,8 @@ function DL({ l, v }: { l: string; v: string }) {
   );
 }
 
-function BigBtn({ icon = "", label, onClick, color = C.navy, outline = false, disabled = false }: {
-  icon?: string; label: string; onClick: () => void; color?: string; outline?: boolean; disabled?: boolean;
+function BigBtn({ icon, label, onClick, color = C.navy, outline = false, disabled = false }: {
+  icon?: React.ReactNode; label: string; onClick: () => void; color?: string; outline?: boolean; disabled?: boolean;
 }) {
   return (
     <button onClick={onClick} disabled={disabled}
@@ -110,7 +111,7 @@ function BigBtn({ icon = "", label, onClick, color = C.navy, outline = false, di
         background: outline ? C.white : disabled ? "#CBD5E1" : color,
         color: outline ? color : C.white, opacity: disabled ? 0.6 : 1,
         display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 52 }}>
-      {icon && <span style={{ fontSize: 18 }}>{icon}</span>}{label}
+      {icon && <span style={{ display: "flex", alignItems: "center" }}>{icon}</span>}{label}
     </button>
   );
 }
@@ -315,7 +316,7 @@ export default function MecanicienPage() {
 
     const { error: a2Err } = await sb.from("alertes").insert({
       type: "vehicule", severity: "normale", read: false, vehicle_id: vId,
-      message: `🔧 Véhicule ${plaque} réceptionné à l'atelier — ${recepF.description.slice(0, 80)}`,
+      message: `Véhicule ${plaque} réceptionné à l'atelier — ${recepF.description.slice(0, 80)}`,
     });
     if (a2Err) console.error("[doReceptionner] alerte insert:", a2Err.message);
 
@@ -386,7 +387,7 @@ export default function MecanicienPage() {
 
     const { error: aErr } = await sb.from("alertes").insert({
       type: "vehicule", severity: "normale", read: false, vehicle_id: vId,
-      message: `🔧 Véhicule ${plaque} réceptionné directement à l'atelier — ${directRecepF.description.slice(0, 80)}`,
+      message: `Véhicule ${plaque} réceptionné directement à l'atelier — ${directRecepF.description.slice(0, 80)}`,
     });
     if (aErr) console.error("[doReceptionnerDirect] alerte insert:", aErr.message);
 
@@ -446,7 +447,7 @@ export default function MecanicienPage() {
     await sb.from("alertes").insert({
       type: newStatut === "en_attente_validation" ? "validation_requise" : "reparation",
       severity: sev, read: false, vehicle_id: vId,
-      message: `🔧 ${plaque} — ${sl}${coutTxt}`,
+      message: `${plaque} — ${sl}${coutTxt}`,
     });
 
     setSuiviRep(null);
@@ -471,7 +472,7 @@ export default function MecanicienPage() {
     await sb.from("vehicules").update({ etat: "repare" }).eq("id", vId);
     await sb.from("alertes").insert({
       type: "reparation", severity: "normale", read: false, vehicle_id: vId,
-      message: `✅ Véhicule ${plaque} — Réparation terminée, prêt à être récupéré`,
+      message: `Véhicule ${plaque} — Réparation terminée, prêt à être récupéré`,
     });
 
     setSuiviRep(null);
@@ -505,8 +506,8 @@ export default function MecanicienPage() {
     await sb.from("vehicules").update({ etat: "bon" }).eq("id", vId);
 
     const msg = recupLabel
-      ? `✅ Véhicule ${plaque} récupéré par ${recupLabel}`
-      : `✅ Véhicule ${plaque} remis en circulation`;
+      ? `Véhicule ${plaque} récupéré par ${recupLabel}`
+      : `Véhicule ${plaque} remis en circulation`;
     await sb.from("alertes").insert({
       type: "remise_circulation", severity: "normale", read: false, vehicle_id: vId, message: msg,
     });
@@ -546,12 +547,19 @@ export default function MecanicienPage() {
   const totalAn   = histReps.filter(r => (r.date_remise_circulation || "") >= y0).reduce((s, r) => s + (r.cout || 0), 0);
   const totalGlob = histReps.reduce((s, r) => s + (r.cout || 0), 0);
 
+  const MTAB_ICONS: Record<MTab, React.ReactNode> = {
+    alertes:    <Bell size={14} />,
+    atelier:    <Wrench size={14} />,
+    prets:      <CheckCircle2 size={14} />,
+    historique: <Archive size={14} />,
+    messages:   <MessageSquare size={14} />,
+  };
   const tabs: { id: MTab; label: string; badge?: number }[] = [
-    { id: "alertes",    label: "🔔 Alertes",   badge: alertesMeca.length || undefined },
-    { id: "atelier",    label: "🔧 Atelier",    badge: atelierReps.length || undefined },
-    { id: "prets",      label: "✅ Prêts",      badge: pretsReps.length || undefined },
-    { id: "historique", label: "📋 Historique" },
-    { id: "messages",   label: "💬 Messages",   badge: msgDecisions.length || undefined },
+    { id: "alertes",    label: "Alertes",    badge: alertesMeca.length || undefined },
+    { id: "atelier",    label: "Atelier",    badge: atelierReps.length || undefined },
+    { id: "prets",      label: "Prêts",      badge: pretsReps.length || undefined },
+    { id: "historique", label: "Historique" },
+    { id: "messages",   label: "Messages",   badge: msgDecisions.length || undefined },
   ];
 
   if (loading) return (
@@ -562,6 +570,35 @@ export default function MecanicienPage() {
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "0 4px" }}>
 
+      {/* Profil mécanicien */}
+      <div style={{ background: `linear-gradient(135deg,${C.navy},${C.navyL})`, borderRadius: 16,
+        padding: 20, marginBottom: 20, color: "#fff" }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <div style={{ width: 52, height: 52, borderRadius: 26, background: "rgba(255,255,255,0.2)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 18, fontWeight: 900, color: "#fff", flexShrink: 0 }}>
+            RM
+          </div>
+          <div>
+            <p style={{ fontSize: 12, opacity: 0.7, margin: "0 0 2px" }}>Mécanicien</p>
+            <h1 style={{ fontSize: 19, fontWeight: 900, margin: 0 }}>Rachid Mehni</h1>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 16, marginTop: 14, fontSize: 12, opacity: 0.85, flexWrap: "wrap" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <Wrench size={13} /> {atelierReps.length} en atelier
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <CheckCircle2 size={13} /> {pretsReps.length} prêt(s)
+          </span>
+          {alertesMeca.length > 0 && (
+            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <Bell size={13} /> {alertesMeca.length} alerte(s)
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Tab nav */}
       <div style={{ display: "flex", gap: 6, marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
         {tabs.map(t => (
@@ -571,7 +608,7 @@ export default function MecanicienPage() {
               whiteSpace: "nowrap", flexShrink: 0,
               background: tab === t.id ? C.navy : C.gray100,
               color: tab === t.id ? C.white : C.gray600 }}>
-            {t.label}
+            {MTAB_ICONS[t.id]}{" "}{t.label}
             {t.badge != null && t.badge > 0 && (
               <span style={{ background: C.red, color: C.white, borderRadius: 99,
                 padding: "1px 7px", fontSize: 11, fontWeight: 800 }}>{t.badge}</span>
@@ -585,7 +622,7 @@ export default function MecanicienPage() {
         <div>
           {alertesMeca.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>🔔</div>
+              <div style={{ display:"flex",justifyContent:"center",marginBottom:12 }}><Inbox size={48} color={C.gray400} /></div>
               <p style={{ fontWeight: 700, fontSize: 15 }}>Aucune alerte mécanicien</p>
               <p style={{ fontSize: 13 }}>Les incidents transmis par le gestionnaire apparaîtront ici</p>
             </div>
@@ -629,7 +666,7 @@ export default function MecanicienPage() {
                     setRecepPhotos([]);
                   }} style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none",
                     background: C.navy, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                    🔧 Réceptionner ce véhicule
+                    Réceptionner ce véhicule
                   </button>
                 ) : (
                   <button onClick={async () => {
@@ -640,7 +677,7 @@ export default function MecanicienPage() {
                   }} style={{ width: "100%", padding: "13px 0", borderRadius: 12,
                     border: `2px solid ${C.navyL}`, background: C.white,
                     color: C.navyL, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                    ✓ Marquer comme lu
+                    Marquer comme lu
                   </button>
                 )}
               </div>
@@ -666,7 +703,7 @@ export default function MecanicienPage() {
 
           {atelierReps.length === 0 ? (
             <div style={{ textAlign: "center", padding: "40px 20px", color: C.gray400 }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>🔧</div>
+              <div style={{ display:"flex",justifyContent:"center",marginBottom:12 }}><Wrench size={48} color={C.gray400} /></div>
               <p style={{ fontWeight: 700, fontSize: 15 }}>Aucun véhicule en atelier</p>
             </div>
           ) : atelierReps.map(r => {
@@ -700,9 +737,9 @@ export default function MecanicienPage() {
                   {(r.description || "").slice(0, 100)}{(r.description || "").length > 100 ? "…" : ""}
                 </p>
                 <div style={{ display: "flex", gap: 12, fontSize: 12, color: C.gray400, flexWrap: "wrap" }}>
-                  {r.date_reception && <span>📥 {fmtDate(r.date_reception)}</span>}
-                  {r.date_debut_reparation && <span>🔧 Début {fmtDate(r.date_debut_reparation)}</span>}
-                  {veh2?.notes && <span style={{ color: C.amber }}>📌 {veh2.notes.slice(0, 40)}</span>}
+                  {r.date_reception && <span>Réceptionné {fmtDate(r.date_reception)}</span>}
+                  {r.date_debut_reparation && <span>Début {fmtDate(r.date_debut_reparation)}</span>}
+                  {veh2?.notes && <span style={{ color: C.amber }}>{veh2.notes.slice(0, 40)}</span>}
                 </div>
               </div>
             );
@@ -715,7 +752,7 @@ export default function MecanicienPage() {
         <div>
           {pretsReps.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+              <div style={{ display:"flex",justifyContent:"center",marginBottom:12 }}><CheckCircle2 size={48} color={C.gray400} /></div>
               <p style={{ fontWeight: 700, fontSize: 15 }}>Aucun véhicule prêt</p>
             </div>
           ) : pretsReps.map(r => {
@@ -743,10 +780,10 @@ export default function MecanicienPage() {
                   )}
                 </div>
                 <div style={{ display: "flex", gap: 12, fontSize: 12, color: C.gray400, marginBottom: 14, flexWrap: "wrap" }}>
-                  {r.date_reception && <span>📥 Réceptionné {fmtDate(r.date_reception)}</span>}
-                  {r.date_fin_reparation && <span>✅ Terminé {fmtDate(r.date_fin_reparation)}</span>}
+                  {r.date_reception && <span>Réceptionné {fmtDate(r.date_reception)}</span>}
+                  {r.date_fin_reparation && <span>Terminé {fmtDate(r.date_fin_reparation)}</span>}
                   {r.date_debut_reparation && r.date_fin_reparation && (
-                    <span>⏱ {nbJ(r.date_debut_reparation, r.date_fin_reparation)}j</span>
+                    <span>{nbJ(r.date_debut_reparation, r.date_fin_reparation)}j</span>
                   )}
                 </div>
                 <button onClick={() => {
@@ -754,7 +791,7 @@ export default function MecanicienPage() {
                   setSortieF({ type: "conducteur", condId: "", nom: "", km: "" });
                 }} style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none",
                   background: C.green, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                  🚌 Véhicule sorti — Enregistrer la remise
+                  Véhicule sorti — Enregistrer la remise
                 </button>
               </div>
             );
@@ -783,7 +820,7 @@ export default function MecanicienPage() {
 
           {histReps.length === 0 ? (
             <div style={{ textAlign: "center", padding: "40px 20px", color: C.gray400 }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
+              <div style={{ display:"flex",justifyContent:"center",marginBottom:12 }}><BarChart2 size={48} color={C.gray400} /></div>
               <p style={{ fontWeight: 700, fontSize: 15 }}>Aucune réparation clôturée</p>
             </div>
           ) : histReps.map(r => {
@@ -833,7 +870,7 @@ export default function MecanicienPage() {
                 {r.commentaire_mecanicien && !r.commentaire_mecanicien.startsWith("Photos:") && (
                   <div style={{ background: C.gray50, borderRadius: 10, padding: "10px 12px",
                     marginTop: 10, fontSize: 13, color: C.gray600, fontStyle: "italic" }}>
-                    💬 {r.commentaire_mecanicien.split(" | ").filter(s => !s.startsWith("Photos:")).join(" | ")}
+                    {r.commentaire_mecanicien.split(" | ").filter(s => !s.startsWith("Photos:")).join(" | ")}
                   </div>
                 )}
               </div>
@@ -848,7 +885,7 @@ export default function MecanicienPage() {
           {/* Décisions admin reçues */}
           {msgDecisions.length === 0 ? (
             <div style={{ textAlign: "center", padding: "32px 20px", color: C.gray400, marginBottom: 24 }}>
-              <div style={{ fontSize: 36, marginBottom: 8 }}>💬</div>
+              <div style={{ display:"flex",justifyContent:"center",marginBottom:8 }}><MessageSquare size={36} color={C.gray400} /></div>
               <p style={{ fontWeight: 700, fontSize: 14 }}>Aucune décision en attente</p>
               <p style={{ fontSize: 12 }}>Les validations et refus de l&apos;admin apparaîtront ici</p>
             </div>
@@ -858,14 +895,14 @@ export default function MecanicienPage() {
                 Décisions de l&apos;administrateur
               </div>
               {msgDecisions.map(a => {
-                const isOk = a.message.startsWith("✅");
+                const isOk = !a.message.toLowerCase().includes("refus");
                 return (
                   <div key={a.id} style={{ background: C.white, borderRadius: 14, padding: 16,
                     marginBottom: 10, boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
                     borderLeft: `4px solid ${isOk ? C.green : C.red}` }}>
                     <div style={{ fontWeight: 800, fontSize: 15,
                       color: isOk ? C.green : C.red, marginBottom: 4 }}>
-                      {isOk ? "✅ Validation accordée" : "❌ Demande refusée"}
+                      {isOk ? "Validation accordée" : "Demande refusée"}
                     </div>
                     <div style={{ fontSize: 12, color: C.gray400, marginBottom: 8 }}>
                       {fmtDateTime(a.created_at)}
@@ -881,7 +918,7 @@ export default function MecanicienPage() {
                       border: `2px solid ${isOk ? C.green : C.gray400}`,
                       background: C.white, color: isOk ? C.green : C.gray600,
                       fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                      Lu ✓
+                      Lu
                     </button>
                   </div>
                 );
@@ -922,7 +959,7 @@ export default function MecanicienPage() {
                 await sb.from("alertes").insert({
                   type: msgSendTarget === "admin" ? "msg_meca_admin" : "msg_meca_gest",
                   severity: "normale",
-                  message: `💬 Message du mécanicien : ${msgSendText.trim()}`,
+                  message: `Message du mécanicien : ${msgSendText.trim()}`,
                   read: false,
                 });
                 setMsgSendText("");
@@ -970,10 +1007,10 @@ export default function MecanicienPage() {
           {recepErr && (
             <div style={{ background: C.redL, color: C.red, borderRadius: 10,
               padding: "10px 14px", fontSize: 13, marginBottom: 12 }}>
-              ❌ Erreur : {recepErr}
+              Erreur : {recepErr}
             </div>
           )}
-          <BigBtn icon="🔧" label={recepBusy ? "Enregistrement…" : "Réceptionner et mettre en atelier"}
+          <BigBtn icon={<Wrench size={16} />} label={recepBusy ? "Enregistrement…" : "Réceptionner et mettre en atelier"}
             onClick={doReceptionner} disabled={recepBusy || !recepF.description.trim()} color={C.navy} />
         </Sheet>
       )}
@@ -1013,10 +1050,10 @@ export default function MecanicienPage() {
           {directRecepErr && (
             <div style={{ background: C.redL, color: C.red, borderRadius: 10,
               padding: "10px 14px", fontSize: 13, marginBottom: 12 }}>
-              ❌ Erreur : {directRecepErr}
+              Erreur : {directRecepErr}
             </div>
           )}
-          <BigBtn icon="🔧"
+          <BigBtn icon={<Wrench size={16} />}
             label={directRecepBusy ? "Enregistrement…" : "Réceptionner et mettre en atelier"}
             onClick={doReceptionnerDirect}
             disabled={directRecepBusy || !directRecepVehId || !directRecepF.description.trim()}
@@ -1029,9 +1066,9 @@ export default function MecanicienPage() {
         type VM = { plaque?: string; marque?: string; modele?: string };
         const vv = suiviRep.vehicule as VM | undefined;
         const STATUTS = [
-          { v: "en_reparation",         l: "🔧 En réparation",      c: C.navy   },
-          { v: "en_attente_piece",       l: "📦 Attente de pièce",   c: C.amber  },
-          { v: "en_attente_validation",  l: "⚠️ Attente validation", c: C.red    },
+          { v: "en_reparation",         l: "En réparation",      c: C.navy   },
+          { v: "en_attente_piece",       l: "Attente de pièce",   c: C.amber  },
+          { v: "en_attente_validation",  l: "Attente validation", c: C.red    },
         ];
         return (
           <Sheet title={`Suivi — ${vv?.plaque || suiviRep.vehicule_id}`}
@@ -1070,7 +1107,7 @@ export default function MecanicienPage() {
             {suiviF.cout && +suiviF.cout > BUDGET_SEUIL && (
               <div style={{ background: C.redL, borderRadius: 10, padding: 12, marginBottom: 16,
                 fontSize: 13, color: C.red, fontWeight: 700 }}>
-                ⚠️ Montant &gt; {BUDGET_SEUIL} CHF — statut automatique "En attente de validation"
+                Montant &gt; {BUDGET_SEUIL} CHF — statut automatique "En attente de validation"
               </div>
             )}
             <TA label="Notes mécanicien" value={suiviF.notes}
@@ -1094,14 +1131,14 @@ export default function MecanicienPage() {
               )}
             </div>
 
-            <BigBtn icon="💾" label={suiviBusy ? "Enregistrement…" : "Enregistrer le suivi"}
+            <BigBtn icon={<Save size={16} />} label={suiviBusy ? "Enregistrement…" : "Enregistrer le suivi"}
               onClick={doSauvegarderSuivi} disabled={suiviBusy} color={C.navyL} />
-            <BigBtn icon="✅" label={suiviBusy ? "Traitement…" : "Réparation terminée → Prêts"}
+            <BigBtn icon={<CheckCircle2 size={16} />} label={suiviBusy ? "Traitement…" : "Réparation terminée → Prêts"}
               onClick={doTerminer} disabled={suiviBusy} color={C.green} />
             <button onClick={() => { setSuiviRep(null); openVe(vehOf(suiviRep.vehicule_id)!); }}
               style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: `1px solid ${C.gray200}`,
                 background: C.white, color: C.gray600, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              📋 Voir fiche véhicule
+              <span style={{display:"flex",alignItems:"center",gap:6}}><FileText size={14} /> Voir fiche véhicule</span>
             </button>
           </Sheet>
         );
@@ -1152,7 +1189,7 @@ export default function MecanicienPage() {
             <F label="Kilométrage sortie" type="number" value={sortieF.km}
               onChange={v => setSortieF(p => ({ ...p, km: v }))}
               placeholder="Ex: 127500" />
-            <BigBtn icon="🚌" label={sortieBusy ? "Enregistrement…" : "Valider la sortie → Historique"}
+            <BigBtn icon={<Bus size={16} />} label={sortieBusy ? "Enregistrement…" : "Valider la sortie → Historique"}
               onClick={doSortie}
               disabled={sortieBusy || (sortieF.type === "conducteur" ? !sortieF.condId : !sortieF.nom.trim())}
               color={C.green} />
@@ -1179,9 +1216,9 @@ export default function MecanicienPage() {
             placeholder="CT à faire, batterie à changer, pneus usés…" />
           {saveErr && (
             <div style={{ background: C.redL, color: C.red, borderRadius: 8,
-              padding: "10px 14px", fontSize: 13, marginBottom: 10 }}>❌ {saveErr}</div>
+              padding: "10px 14px", fontSize: 13, marginBottom: 10 }}>{saveErr}</div>
           )}
-          <BigBtn icon="💾" label="Enregistrer" onClick={doVeSave} />
+          <BigBtn icon={<Save size={16} />} label="Enregistrer" onClick={doVeSave} />
         </Sheet>
       )}
 
