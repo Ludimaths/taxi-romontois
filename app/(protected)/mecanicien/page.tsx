@@ -230,7 +230,7 @@ export default function MecanicienPage() {
     console.log("[doReceptionner] vehicle_id:", vId);
     if (!vId) {
       console.error("[doReceptionner] vehicle_id manquant sur l'alerte", recepAlerte);
-      setRecepErr("Alerte sans véhicule associé — contactez le gestionnaire");
+      setRecepErr("Aucun véhicule associé à cet incident — le gestionnaire doit préciser le véhicule concerné");
       setRecepBusy(false);
       return;
     }
@@ -531,38 +531,59 @@ export default function MecanicienPage() {
               <p style={{ fontSize: 13 }}>Les incidents transmis par le gestionnaire apparaîtront ici</p>
             </div>
           ) : alertesMeca.map(a => {
+            const hasVehicle = !!a.vehicle_id;
             const veh = vehOf(a.vehicle_id || "");
             return (
               <div key={a.id} style={{ background: C.white, borderRadius: 16, padding: 18,
                 marginBottom: 12, boxShadow: "0 2px 10px rgba(0,0,0,0.07)",
-                borderLeft: `4px solid ${C.amber}` }}>
+                borderLeft: `4px solid ${hasVehicle ? C.amber : C.navyL}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start",
                   marginBottom: 10, gap: 10, flexWrap: "wrap" }}>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: 16, color: C.navy }}>
-                      {veh?.plaque || a.vehicle_id || "Véhicule"}
-                      <span style={{ fontWeight: 400, color: C.gray400, fontSize: 13, marginLeft: 8 }}>
-                        {veh?.marque} {veh?.modele}
-                      </span>
+                      {hasVehicle
+                        ? (veh?.plaque || a.vehicle_id)
+                        : "Message gestionnaire"}
+                      {veh && (
+                        <span style={{ fontWeight: 400, color: C.gray400, fontSize: 13, marginLeft: 8 }}>
+                          {veh.marque} {veh.modele}
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>
                       {fmtDateTime(a.created_at)}
                     </div>
                   </div>
                   <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                    background: C.amberL, color: C.amber }}>À réceptionner</span>
+                    background: hasVehicle ? C.amberL : C.skyL,
+                    color: hasVehicle ? C.amber : C.navyL }}>
+                    {hasVehicle ? "À réceptionner" : "Message"}
+                  </span>
                 </div>
                 <p style={{ fontSize: 14, color: "#1E293B", lineHeight: 1.5, margin: "0 0 14px" }}>
                   {a.message}
                 </p>
-                <button onClick={() => {
-                  setRecepAlerte(a);
-                  setRecepF({ description: "", etat_visuel: "", km: String(veh?.km ?? ""), notes: "" });
-                  setRecepPhotos([]);
-                }} style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none",
-                  background: C.navy, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                  🔧 Réceptionner ce véhicule
-                </button>
+                {hasVehicle ? (
+                  <button onClick={() => {
+                    setRecepAlerte(a);
+                    setRecepF({ description: "", etat_visuel: "", km: String(veh?.km ?? ""), notes: "" });
+                    setRecepPhotos([]);
+                  }} style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none",
+                    background: C.navy, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                    🔧 Réceptionner ce véhicule
+                  </button>
+                ) : (
+                  <button onClick={async () => {
+                    await sb.from("alertes")
+                      .update({ read: true, read_at: new Date().toISOString() })
+                      .eq("id", a.id);
+                    load();
+                  }} style={{ width: "100%", padding: "13px 0", borderRadius: 12,
+                    border: `2px solid ${C.navyL}`, background: C.white,
+                    color: C.navyL, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                    ✓ Marquer comme lu
+                  </button>
+                )}
               </div>
             );
           })}
