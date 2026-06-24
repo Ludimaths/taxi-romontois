@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDateTime } from "@/lib/constants";
 import type { Conducteur, Alerte } from "@/lib/types";
+import { Thermometer, School, Users, Bus, Cloud, HelpCircle, User, Wrench, Settings, CheckCircle2, Loader2, Send, Inbox } from "lucide-react";
 
 type ImprevuType = "absence" | "ecole" | "parent" | "vehicule" | "meteo" | "autre";
 
@@ -14,13 +15,21 @@ interface Recipient {
   subtitle?: string;
 }
 
-const TYPES: { id: ImprevuType; icon: string; label: string; color: string }[] = [
-  { id: "absence",  icon: "🤒", label: "Absence",          color: C.red },
-  { id: "ecole",    icon: "🏫", label: "École",             color: C.navyL },
-  { id: "parent",   icon: "👨‍👩‍👧", label: "Parent",           color: C.amber },
-  { id: "vehicule", icon: "🚌", label: "Véhicule",          color: C.navyL },
-  { id: "meteo",    icon: "🌧️", label: "Météo",             color: C.sky },
-  { id: "autre",    icon: "❓", label: "Autre",             color: C.gray600 },
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  absence:  <Thermometer size={14} />,
+  ecole:    <School size={14} />,
+  parent:   <Users size={14} />,
+  vehicule: <Bus size={14} />,
+  meteo:    <Cloud size={14} />,
+  autre:    <HelpCircle size={14} />,
+};
+const TYPES: { id: ImprevuType; label: string; color: string }[] = [
+  { id: "absence",  label: "Absence",  color: C.red },
+  { id: "ecole",    label: "École",    color: C.navyL },
+  { id: "parent",   label: "Parent",   color: C.amber },
+  { id: "vehicule", label: "Véhicule", color: C.navyL },
+  { id: "meteo",    label: "Météo",    color: C.sky },
+  { id: "autre",    label: "Autre",    color: C.gray600 },
 ];
 
 const TEMPLATES: Record<ImprevuType, string> = {
@@ -99,11 +108,11 @@ export default function ImprevusPage() {
   }, [useTemplate, type]);
 
   // Recipients by category
-  const CATEGORIES: { id: "conducteurs"|"mecanicien"|"admin"|"parents"; label: string; icon: string }[] = [
-    { id: "conducteurs", label: "Conducteurs", icon: "👤" },
-    { id: "mecanicien",  label: "Mécanicien",  icon: "🔧" },
-    { id: "admin",       label: "Admin",        icon: "⚙️" },
-    { id: "parents",     label: "Parents",      icon: "👪" },
+  const CATEGORIES: { id: "conducteurs"|"mecanicien"|"admin"|"parents"; label: string; icon: React.ReactNode }[] = [
+    { id: "conducteurs", label: "Conducteurs", icon: <User size={13} /> },
+    { id: "mecanicien",  label: "Mécanicien",  icon: <Wrench size={13} /> },
+    { id: "admin",       label: "Admin",        icon: <Settings size={13} /> },
+    { id: "parents",     label: "Parents",      icon: <Users size={13} /> },
   ];
 
   const recipientsForCategory = (cat: string): Recipient[] => {
@@ -181,7 +190,7 @@ export default function ImprevusPage() {
 
   if (loading) return (
     <div style={{ display: "flex", justifyContent: "center", padding: 60, color: C.gray400 }}>
-      <div>⏳ Chargement…</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} /> Chargement…</div>
     </div>
   );
 
@@ -210,7 +219,7 @@ export default function ImprevusPage() {
 
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 900, color: C.navy, marginBottom: 4 }}>⚡ Imprévus</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 900, color: C.navy, marginBottom: 4 }}>Imprévus</h1>
         <p style={{ fontSize: 13, color: C.gray600 }}>
           Envoie une notification ciblée aux conducteurs, parents, mécanicien ou admin.
         </p>
@@ -220,7 +229,7 @@ export default function ImprevusPage() {
       {sent && (
         <div style={{ background: C.greenL, borderRadius: 12, padding: "12px 16px", marginBottom: 16,
           border: `1px solid #86EFAC`, fontWeight: 700, color: C.green, fontSize: 14 }}>
-          ✅ Messages envoyés à {selected.length} destinataire(s).
+          Messages envoyés à {selected.length} destinataire(s).
         </div>
       )}
 
@@ -244,7 +253,7 @@ export default function ImprevusPage() {
                     background: type === t.id ? t.color : C.white,
                     color: type === t.id ? C.white : C.gray600,
                     fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                  {t.icon} {t.label}
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>{TYPE_ICONS[t.id]} {t.label}</span>
                 </button>
               ))}
             </div>
@@ -258,7 +267,7 @@ export default function ImprevusPage() {
                 <button onClick={() => setUseTemplate(v => { if (!v) setMessage(TEMPLATES[type as ImprevuType]); return !v; })}
                   style={{ fontSize: 11, color: C.navyL, background: "none", border: "none",
                     cursor: "pointer", fontWeight: 700 }}>
-                  {useTemplate ? "✏️ Éditer librement" : "📋 Utiliser modèle"}
+                  {useTemplate ? "Éditer librement" : "Utiliser modèle"}
                 </button>
               )}
             </div>
@@ -267,7 +276,7 @@ export default function ImprevusPage() {
               style={{ ...inputSt, resize: "vertical" }} />
             {type === "parent" && (
               <div style={{ fontSize: 11, color: C.gray400, marginTop: 4, lineHeight: 1.5 }}>
-                💡 Modèle parent : "Bonjour, le conducteur habituel est absent aujourd'hui. Un remplaçant assurera le transport de votre enfant. Tout est géré, ne vous inquiétez pas."
+                Modèle parent : "Bonjour, le conducteur habituel est absent aujourd'hui. Un remplaçant assurera le transport de votre enfant. Tout est géré, ne vous inquiétez pas."
               </div>
             )}
           </div>
@@ -283,7 +292,7 @@ export default function ImprevusPage() {
                     cursor: "pointer", border: `2px solid ${category === cat.id ? C.navyL : C.gray200}`,
                     background: category === cat.id ? C.navyL : C.white,
                     color: category === cat.id ? C.white : C.gray600 }}>
-                  {cat.icon} {cat.label}
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>{cat.icon} {cat.label}</span>
                   {category === cat.id && ` (${categoryRecipients.length})`}
                 </button>
               ))}
@@ -358,7 +367,7 @@ export default function ImprevusPage() {
               background: (!type || !message.trim() || selected.length === 0) ? C.gray200 : C.navyL,
               color: (!type || !message.trim() || selected.length === 0) ? C.gray400 : C.white,
               boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}>
-            {sending ? "Envoi en cours…" : `📤 Envoyer à ${selected.length} destinataire(s)`}
+            {sending ? "Envoi en cours…" : `Envoyer à ${selected.length} destinataire(s)`}
           </button>
         </div>
 
@@ -384,7 +393,7 @@ export default function ImprevusPage() {
           {visibleGroups.length === 0 ? (
             <div style={{ background: C.white, borderRadius: 14, padding: 24,
               border: `1px solid ${C.gray200}`, textAlign: "center", color: C.gray400 }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}><Inbox size={32} color={C.gray400} /></div>
               <div style={{ fontSize: 13 }}>Aucun imprévu envoyé aujourd'hui</div>
             </div>
           ) : (() => {
@@ -416,7 +425,7 @@ export default function ImprevusPage() {
                 marginBottom: 10, border: `1px solid ${C.gray200}`,
                 boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 8 }}>
-                  <span style={{ fontSize: 20, flexShrink: 0 }}>{typeInfo.icon}</span>
+                  <span style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>{TYPE_ICONS[typeInfo.id] ?? <HelpCircle size={20} />}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: typeInfo.color, marginBottom: 2 }}>
                       {typeInfo.label.toUpperCase()}
@@ -448,7 +457,7 @@ export default function ImprevusPage() {
                 <div style={{ marginTop: 8, fontSize: 12, color: C.gray600 }}>
                   {luCount}/{totalCount} lu(s)
                   {luCount === totalCount && totalCount > 0 && (
-                    <span style={{ marginLeft: 6, color: C.green, fontWeight: 700 }}>✅ Tous ont lu</span>
+                    <span style={{ marginLeft: 6, color: C.green, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}><CheckCircle2 size={12} /> Tous ont lu</span>
                   )}
                 </div>
               </div>
