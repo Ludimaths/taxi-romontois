@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { BorderBeam } from "@/components/ui/border-beam"
@@ -64,11 +65,11 @@ export function Hero195() {
 
       {/* CTA Buttons */}
       <div className="flex flex-wrap gap-3 justify-center mb-16">
-        <Button size="lg" className="gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6">
-          Se connecter <ArrowRight className="size-4" />
+        <Button size="lg" asChild className="gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6">
+          <Link href="/login">Se connecter <ArrowRight className="size-4" /></Link>
         </Button>
-        <Button size="lg" variant="outline" className="gap-2 px-6">
-          Découvrir la plateforme
+        <Button size="lg" variant="outline" asChild className="gap-2 px-6">
+          <a href="#roles">Découvrir la plateforme</a>
         </Button>
       </div>
 
@@ -169,7 +170,7 @@ export function Hero195() {
       </div>
 
       {/* Rôles */}
-      <div className="max-w-4xl mx-auto mt-16">
+      <div id="roles" className="max-w-4xl mx-auto mt-16">
         <p className="text-center text-sm font-semibold text-slate-400 uppercase tracking-widest mb-6">
           4 comptes · 4 rôles · 1 plateforme
         </p>
