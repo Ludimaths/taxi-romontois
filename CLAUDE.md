@@ -502,3 +502,32 @@ PARENTS        validation)
 15. Nettoyage données
 16. Visuel
 17. PowerPoint
+
+
+---
+
+## Règle absolue — Sécurité des clés API
+
+- Ne JAMAIS écrire un token, clé API, ou credential en clair dans une commande PowerShell ou bash
+- Toujours lire les valeurs depuis .env.local avec les variables d'environnement
+- Exemple CORRECT : $token = $env:SUPABASE_ACCESS_TOKEN
+- Exemple INTERDIT : $token = "sbp_xxxxxxxxxxxx"
+- Cette règle s'applique à TOUTES les commandes, sans exception
+- Si une clé apparaît en clair dans le chat → la régénérer immédiatement dans Supabase
+
+## Règle absolue — Avant de créer un fichier ou une route
+
+- Toujours vérifier si un fichier ou une route similaire existe déjà
+- Ne jamais créer de doublon
+- Commande de vérification : Get-ChildItem -Recurse | Where-Object { $_.Name -like "*nom*" }
+
+## Règle absolue — Variables d'environnement
+
+Les variables sensibles sont dans .env.local UNIQUEMENT :
+- SUPABASE_URL
+- SUPABASE_ANON_KEY  
+- SUPABASE_SERVICE_ROLE_KEY
+- SUPABASE_ACCESS_TOKEN
+
+Ne jamais les mettre dans le code, dans le chat, ou dans les commandes en clair.
+
