@@ -24,24 +24,16 @@ export default function ScanPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    console.log("[scan] vehicleId depuis URL:", vehicleId);
-    const sel = "*, circuit:circuits(*,cercle:cercles_scolaires(*)), conducteur:conducteurs(*)";
     async function findVehicle() {
-      // Stratégie 1 : par id exact (ex: "FR-80058")
-      let { data } = await supabase.from("vehicules").select(sel).eq("id", vehicleId).maybeSingle();
-      if (!data) {
-        // Stratégie 2 : par plaque avec tirets → espaces (ex: "FR-80058" → "FR 80058")
-        const withSpace = vehicleId.replace(/-/g, " ");
-        ({ data } = await supabase.from("vehicules").select(sel).eq("plaque", withSpace).maybeSingle());
+      try {
+        const res = await fetch(`/api/vehicule/${encodeURIComponent(vehicleId)}`);
+        if (!res.ok) { setNotFound(true); setLoading(false); return; }
+        const { vehicle: data } = await res.json();
+        if (!data) setNotFound(true);
+        else setVehicle(data);
+      } catch {
+        setNotFound(true);
       }
-      if (!data) {
-        // Stratégie 3 : par id avec tirets → espaces
-        const withSpace = vehicleId.replace(/-/g, " ");
-        ({ data } = await supabase.from("vehicules").select(sel).eq("id", withSpace).maybeSingle());
-      }
-      console.log("[scan] résultat:", data?.id ?? "introuvable");
-      if (!data) setNotFound(true);
-      else setVehicle(data);
       setLoading(false);
     }
     findVehicle();

@@ -44,10 +44,16 @@ export default function QRCodesPage() {
   return (
     <div>
       <style>{`
+        #qr-print-area { display: none; }
         @media print {
-          body * { visibility: hidden; }
-          #qr-print-area, #qr-print-area * { visibility: visible; }
-          #qr-print-area { position: fixed; left: 0; top: 0; width: 100%; }
+          body { visibility: hidden; }
+          #qr-print-area {
+            display: block !important;
+            visibility: visible !important;
+            position: fixed !important;
+            left: 0 !important; top: 0 !important; width: 100% !important;
+          }
+          #qr-print-area * { visibility: visible !important; }
           .qr-card { page-break-inside: avoid; }
           .no-print { display: none !important; }
         }
@@ -74,6 +80,9 @@ export default function QRCodesPage() {
               <div style={{ fontWeight: 900, fontSize: 15, color: C.navy }}>{v.plaque}</div>
               <div style={{ fontSize: 12, color: C.gray600 }}>{v.marque} {v.modele}</div>
               {v.circuit && <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>{v.circuit.emoji} {v.circuit.nom}</div>}
+              <div style={{ fontSize: 10, color: C.gray400, marginTop: 6, wordBreak: "break-all", maxWidth: "100%" }}>
+                {`${DOMAIN}/scan/${v.id}`}
+              </div>
             </div>
             <Btn small onClick={() => handlePrintOne(v.id)} color={C.navyL}>🖨 Imprimer</Btn>
           </div>
@@ -81,9 +90,8 @@ export default function QRCodesPage() {
       </div>
 
       {/* Zone d'impression — masquée à l'écran, visible en impression */}
-      <div id="qr-print-area" style={{ position: "absolute", left: -9999, top: 0, width: 794 }}>
+      <div id="qr-print-area">
         <style>{`
-          #qr-print-area { display: block !important; }
           .qr-print-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
           .qr-card {
             padding: 30px 20px; border: 1px solid #ddd; margin: 0;
