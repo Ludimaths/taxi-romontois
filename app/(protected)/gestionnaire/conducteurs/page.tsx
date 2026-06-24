@@ -152,6 +152,9 @@ export default function ConducteursPage() {
   const [pwdSet,    setPwdSet]    = useState(false);
   const [pwdBusy,   setPwdBusy]   = useState(false);
 
+  // Email réel retourné par l'API après set-password
+  const [actualEmail, setActualEmail] = useState("");
+
   // Création de compte
   const [createBusy,   setCreateBusy]   = useState(false);
   const [createResult, setCreateResult] = useState<{ email: string; password: string } | null>(null);
@@ -206,6 +209,7 @@ export default function ConducteursPage() {
     setCreateCopied(false);
     setGenPwd("");
     setPwdSet(false);
+    setActualEmail("");
   }, [sel]);
 
   const handleSave = async (form: Partial<Conducteur>) => {
@@ -258,8 +262,15 @@ export default function ConducteursPage() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: profile.id, password: pwd }),
     });
+    const json = await res.json();
     setPwdBusy(false);
-    if (res.ok) setPwdSet(true);
+    if (res.ok) {
+      if (json.email) setActualEmail(json.email);
+      setPwdSet(true);
+    } else {
+      setGenPwd("");
+      alert(`Erreur : ${json.error ?? "Impossible de définir le mot de passe"}`);
+    }
   };
 
   const handleResetPassword = async () => {
@@ -381,7 +392,7 @@ export default function ConducteursPage() {
                   </div>
                   <div style={{ fontSize: 12, color: C.gray600, marginBottom: 12, padding: "4px 10px",
                     background: C.gray50, borderRadius: 6, fontFamily: "monospace" }}>
-                    {conducteurEmail(d.prenom, d.nom)}
+                    {actualEmail || conducteurEmail(d.prenom, d.nom)}
                   </div>
                   {genPwd && (
                     <div style={{ background: C.amberL, borderRadius: 10, padding: 12, marginBottom: 12 }}>

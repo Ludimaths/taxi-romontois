@@ -16,26 +16,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Configuration serveur manquante" }, { status: 500 });
     }
 
-    console.log("[set-password] userId:", userId, "| pwd length:", password.length);
     const supabase = await createServiceClient();
 
-    // Vérifier que l'utilisateur existe
+    // Vérifier que l'utilisateur existe dans auth.users
     const { data: userData, error: fetchErr } = await supabase.auth.admin.getUserById(userId);
     if (fetchErr || !userData?.user) {
       console.error("[set-password] utilisateur introuvable:", fetchErr?.message);
-      return NextResponse.json({ error: `Utilisateur introuvable (${fetchErr?.message ?? "inconnu"})` }, { status: 404 });
-    }
-    console.log("[set-password] utilisateur trouvé:", userData.user.email);
-
-    // Supabase Auth hache automatiquement le mot de passe (bcrypt côté serveur Supabase)
-    const { error } = await supabase.auth.admin.updateUserById(userId, { password });
-    if (error) {
-      console.error("[set-password] erreur updateUserById:", error.message);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: `Utilisateur introuvable dans Auth (${fetchErr?.message ?? "inconnu"})` },
+        { status: 404 }
+      );
     }
 
-    console.log("[set-password] succès pour:", userData.user.email);
-    return NextResponse.json({ ok: true, email: userData.user.email });
+    const u = userData.user;
+    console.log("[set-password] utilisateur trouvé:", {
+      email: u.email,
+      confirmed: u.email_confirmed_at,
+      created: u.created_at,
+      id: u.id,
+    });
+
+    // Mise à jour du mot de passe + confirmation forcée de l'email
+    // email_confirm: true garantit que email_confirmed_at est renseigné → connexion possible
+    const { data: updateData, error: updateErr } = await supabase.auth.admin.updateUserById(
+      userId,
+      { password, email_confirm: true }
+    );
+
+    if (updateErr) {
+      console.error("[set-password] erreur updateUserById:", updateErr.message, updateErr);
+      return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    }
+
+    console.log("[set-password] succès:", {
+      email: updateData?.user?.email,
+      confirmed: updateData?.user?.email_confirmed_at,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      email: updateData?.user?.email ?? u.email,
+      confirmed: !!updateData?.user?.email_confirmed_at,
+    });
   } catch (e) {
     console.error("[set-password] exception:", e);
     return NextResponse.json({ error: "Erreur serveur inattendue" }, { status: 500 });
