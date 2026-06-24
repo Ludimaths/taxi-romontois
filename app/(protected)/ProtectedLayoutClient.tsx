@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Sidebar from "@/components/Sidebar";
 import { C } from "@/lib/constants";
@@ -13,7 +13,8 @@ export default function ProtectedLayoutClient({
   profile: Profile;
   children: React.ReactNode;
 }) {
-  const router = useRouter();
+  const router   = useRouter();
+  const pathname = usePathname();
   const sb = createClient();
   const [incidentsCount,  setIncidentsCount]  = useState(0);
   const [alertesCount,    setAlertesCount]    = useState(0);
@@ -46,6 +47,27 @@ export default function ProtectedLayoutClient({
     router.push("/login");
     router.refresh();
   };
+
+  // Admin : layout sans sidebar — page /admin gère son propre header
+  if (profile.role === "admin") {
+    return (
+      <div style={{ minHeight: "100vh", background: C.gray50, color: C.gray800 }}>
+        {pathname !== "/admin" && (
+          <div style={{ background: C.white, borderBottom: `1px solid ${C.gray200}`,
+            padding: "10px 20px", position: "sticky", top: 0, zIndex: 200,
+            display: "flex", alignItems: "center" }}>
+            <button onClick={() => router.push("/admin")}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "none",
+                border: "none", cursor: "pointer", color: C.navy, fontWeight: 700, fontSize: 14,
+                padding: "6px 12px", borderRadius: 8 }}>
+              ← Retour Administration
+            </button>
+          </div>
+        )}
+        <div>{children}</div>
+      </div>
+    );
+  }
 
   // Conducteur : layout sans sidebar, header toujours visible
   if (profile.role === "conducteur") {
