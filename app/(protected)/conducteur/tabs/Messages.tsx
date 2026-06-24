@@ -169,8 +169,8 @@ export function TabMessages({
                   Votre signalement : {inc.description}
                 </p>
                 <div style={{background:C.greenL,borderRadius:10,padding:"10px 12px",
-                  fontSize:14,color:C.greenD,fontWeight:600,lineHeight:1.5}}>
-                  💬 Réponse : {inc.response}
+                  fontSize:14,color:C.green,fontWeight:600,lineHeight:1.5}}>
+                  {inc.response ? `💬 Réponse : ${inc.response}` : "✅ Signalement résolu par le gestionnaire"}
                 </div>
               </div>
             );

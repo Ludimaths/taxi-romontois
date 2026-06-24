@@ -216,7 +216,7 @@ export default function ConducteurPage(){
   const veh    = driver?.vehicule as{plaque?:string;marque?:string;modele?:string}|undefined;
   const enfantsCircuit = driver?.circuit_id ? enfants.filter(e=>e.circuit_id===driver.circuit_id) : [];
   const todayAbsences  = absences.filter(a=>a.date_absence===isoToday());
-  const incWithResponse= incidents.filter(i=>i.response);
+  const incWithResponse= incidents.filter(i=>i.response||i.status==="resolu");
   const unreadMsg      = messages.filter(m=>!m.read).length;
   const pendingInc     = incidents.filter(i=>i.status==="en_attente").length;
 

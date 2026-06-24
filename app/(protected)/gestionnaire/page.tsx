@@ -437,12 +437,18 @@ export default function GestionnaireDashboard() {
       .update({ response, status, resolved_at: status === "resolu" ? new Date().toISOString() : null })
       .eq("id", id);
     const inc = incidents.find(i => i.id === id);
-    if (inc?.conducteur_id && response.trim()) {
-      await sb.from("alertes").insert({
-        type: "conducteur", severity: "normale",
-        message: `📋 Votre signalement a été traité : ${response}`,
-        read: false, driver_id: inc.conducteur_id,
-      });
+    if (inc?.conducteur_id) {
+      const notifMsg = response.trim()
+        ? `📋 Votre signalement a été traité : ${response}`
+        : status === "resolu"
+          ? `✅ Votre signalement a été résolu.`
+          : null;
+      if (notifMsg) {
+        await sb.from("alertes").insert({
+          type: "conducteur", severity: "normale",
+          message: notifMsg, read: false, driver_id: inc.conducteur_id,
+        });
+      }
     }
     if (extra === "transmis_meca") {
       const inc = incidents.find(i => i.id === id);
