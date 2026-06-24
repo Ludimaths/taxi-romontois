@@ -152,6 +152,12 @@ export default function ConducteursPage() {
   const [pwdSet,    setPwdSet]    = useState(false);
   const [pwdBusy,   setPwdBusy]   = useState(false);
 
+  // Création de compte
+  const [createBusy,   setCreateBusy]   = useState(false);
+  const [createResult, setCreateResult] = useState<{ email: string; password: string } | null>(null);
+  const [createError,  setCreateError]  = useState("");
+  const [createCopied, setCreateCopied] = useState(false);
+
   const fetchAll = useCallback(async () => {
     const [drv, cir, veh] = await Promise.all([
       sb.from("conducteurs")
@@ -192,6 +198,15 @@ export default function ConducteursPage() {
   useEffect(() => {
     if (sel !== null) fetchHistory(sel);
   }, [sel, fetchHistory]);
+
+  useEffect(() => {
+    setCreateBusy(false);
+    setCreateResult(null);
+    setCreateError("");
+    setCreateCopied(false);
+    setGenPwd("");
+    setPwdSet(false);
+  }, [sel]);
 
   const handleSave = async (form: Partial<Conducteur>) => {
     setSaving(true);
@@ -254,6 +269,27 @@ export default function ConducteursPage() {
     await handleGenPassword();
   };
 
+  const handleCreateAccount = async () => {
+    if (!sel) return;
+    const drv = drivers.find(x => x.id === sel);
+    if (!drv) return;
+    setCreateBusy(true);
+    setCreateError("");
+    const res = await fetch("/api/gestionnaire/create-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conducteurId: drv.id, prenom: drv.prenom, nom: drv.nom }),
+    });
+    const json = await res.json();
+    setCreateBusy(false);
+    if (res.ok) {
+      setCreateResult({ email: json.email, password: json.password });
+      fetchHistory(drv.id);
+    } else {
+      setCreateError(json.error || "Erreur inconnue");
+    }
+  };
+
   // ── Filter ─────────────────────────────────────────────────────────────────
   const filtered = drivers.filter(d => {
     const match = `${d.prenom} ${d.nom} ${d.tel ?? ""}`.toLowerCase().includes(search.toLowerCase());
@@ -293,7 +329,7 @@ export default function ConducteursPage() {
         )}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <button onClick={() => { setSel(null); setTab("infos"); setGenPwd(""); setPwdSet(false); }}
+          <button onClick={() => { setSel(null); setTab("infos"); setGenPwd(""); setPwdSet(false); setCreateResult(null); setCreateError(""); }}
             style={{ background: "none", border: "none", color: C.navyL, cursor: "pointer",
               fontWeight: 700, fontSize: 14, padding: 0 }}>
             ← Tous les conducteurs
@@ -383,13 +419,68 @@ export default function ConducteursPage() {
                 </div>
               ) : (
                 <div>
-                  <div style={{ padding: "6px 10px", background: C.amberL, borderRadius: 8,
-                    fontSize: 12, color: C.amber, fontWeight: 700, marginBottom: 10 }}>
-                    ⚠ Aucun compte associé
-                  </div>
-                  <p style={{ fontSize: 12, color: C.gray600, lineHeight: 1.5, margin: 0 }}>
-                    Un compte doit être créé via Supabase Auth pour ce conducteur, puis associé à ce profil.
-                  </p>
+                  {createResult ? (
+                    <div>
+                      <div style={{ padding: "8px 12px", background: C.greenL, borderRadius: 8,
+                        fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 12 }}>
+                        ✅ Compte créé avec succès
+                      </div>
+                      <div style={{ background: C.amberL, borderRadius: 10, padding: 14, marginBottom: 10,
+                        border: `1px solid #FDE68A` }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 12 }}>
+                          ⚠ Copiez ces identifiants maintenant — ils ne seront plus affichés
+                        </div>
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: C.gray600,
+                            textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Email</div>
+                          <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700,
+                            color: C.navy, background: C.white, padding: "7px 10px",
+                            borderRadius: 6, border: `1px solid ${C.gray200}` }}>
+                            {createResult.email}
+                          </div>
+                        </div>
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: C.gray600,
+                            textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Mot de passe</div>
+                          <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 900,
+                            color: C.navy, background: C.white, padding: "7px 10px",
+                            borderRadius: 6, border: `1px solid ${C.gray200}`, letterSpacing: 2 }}>
+                            {createResult.password}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              `Email : ${createResult.email}\nMot de passe : ${createResult.password}`
+                            );
+                            setCreateCopied(true);
+                            setTimeout(() => setCreateCopied(false), 2500);
+                          }}
+                          style={{ width: "100%", padding: "9px", borderRadius: 8, border: "none",
+                            background: createCopied ? C.green : C.navyL, color: C.white,
+                            cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "background .2s" }}>
+                          {createCopied ? "✓ Copié !" : "📋 Copier email + mot de passe"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ padding: "6px 10px", background: C.amberL, borderRadius: 8,
+                        fontSize: 12, color: C.amber, fontWeight: 700, marginBottom: 10 }}>
+                        ⚠ Aucun compte associé
+                      </div>
+                      {createError && (
+                        <div style={{ padding: "8px 10px", background: C.redL, borderRadius: 8,
+                          fontSize: 12, color: C.red, fontWeight: 600, marginBottom: 10,
+                          border: `1px solid #FCA5A5` }}>
+                          {createError}
+                        </div>
+                      )}
+                      <Btn full onClick={handleCreateAccount} disabled={createBusy} color={C.green}>
+                        {createBusy ? "Création en cours…" : "🆕 Créer le compte conducteur"}
+                      </Btn>
+                    </div>
+                  )}
                 </div>
               )}
             </Card>
