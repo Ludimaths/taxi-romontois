@@ -3,22 +3,36 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDateTime } from "@/lib/constants";
 import { Btn } from "@/components/ui";
+import { User, Bus, Wrench, DollarSign, CheckCircle2, Settings, FileText, RefreshCw, Zap, FileWarning, Bell } from "lucide-react";
 import type { Alerte } from "@/lib/types";
 
 // ── Type config ───────────────────────────────────────────────────────────────
-const TYPE_CFG: Record<string, { label: string; icon: string; color: string }> = {
-  conducteur:         { label: "Conducteur",          icon: "👤", color: C.navyL  },
-  vehicule:           { label: "Véhicule",             icon: "🚌", color: C.navy   },
-  reparation:         { label: "Réparation",           icon: "🔧", color: C.amber  },
-  validation_requise: { label: "Validation budget",    icon: "💰", color: C.red    },
-  remise_circulation: { label: "Remise en service",    icon: "✅", color: C.green  },
-  transmis_meca:      { label: "Mécanicien",           icon: "🔩", color: C.purple },
-  rapport_admin:      { label: "Rapport admin",        icon: "📋", color: C.navy   },
-  remplacement:       { label: "Remplacement",         icon: "🔄", color: C.amber  },
-  "imprévu":          { label: "Imprévu",              icon: "⚡", color: C.sky    },
-  document:           { label: "Document expiré",      icon: "📄", color: C.red    },
+const ICON_MAP: Record<string, React.ReactNode> = {
+  conducteur:         <User size={16} color={C.navyL} />,
+  vehicule:           <Bus size={16} color={C.navy} />,
+  reparation:         <Wrench size={16} color={C.amber} />,
+  validation_requise: <DollarSign size={16} color={C.red} />,
+  remise_circulation: <CheckCircle2 size={16} color={C.green} />,
+  transmis_meca:      <Settings size={16} color="#7C3AED" />,
+  rapport_admin:      <FileText size={16} color={C.navy} />,
+  remplacement:       <RefreshCw size={16} color={C.amber} />,
+  "imprévu":          <Zap size={16} color={C.sky} />,
+  document:           <FileWarning size={16} color={C.red} />,
 };
-const cfgOf = (type: string) => TYPE_CFG[type] ?? { label: type, icon: "🔔", color: C.gray600 };
+const TYPE_CFG: Record<string, { label: string; color: string }> = {
+  conducteur:         { label: "Conducteur",          color: C.navyL  },
+  vehicule:           { label: "Véhicule",             color: C.navy   },
+  reparation:         { label: "Réparation",           color: C.amber  },
+  validation_requise: { label: "Validation budget",    color: C.red    },
+  remise_circulation: { label: "Remise en service",    color: C.green  },
+  transmis_meca:      { label: "Mécanicien",           color: "#7C3AED" },
+  rapport_admin:      { label: "Rapport admin",        color: C.navy   },
+  remplacement:       { label: "Remplacement",         color: C.amber  },
+  "imprévu":          { label: "Imprévu",              color: C.sky    },
+  document:           { label: "Document expiré",      color: C.red    },
+};
+const cfgOf = (type: string) => TYPE_CFG[type] ?? { label: type, color: C.gray600 };
+const iconOf = (type: string) => ICON_MAP[type] ?? <Bell size={16} color={C.gray600} />;
 
 const SEV_CFG = {
   critique: { label: "Critique", color: C.red,   bg: C.redL   },
@@ -123,7 +137,7 @@ export default function AlertesPage() {
           </p>
         </div>
         {unreadCnt > 0 && (
-          <Btn small onClick={markAllRead} color={C.green}>✓ Tout marquer lu</Btn>
+          <Btn small onClick={markAllRead} color={C.green}>Tout marquer lu</Btn>
         )}
       </div>
 
@@ -174,7 +188,7 @@ export default function AlertesPage() {
 
       {sorted.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 20px" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🔔</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><Bell size={48} color={C.gray400} /></div>
           <p style={{ fontWeight: 700, fontSize: 16, color: C.gray600, margin: 0 }}>
             {filterStatus === "unread" ? "Aucune alerte non lue" : "Aucune alerte"}
           </p>
@@ -192,7 +206,7 @@ export default function AlertesPage() {
                 <div key={String(isRead)} style={{ marginBottom: 24 }}>
                   <div style={{ fontSize: 11, fontWeight: 800, color: isRead ? C.gray400 : C.navy,
                     textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
-                    {isRead ? "✓ Lues" : `🔴 Non lues (${group.length})`}
+                    {isRead ? "Lues" : `Non lues (${group.length})`}
                   </div>
                   {group.map(a => {
                     const cfg = cfgOf(a.type);
@@ -210,7 +224,7 @@ export default function AlertesPage() {
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                           <div style={{ flex: 1 }}>
                             <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 5, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 16 }}>{cfg.icon}</span>
+                              <span style={{ display: "flex", alignItems: "center" }}>{iconOf(a.type)}</span>
                               <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, textTransform: "uppercase" }}>
                                 {cfg.label}
                               </span>
@@ -232,7 +246,7 @@ export default function AlertesPage() {
                               style={{ flexShrink: 0, padding: "4px 10px", borderRadius: 8,
                                 border: `1px solid ${C.green}`, background: C.white,
                                 color: C.green, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                              Lu ✓
+                              Lu
                             </button>
                           )}
                         </div>
@@ -262,7 +276,7 @@ export default function AlertesPage() {
                 <div style={{ background: sev.bg, borderRadius: 12, padding: "12px 14px",
                   borderLeft: `4px solid ${sev.color}`, marginBottom: 16 }}>
                   <div style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
-                    <span style={{ fontSize: 18 }}>{cfg.icon}</span>
+                    <span style={{ display: "flex", alignItems: "center" }}>{iconOf(sel.type)}</span>
                     <span style={{ fontWeight: 800, fontSize: 13, color: cfg.color }}>{cfg.label}</span>
                     <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11,
                       background: sev.bg, color: sev.color, fontWeight: 700,
@@ -287,11 +301,11 @@ export default function AlertesPage() {
                   ))}
                 </div>
                 {!sel.read && (
-                  <Btn full onClick={() => markRead(sel.id)} color={C.green}>✓ Marquer comme lu</Btn>
+                  <Btn full onClick={() => markRead(sel.id)} color={C.green}>Marquer comme lu</Btn>
                 )}
                 {sel.read && (
                   <div style={{ textAlign: "center", padding: "8px 0", color: C.green, fontWeight: 700, fontSize: 13 }}>
-                    ✓ Lu le {sel.read_at ? fmtDateTime(sel.read_at) : ""}
+                    Lu le {sel.read_at ? fmtDateTime(sel.read_at) : ""}
                   </div>
                 )}
               </div>
