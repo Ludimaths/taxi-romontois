@@ -50,10 +50,12 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
 export default function ImprevusPage() {
   const sb = createClient();
 
-  const [drivers,    setDrivers]    = useState<Conducteur[]>([]);
-  const [profiles,   setProfiles]   = useState<{ id: string; prenom: string; nom: string; role: string }[]>([]);
-  const [sentAlerts, setSentAlerts] = useState<(Alerte & { recipient_label?: string })[]>([]);
-  const [loading,    setLoading]    = useState(true);
+  const [drivers,      setDrivers]      = useState<Conducteur[]>([]);
+  const [profiles,     setProfiles]     = useState<{ id: string; prenom: string; nom: string; role: string }[]>([]);
+  const [sentAlerts,   setSentAlerts]   = useState<(Alerte & { recipient_label?: string })[]>([]);
+  const [allVehicles,  setAllVehicles]  = useState<{ id: string; plaque: string; marque: string; modele: string }[]>([]);
+  const [mecaVehicleId, setMecaVehicleId] = useState("");
+  const [loading,      setLoading]      = useState(true);
 
   // Form state
   const [type,        setType]        = useState<ImprevuType | "">("");
@@ -66,7 +68,7 @@ export default function ImprevusPage() {
   const [showHistory, setShowHistory] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const [drv, prof, alt] = await Promise.all([
+    const [drv, prof, alt, veh] = await Promise.all([
       sb.from("conducteurs").select("*").order("nom"),
       sb.from("profiles").select("id,prenom,nom,role").in("role", ["mecanicien", "admin", "gestionnaire", "parent"]).order("nom"),
       sb.from("alertes")
@@ -74,10 +76,12 @@ export default function ImprevusPage() {
         .eq("type", "imprévu")
         .order("created_at", { ascending: false })
         .limit(100),
+      sb.from("vehicules").select("id,plaque,marque,modele").order("plaque"),
     ]);
     setDrivers(drv.data ?? []);
     setProfiles(prof.data ?? []);
     setSentAlerts(alt.data ?? []);
+    setAllVehicles(veh.data ?? []);
     setLoading(false);
   }, [sb]);
 
@@ -147,6 +151,7 @@ export default function ImprevusPage() {
       }
       if (recipient.type === "mecanicien") {
         payload.type = "transmis_meca";
+        if (mecaVehicleId) payload.vehicle_id = mecaVehicleId;
       }
       return sb.from("alertes").insert(payload);
     }));
@@ -156,6 +161,7 @@ export default function ImprevusPage() {
     setMessage("");
     setSelected([]);
     setCategory("");
+    setMecaVehicleId("");
     setUseTemplate(false);
     setSending(false);
     setSent(true);
@@ -311,6 +317,20 @@ export default function ImprevusPage() {
               </div>
             )}
           </div>
+
+          {/* Véhicule optionnel pour mécanicien */}
+          {selected.some(r => r.type === "mecanicien") && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelSt}>Véhicule concerné (optionnel)</label>
+              <select value={mecaVehicleId} onChange={e => setMecaVehicleId(e.target.value)}
+                style={{ ...inputSt }}>
+                <option value="">— Aucun véhicule —</option>
+                {allVehicles.map(v => (
+                  <option key={v.id} value={v.id}>{v.plaque} · {v.marque} {v.modele}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Destinataires sélectionnés */}
           {selected.length > 0 && (

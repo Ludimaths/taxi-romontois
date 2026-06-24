@@ -7,13 +7,13 @@ import {
 } from "recharts";
 import {
   Bus, Users, Wrench, AlertTriangle, Smartphone, LayoutDashboard,
-  Cog, Download, LogOut, Home, BarChart2, CheckCircle2, CalendarDays,
+  Cog, Download, LogOut, Home, BarChart2, CheckCircle2, CalendarDays, MessageSquare,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDate, fmtDateTime, isoToday } from "@/lib/constants";
-import type { Conducteur, Vehicule, Incident, Reparation, AbsenceConducteur } from "@/lib/types";
+import type { Conducteur, Vehicule, Incident, Reparation, AbsenceConducteur, Alerte } from "@/lib/types";
 
-type AdminTab = "dashboard" | "stats" | "validation" | "historique";
+type AdminTab = "dashboard" | "stats" | "validation" | "historique" | "messages";
 type Period   = "week" | "month" | "annee";
 
 const PIE_COLORS = [C.red, C.amber, "#2563EB", C.green, "#7C3AED", C.gray400];
@@ -63,6 +63,7 @@ export default function AdminPage() {
   const [refusOpen,  setRefusOpen]  = useState<number | null>(null);
   const [refusMotif, setRefusMotif] = useState("");
   const [valBusy,    setValBusy]    = useState(false);
+  const [adminMsgs,  setAdminMsgs]  = useState<Alerte[]>([]);
 
   const [histYear,  setHistYear]  = useState(currentSchoolYear());
   const [histMonth, setHistMonth] = useState<number | null>(null);
@@ -71,7 +72,7 @@ export default function AdminPage() {
   // ── Load ────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     const yearAgo = addDays(isoToday(), -365);
-    const [c, v, inc, rep, abs] = await Promise.all([
+    const [c, v, inc, rep, abs, msgs] = await Promise.all([
       sb.from("conducteurs").select("*").order("nom"),
       sb.from("vehicules").select("*").order("plaque"),
       sb.from("incidents").select("*,vehicule:vehicules(id,plaque),conducteur:conducteurs(prenom,nom)")
@@ -81,12 +82,18 @@ export default function AdminPage() {
       sb.from("absences_conducteurs")
         .select("*,conducteur:conducteurs!conducteur_id(prenom,nom)")
         .gte("date_absence", yearAgo).order("date_absence", { ascending: false }),
+      sb.from("alertes")
+        .select("*")
+        .eq("type", "msg_meca_admin")
+        .order("created_at", { ascending: false })
+        .limit(50),
     ]);
     setConducteurs(c.data ?? []);
     setVehicules(v.data ?? []);
     setIncidents(inc.data ?? []);
     setReparations(rep.data ?? []);
     setAbsencesCond(abs.data ?? []);
+    setAdminMsgs(msgs.data ?? []);
     setLoading(false);
   }, [sb]);
 
@@ -126,7 +133,8 @@ export default function AdminPage() {
   const cPresents   = conducteurs.filter(d => ["en_service","disponible"].includes(d.status)).length;
   const cAbsents    = conducteurs.filter(d => d.status === "absent").length;
   const incOuverts  = incidents.filter(i => i.status !== "resolu").length;
-  const repAValider = reparations.filter(r => r.statut === "en_attente_validation");
+  const repAValider    = reparations.filter(r => r.statut === "en_attente_validation");
+  const unreadMsgCount = adminMsgs.filter(m => !m.read).length;
 
   // Graphiques
   const today = isoToday();
@@ -188,8 +196,8 @@ export default function AdminPage() {
       // Notification gestionnaire
       { type: "reparation", severity: "normale", read: false, vehicle_id: rep.vehicule_id,
         message: `✅ Réparation validée — ${plaque} (${(rep.cout_estime ?? 0).toLocaleString("fr-CH")} CHF)` },
-      // Notification mécanicien (transmis_meca = seul type qu'il lit en Alertes)
-      { type: "transmis_meca", severity: "normale", read: false, vehicle_id: rep.vehicule_id,
+      // Notification mécanicien → onglet Messages
+      { type: "decision_admin", severity: "normale", read: false, vehicle_id: rep.vehicule_id,
         message: `✅ Admin a validé la réparation de ${plaque} — ${(rep.cout_estime ?? 0).toLocaleString("fr-CH")} CHF. Vous pouvez continuer.` },
     ]);
     setValBusy(false);
@@ -207,8 +215,8 @@ export default function AdminPage() {
       // Notification gestionnaire
       { type: "reparation", severity: "haute", read: false, vehicle_id: rep.vehicule_id,
         message: `❌ Réparation refusée — ${plaque} : ${refusMotif.trim()}` },
-      // Notification mécanicien
-      { type: "transmis_meca", severity: "haute", read: false, vehicle_id: rep.vehicule_id,
+      // Notification mécanicien → onglet Messages
+      { type: "decision_admin", severity: "haute", read: false, vehicle_id: rep.vehicule_id,
         message: `❌ Admin a refusé la réparation de ${plaque} — Motif : ${refusMotif.trim()}` },
     ]);
     setRefusOpen(null); setRefusMotif(""); setValBusy(false);
@@ -283,10 +291,11 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
   ];
 
   const TABS: { id: AdminTab; icon: React.ReactNode; label: string; badge?: number }[] = [
-    { id: "dashboard",   icon: <Home size={15} />,         label: "Tableau de bord"                           },
-    { id: "stats",       icon: <BarChart2 size={15} />,    label: "Statistiques"                              },
-    { id: "validation",  icon: <CheckCircle2 size={15} />, label: "Validations", badge: repAValider.length    },
-    { id: "historique",  icon: <CalendarDays size={15} />, label: "Historique"                                },
+    { id: "dashboard",   icon: <Home size={15} />,           label: "Tableau de bord"                                    },
+    { id: "stats",       icon: <BarChart2 size={15} />,      label: "Statistiques"                                       },
+    { id: "validation",  icon: <CheckCircle2 size={15} />,   label: "Validations",  badge: repAValider.length            },
+    { id: "historique",  icon: <CalendarDays size={15} />,   label: "Historique"                                         },
+    { id: "messages",    icon: <MessageSquare size={15} />,  label: "Messages",     badge: unreadMsgCount || undefined   },
   ];
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -601,14 +610,23 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
             })}
 
             {/* Historique validations */}
-            {reparations.filter(r => ["en_reparation","remis_en_circulation"].includes(r.statut)).length > 0 && (
+            {reparations.filter(r =>
+              ["en_reparation","remis_en_circulation"].includes(r.statut) ||
+              (r.statut === "receptionne" && (r.commentaire_mecanicien || "").startsWith("[Refusé"))
+            ).length > 0 && (
               <div style={{ marginTop: 32 }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.gray600, marginBottom: 14 }}>
                   Historique des validations
                 </div>
-                {reparations.filter(r => ["en_reparation","remis_en_circulation"].includes(r.statut)).map(r => {
+                {reparations.filter(r =>
+                  ["en_reparation","remis_en_circulation"].includes(r.statut) ||
+                  (r.statut === "receptionne" && (r.commentaire_mecanicien || "").startsWith("[Refusé"))
+                ).map(r => {
                   const vv = r.vehicule as { plaque?: string } | undefined;
                   const wasRefused = (r.commentaire_mecanicien || "").startsWith("[Refusé");
+                  const refusMotifText = wasRefused
+                    ? (r.commentaire_mecanicien || "").replace("[Refusé par admin: ", "").replace("]", "")
+                    : null;
                   return (
                     <div key={r.id} style={{ background: C.gray50, borderRadius: 12, padding: 14,
                       marginBottom: 10, borderLeft: `3px solid ${wasRefused ? C.red : C.green}` }}>
@@ -617,6 +635,11 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                         <div>
                           <div style={{ fontWeight: 700, fontSize: 14 }}>{vv?.plaque || r.vehicule_id}</div>
                           <div style={{ fontSize: 12, color: C.gray400 }}>{fmtDate(r.date_reception)}</div>
+                          {refusMotifText && (
+                            <div style={{ fontSize: 12, color: C.red, marginTop: 3, fontStyle: "italic" }}>
+                              Motif : {refusMotifText}
+                            </div>
+                          )}
                         </div>
                         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                           {(r.cout_estime ?? 0) > 0 && (
@@ -826,6 +849,53 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
             })()}
           </div>
         )}
+        {/* ══ TAB : MESSAGES ═════════════════════════════════════════════════ */}
+        {tab === "messages" && (
+          <div>
+            {adminMsgs.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
+                <MessageSquare size={48} strokeWidth={1} style={{ marginBottom: 12, display: "block", margin: "0 auto 12px" }} />
+                <p style={{ fontWeight: 700, fontSize: 15 }}>Aucun message du mécanicien</p>
+              </div>
+            ) : adminMsgs.map(m => (
+              <div key={m.id} style={{ background: m.read ? C.gray50 : C.white, borderRadius: 14, padding: 18,
+                marginBottom: 12, border: `1px solid ${m.read ? C.gray200 : C.navyL}`,
+                boxShadow: m.read ? "none" : "0 2px 10px rgba(0,0,0,0.08)",
+                borderLeft: `4px solid ${m.read ? C.gray400 : C.navyL}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between",
+                  alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: C.navyL }}>
+                    🔧 Mécanicien
+                    {!m.read && (
+                      <span style={{ marginLeft: 8, background: C.navyL, color: C.white,
+                        borderRadius: 99, padding: "1px 7px", fontSize: 10, fontWeight: 900 }}>
+                        Nouveau
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.gray400 }}>
+                    {fmtDateTime(m.created_at)}
+                  </div>
+                </div>
+                <p style={{ fontSize: 14, color: "#1E293B", lineHeight: 1.5, margin: "0 0 12px" }}>
+                  {(m.message || "").replace("💬 Message du mécanicien : ", "")}
+                </p>
+                {!m.read && (
+                  <button onClick={async () => {
+                    await sb.from("alertes")
+                      .update({ read: true, read_at: new Date().toISOString() }).eq("id", m.id);
+                    load();
+                  }} style={{ padding: "9px 20px", borderRadius: 10,
+                    border: `2px solid ${C.navyL}`, background: C.white,
+                    color: C.navyL, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                    Lu ✓
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
       </div>
     </div>
   );

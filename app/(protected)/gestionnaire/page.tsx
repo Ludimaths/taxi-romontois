@@ -173,11 +173,12 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
   onClose: () => void;
   onAction: (id: number, response: string, status: "en_cours" | "resolu", extra?: string) => Promise<void>;
 }) {
-  const [response, setResponse] = useState(incident.response || "");
-  const [status,   setStatus]   = useState<"en_cours" | "resolu">(
+  const [response,        setResponse]        = useState(incident.response || "");
+  const [status,          setStatus]          = useState<"en_cours" | "resolu">(
     incident.status === "resolu" ? "resolu" : "en_cours"
   );
-  const [busy, setBusy] = useState(false);
+  const [busy,            setBusy]            = useState(false);
+  const [vehicleOverride, setVehicleOverride] = useState(incident.vehicule_id || "");
 
   const drv  = incident.conducteur || drivers.find(d => d.id === incident.conducteur_id);
   const veh  = incident.vehicule   || vehicles.find(v => v.id === incident.vehicule_id);
@@ -237,7 +238,23 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
         <div>
           {isPanne && <>
             <div style={{ ...labelSt, marginBottom: 8 }}>Actions rapides</div>
-            <button style={qBtn} onClick={() => quick(`Transmis au mécanicien — véhicule ${veh?.plaque || ""}`, "transmis_meca")}>
+            {!veh && (
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ ...labelSt, marginBottom: 4 }}>Véhicule concerné</label>
+                <select value={vehicleOverride} onChange={e => setVehicleOverride(e.target.value)}
+                  style={{ ...inputSt, padding: "8px 10px" }}>
+                  <option value="">— Sélectionner un véhicule —</option>
+                  {vehicles.map(v => (
+                    <option key={v.id} value={v.id}>{v.plaque} · {v.marque} {v.modele}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button style={qBtn} onClick={() => {
+              const vId = vehicleOverride || incident.vehicule_id || "";
+              const vPlaque = vehicles.find(v => v.id === vId)?.plaque || veh?.plaque || "";
+              quick(`Transmis au mécanicien — véhicule ${vPlaque}`, `transmis_meca|${vId}`);
+            }}>
               🔧 Envoyer au mécanicien
             </button>
             <button style={qBtn} onClick={() => quick(`Véhicule ${veh?.plaque || ""} immobilisé.`, "immobiliser")}>
@@ -450,14 +467,19 @@ export default function GestionnaireDashboard() {
         });
       }
     }
-    if (extra === "transmis_meca") {
+    if (extra?.startsWith("transmis_meca")) {
       const inc = incidents.find(i => i.id === id);
+      const vIdFromExtra = extra.includes("|") ? extra.split("|")[1] : "";
+      const vehicleIdToUse = vIdFromExtra || inc?.vehicule_id || null;
+      const vPlaque = vehicles.find(v => v.id === vehicleIdToUse)?.plaque
+        || (inc?.vehicule as { plaque?: string } | undefined)?.plaque
+        || vehicleIdToUse || "";
       await sb.from("alertes").insert({
         type: "transmis_meca",
         severity: "haute",
-        message: `Incident transmis au mécanicien : ${inc?.vehicule?.plaque || inc?.vehicule_id || ""} — ${inc?.description?.slice(0, 100) || ""}`,
+        message: `Incident transmis au mécanicien : ${vPlaque} — ${inc?.description?.slice(0, 100) || ""}`,
         read: false,
-        vehicle_id: inc?.vehicule_id,
+        vehicle_id: vehicleIdToUse,
       });
     }
     if (extra === "immobiliser") {

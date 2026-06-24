@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { C, fmtDate, fmtDateTime, isoToday } from "@/lib/constants";
 import type { Vehicule, Reparation, Alerte } from "@/lib/types";
 
-type MTab = "alertes" | "atelier" | "prets" | "historique";
+type MTab = "alertes" | "atelier" | "prets" | "historique" | "messages";
 
 const BUDGET_SEUIL = 1000;
 
@@ -130,6 +130,12 @@ export default function MecanicienPage() {
   const [vehicules,   setVehicules]   = useState<Vehicule[]>([]);
   const [conducteurs, setConducteurs] = useState<{ id: number; prenom: string; nom: string }[]>([]);
 
+  // Messages
+  const [msgDecisions,   setMsgDecisions]   = useState<Alerte[]>([]);
+  const [msgSendText,    setMsgSendText]    = useState("");
+  const [msgSendTarget,  setMsgSendTarget]  = useState<"gestionnaire"|"admin">("gestionnaire");
+  const [msgSending,     setMsgSending]     = useState(false);
+
   // Réception depuis alerte
   const [recepAlerte, setRecepAlerte] = useState<Alerte | null>(null);
   const [recepF,      setRecepF]      = useState({ description: "", etat_visuel: "", km: "", notes: "" });
@@ -162,7 +168,7 @@ export default function MecanicienPage() {
 
   // ── Load ────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
-    const [v, r, alt, cond] = await Promise.all([
+    const [v, r, alt, cond, dec] = await Promise.all([
       sb.from("vehicules")
         .select("*,circuit:circuits(*),conducteur:conducteurs(prenom,nom)")
         .order("plaque"),
@@ -175,11 +181,17 @@ export default function MecanicienPage() {
         .eq("read", false)
         .order("created_at", { ascending: false }),
       sb.from("conducteurs").select("id,prenom,nom").order("nom"),
+      sb.from("alertes")
+        .select("*")
+        .eq("type", "decision_admin")
+        .eq("read", false)
+        .order("created_at", { ascending: false }),
     ]);
     setVehicules(v.data ?? []);
     setReparations(r.data ?? []);
     setAlertesMeca(alt.data ?? []);
     setConducteurs(cond.data ?? []);
+    setMsgDecisions(dec.data ?? []);
     setLoading(false);
   }, [sb]);
 
@@ -236,6 +248,30 @@ export default function MecanicienPage() {
     }
     const plaque = plaqueOf(vId);
     console.log("[doReceptionner] plaque:", plaque, "description:", recepF.description);
+
+    // Vérifier si une réparation active existe déjà pour ce véhicule
+    const { data: existingRep } = await sb.from("reparations")
+      .select("id,commentaire_mecanicien")
+      .eq("vehicule_id", vId)
+      .neq("statut", "remis_en_circulation")
+      .maybeSingle();
+    if (existingRep) {
+      const prevNote = existingRep.commentaire_mecanicien || "";
+      const addNote = `Nouvelle alerte le ${isoToday()} : ${recepF.description.trim()}`;
+      await sb.from("reparations").update({
+        commentaire_mecanicien: [prevNote, addNote].filter(Boolean).join(" | "),
+      }).eq("id", existingRep.id);
+      await sb.from("alertes")
+        .update({ read: true, read_at: new Date().toISOString() }).eq("id", recepAlerte.id);
+      setRecepAlerte(null);
+      setRecepF({ description: "", etat_visuel: "", km: "", notes: "" });
+      setRecepPhotos([]);
+      setRecepErr("");
+      setRecepBusy(false);
+      setTab("atelier");
+      load();
+      return;
+    }
 
     const urls: string[] = [];
     for (const f of recepPhotos) {
@@ -299,6 +335,28 @@ export default function MecanicienPage() {
     const vId = directRecepVehId;
     const plaque = plaqueOf(vId);
     console.log("[doReceptionnerDirect] vId:", vId, "plaque:", plaque);
+
+    // Vérifier si une réparation active existe déjà pour ce véhicule
+    const { data: existingRepD } = await sb.from("reparations")
+      .select("id,commentaire_mecanicien")
+      .eq("vehicule_id", vId)
+      .neq("statut", "remis_en_circulation")
+      .maybeSingle();
+    if (existingRepD) {
+      const prevNoteD = existingRepD.commentaire_mecanicien || "";
+      const addNoteD = `Nouvelle réception le ${isoToday()} : ${directRecepF.description.trim()}`;
+      await sb.from("reparations").update({
+        commentaire_mecanicien: [prevNoteD, addNoteD].filter(Boolean).join(" | "),
+      }).eq("id", existingRepD.id);
+      setDirectRecep(false);
+      setDirectRecepVehId("");
+      setDirectRecepF({ description: "", etat_visuel: "", km: "", notes: "" });
+      setDirectRecepErr("");
+      setDirectRecepBusy(false);
+      setTab("atelier");
+      load();
+      return;
+    }
 
     const notesArr = [
       directRecepF.etat_visuel ? `État: ${directRecepF.etat_visuel}` : "",
@@ -493,6 +551,7 @@ export default function MecanicienPage() {
     { id: "atelier",    label: "🔧 Atelier",    badge: atelierReps.length || undefined },
     { id: "prets",      label: "✅ Prêts",      badge: pretsReps.length || undefined },
     { id: "historique", label: "📋 Historique" },
+    { id: "messages",   label: "💬 Messages",   badge: msgDecisions.length || undefined },
   ];
 
   if (loading) return (
@@ -780,6 +839,98 @@ export default function MecanicienPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── TAB MESSAGES ─────────────────────────────────────────────────────── */}
+      {tab === "messages" && (
+        <div>
+          {/* Décisions admin reçues */}
+          {msgDecisions.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "32px 20px", color: C.gray400, marginBottom: 24 }}>
+              <div style={{ fontSize: 36, marginBottom: 8 }}>💬</div>
+              <p style={{ fontWeight: 700, fontSize: 14 }}>Aucune décision en attente</p>
+              <p style={{ fontSize: 12 }}>Les validations et refus de l&apos;admin apparaîtront ici</p>
+            </div>
+          ) : (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, color: C.gray600, marginBottom: 12 }}>
+                Décisions de l&apos;administrateur
+              </div>
+              {msgDecisions.map(a => {
+                const isOk = a.message.startsWith("✅");
+                return (
+                  <div key={a.id} style={{ background: C.white, borderRadius: 14, padding: 16,
+                    marginBottom: 10, boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
+                    borderLeft: `4px solid ${isOk ? C.green : C.red}` }}>
+                    <div style={{ fontWeight: 800, fontSize: 15,
+                      color: isOk ? C.green : C.red, marginBottom: 4 }}>
+                      {isOk ? "✅ Validation accordée" : "❌ Demande refusée"}
+                    </div>
+                    <div style={{ fontSize: 12, color: C.gray400, marginBottom: 8 }}>
+                      {fmtDateTime(a.created_at)}
+                    </div>
+                    <p style={{ fontSize: 14, color: "#1E293B", lineHeight: 1.5, margin: "0 0 14px" }}>
+                      {a.message}
+                    </p>
+                    <button onClick={async () => {
+                      await sb.from("alertes")
+                        .update({ read: true, read_at: new Date().toISOString() }).eq("id", a.id);
+                      load();
+                    }} style={{ width: "100%", padding: "11px 0", borderRadius: 10,
+                      border: `2px solid ${isOk ? C.green : C.gray400}`,
+                      background: C.white, color: isOk ? C.green : C.gray600,
+                      fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                      Lu ✓
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Envoyer un message */}
+          <div style={{ background: C.white, borderRadius: 16, padding: 20,
+            boxShadow: "0 2px 10px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 16 }}>
+              Envoyer un message
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 700,
+                color: C.gray600, marginBottom: 6 }}>
+                Destinataire
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["gestionnaire", "admin"] as const).map(t => (
+                  <button key={t} onClick={() => setMsgSendTarget(t)}
+                    style={{ flex: 1, padding: "10px 0", borderRadius: 10, fontWeight: 700,
+                      fontSize: 13, cursor: "pointer", border: "none",
+                      background: msgSendTarget === t ? C.navy : C.gray100,
+                      color: msgSendTarget === t ? C.white : C.gray600 }}>
+                    {t === "gestionnaire" ? "Gestionnaire" : "Admin"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <TA label="Message *" value={msgSendText}
+              onChange={v => setMsgSendText(v)}
+              rows={4} placeholder="Votre message…" />
+            <BigBtn label={msgSending ? "Envoi…" : "Envoyer le message"}
+              onClick={async () => {
+                if (!msgSendText.trim()) return;
+                setMsgSending(true);
+                await sb.from("alertes").insert({
+                  type: msgSendTarget === "admin" ? "msg_meca_admin" : "msg_meca_gest",
+                  severity: "normale",
+                  message: `💬 Message du mécanicien : ${msgSendText.trim()}`,
+                  read: false,
+                });
+                setMsgSendText("");
+                setMsgSending(false);
+              }}
+              disabled={msgSending || !msgSendText.trim()}
+              color={C.navy} />
+          </div>
         </div>
       )}
 
