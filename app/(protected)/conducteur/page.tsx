@@ -145,8 +145,10 @@ export default function ConducteurPage(){
   }
 
   async function handleTerminerService(){
-    if(!driver||!todayLog)return;
-    await sb.from("service_logs").update({heure_fin:nowTimeStr(),status:"termine"}).eq("id",todayLog.id);
+    if(!driver)return;
+    if(todayLog){
+      await sb.from("service_logs").update({heure_fin:nowTimeStr(),status:"termine"}).eq("id",todayLog.id);
+    }
     await sb.from("conducteurs").update({status:"disponible"}).eq("id",driver.id);
     await sb.from("alertes").insert({type:"conducteur",severity:"normale",
       message:`${driver.prenom} ${driver.nom} a terminé son service à ${fmtHHMM(nowTimeStr())}`,

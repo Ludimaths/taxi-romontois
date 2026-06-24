@@ -160,6 +160,9 @@ export default function ConducteursPage() {
   const [createResult, setCreateResult] = useState<{ email: string; password: string } | null>(null);
   const [createError,  setCreateError]  = useState("");
   const [createCopied, setCreateCopied] = useState(false);
+  const [linkBusy,     setLinkBusy]     = useState(false);
+  const [linkDone,     setLinkDone]     = useState(false);
+  const [linkError,    setLinkError]    = useState("");
 
   const fetchAll = useCallback(async () => {
     const [drv, cir, veh] = await Promise.all([
@@ -210,6 +213,9 @@ export default function ConducteursPage() {
     setGenPwd("");
     setPwdSet(false);
     setActualEmail("");
+    setLinkBusy(false);
+    setLinkDone(false);
+    setLinkError("");
   }, [sel]);
 
   const handleSave = async (form: Partial<Conducteur>) => {
@@ -301,6 +307,28 @@ export default function ConducteursPage() {
     }
   };
 
+  const handleLinkAccount = async () => {
+    if (!sel) return;
+    const drv = drivers.find(x => x.id === sel);
+    if (!drv) return;
+    setLinkBusy(true);
+    setLinkError("");
+    const res = await fetch("/api/gestionnaire/link-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conducteurId: drv.id, prenom: drv.prenom, nom: drv.nom }),
+    });
+    const json = await res.json();
+    setLinkBusy(false);
+    if (res.ok) {
+      setCreateError("");
+      setLinkDone(true);
+      fetchHistory(drv.id);
+    } else {
+      setLinkError(json.error || "Erreur liaison inconnue");
+    }
+  };
+
   // ── Filter ─────────────────────────────────────────────────────────────────
   const filtered = drivers.filter(d => {
     const match = `${d.prenom} ${d.nom} ${d.tel ?? ""}`.toLowerCase().includes(search.toLowerCase());
@@ -318,6 +346,7 @@ export default function ConducteursPage() {
   if (sel && d) {
     const circ = circuits.find(c => c.id === d.circuit_id);
     const permisExpireSoon = d.permis_exp && new Date(d.permis_exp) < new Date(Date.now() + 90 * 864e5);
+    const isIncomplete = !d.circuit_id || !d.vehicule_id || !d.permis;
     const years = [...new Set(logs.map(l => l.date_service.slice(0,4)))].sort().reverse();
     const curYear = histYear || new Date().getFullYear().toString();
 
@@ -364,6 +393,7 @@ export default function ConducteursPage() {
                   <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>{d.tel || "—"} · {d.affectation}</div>
                   <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>
+                    {isIncomplete && <Badge color="amber">Incomplet</Badge>}
                     {permisExpireSoon && <Badge color="red">⚠ Permis bientôt</Badge>}
                   </div>
                 </div>
@@ -487,9 +517,24 @@ export default function ConducteursPage() {
                           {createError}
                         </div>
                       )}
-                      <Btn full onClick={handleCreateAccount} disabled={createBusy} color={C.green}>
-                        {createBusy ? "Création en cours…" : "🆕 Créer le compte conducteur"}
-                      </Btn>
+                      {createError.includes("existe déjà") ? (
+                        <div>
+                          <Btn full onClick={handleLinkAccount} disabled={linkBusy} color={C.amber}>
+                            {linkBusy ? "Liaison en cours…" : "🔗 Lier le compte existant"}
+                          </Btn>
+                          {linkError && (
+                            <div style={{ padding: "8px 10px", background: C.redL, borderRadius: 8,
+                              fontSize: 12, color: C.red, fontWeight: 600, marginTop: 8,
+                              border: `1px solid #FCA5A5` }}>
+                              {linkError}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <Btn full onClick={handleCreateAccount} disabled={createBusy} color={C.green}>
+                          {createBusy ? "Création en cours…" : "🆕 Créer le compte conducteur"}
+                        </Btn>
+                      )}
                     </div>
                   )}
                 </div>
@@ -759,6 +804,7 @@ export default function ConducteursPage() {
         {filtered.map(d => {
           const circ = circuits.find(c => c.id === d.circuit_id);
           const permisExpireSoon = d.permis_exp && new Date(d.permis_exp) < new Date(Date.now() + 90 * 864e5);
+          const isIncomplete = !d.circuit_id || !d.vehicule_id || !d.permis;
           return (
             <Card key={d.id} onClick={() => setSel(d.id)} style={{ padding: 18 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
@@ -772,7 +818,10 @@ export default function ConducteursPage() {
                 </div>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>
+                  {isIncomplete && <Badge color="amber">Incomplet</Badge>}
+                </div>
                 {permisExpireSoon && <Badge color="red">⚠ Permis</Badge>}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, fontSize: 12 }}>

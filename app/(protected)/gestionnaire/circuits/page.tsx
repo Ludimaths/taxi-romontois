@@ -146,7 +146,7 @@ export default function CircuitsPage() {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <Badge color={drv ? "green" : "red"}>{drv ? "Couvert" : "Non couvert"}</Badge>
+                  <Badge color={drv ? "green" : "red"}>{drv ? "Couvert" : "Incomplet"}</Badge>
                   <Btn small onClick={() => setEditId(c.id)} color={C.navyL}>✏️</Btn>
                 </div>
               </div>
