@@ -631,3 +631,5 @@ https://nextjs.org/docs/messages/module-not-found
 ✓ Compiled in 60ms
 ✓ Compiled in 33ms
 ✓ Compiled in 47ms
+ GET / 307 in 477ms (next.js: 231ms, application-code: 246ms)
+ GET /login 200 in 322ms (next.js: 138ms, application-code: 184ms)
