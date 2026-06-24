@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDateTime } from "@/lib/constants";
 import { Badge, Btn, Modal, InfoBox } from "@/components/ui";
+import { Pen, Trash2, Bell, Zap, Send, Inbox, Users, CheckCircle2, Clock } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Parent {
@@ -94,7 +95,7 @@ function ParentForm({ init, enfants, onSave, onCancel, saving }: {
       </div>
       <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
         <Btn full onClick={() => onSave(f)} disabled={saving || !f.nom || !f.prenom} color={C.green}>
-          {saving ? "Enregistrement…" : "✅ Enregistrer"}
+          {saving ? "Enregistrement…" : "Enregistrer"}
         </Btn>
         <Btn outline onClick={onCancel} color={C.gray600}>Annuler</Btn>
       </div>
@@ -225,15 +226,15 @@ export default function ParentsPage() {
             ← Tous les parents
           </button>
           <div style={{ display: "flex", gap: 8 }}>
-            <Btn small onClick={() => setEditModal(true)} color={C.navyL}>✏️ Modifier</Btn>
-            <Btn small onClick={() => handleDelete(sel)} color={C.red} outline>🗑 Supprimer</Btn>
+            <Btn small onClick={() => setEditModal(true)} color={C.navyL}><span style={{ display: "flex", alignItems: "center", gap: 5 }}><Pen size={13} /> Modifier</span></Btn>
+            <Btn small onClick={() => handleDelete(sel)} color={C.red} outline><span style={{ display: "flex", alignItems: "center", gap: 5 }}><Trash2 size={13} /> Supprimer</span></Btn>
           </div>
         </div>
 
         {notifSent && (
           <div style={{ background: C.greenL, borderRadius: 10, padding: 12, marginBottom: 16,
             fontWeight: 700, color: C.green, fontSize: 13 }}>
-            ✅ Notification envoyée à {sel.prenom} {sel.nom}
+            Notification envoyée à {sel.prenom} {sel.nom}
           </div>
         )}
 
@@ -255,7 +256,7 @@ export default function ParentsPage() {
                 </div>
                 <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>
                   {sel.civilite === "mere" ? "Mère" : "Père"}
-                  {" · "}{sel.user_id ? "✅ Compte actif" : "⚠ Pas de compte"}
+                  {" · "}{sel.user_id ? "Compte actif" : "Pas de compte"}
                 </div>
               </div>
             </div>
@@ -282,7 +283,7 @@ export default function ParentsPage() {
             {!enfant && sel.enfant_id && (
               <div style={{ marginTop: 12, padding: 12, background: C.amberL, borderRadius: 10,
                 fontSize: 12, color: C.amber, fontWeight: 600 }}>
-                ⚠ Enfant non trouvé (ID {sel.enfant_id})
+                Enfant non trouvé (ID {sel.enfant_id})
               </div>
             )}
             {!sel.enfant_id && (
@@ -296,7 +297,7 @@ export default function ParentsPage() {
             <div style={{ marginTop: 16 }}>
               {!notifOpen ? (
                 <Btn full onClick={() => setNotifOpen(true)} color={C.navyL}>
-                  📨 Envoyer une notification
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Bell size={15} /> Envoyer une notification</span>
                 </Btn>
               ) : (
                 <div style={{ background: C.skyL, borderRadius: 12, padding: 14 }}>
@@ -314,13 +315,13 @@ export default function ParentsPage() {
                           background: notifSev === v ? C.navyL : C.white,
                           color: notifSev === v ? C.white : C.gray600,
                           fontWeight: 700, fontSize: 12 }}>
-                        {v === "haute" ? "⚡ Urgente" : "📢 Normale"}
+                        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>{v === "haute" ? <><Zap size={13} /> Urgente</> : <><Bell size={13} /> Normale</>}</span>
                       </button>
                     ))}
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <Btn full onClick={sendNotif} disabled={!notifText.trim() || sending} color={C.navyL}>
-                      {sending ? "Envoi…" : "📤 Envoyer"}
+                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Send size={15} /> {sending ? "Envoi…" : "Envoyer"}</span>
                     </Btn>
                     <Btn outline color={C.gray600} onClick={() => { setNotifOpen(false); setNotifText(""); }}>
                       Annuler
@@ -339,19 +340,19 @@ export default function ParentsPage() {
             </div>
             {msgs.length === 0 ? (
               <div style={{ textAlign: "center", padding: "40px 0", color: C.gray400 }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>📭</div>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><Inbox size={36} color={C.gray400} /></div>
                 <p style={{ fontSize: 13, margin: 0 }}>Aucune communication avec ce parent</p>
               </div>
             ) : msgs.map(m => (
               <div key={m.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.gray100}` }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 4 }}>
-                  <span style={{ fontSize: 14 }}>{m.severity === "haute" ? "⚡" : "📢"}</span>
+                  <span style={{ display: "flex", alignItems: "center" }}>{m.severity === "haute" ? <Zap size={14} color={C.amber} /> : <Bell size={14} color={C.navyL} />}</span>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 13, color: C.gray800, margin: 0, lineHeight: 1.5, fontWeight: m.read ? 400 : 700 }}>
                       {m.message.replace(/^\[Pour[^\]]+\]\s*/, "")}
                     </p>
                     <div style={{ fontSize: 11, color: C.gray400, marginTop: 3 }}>
-                      {fmtDateTime(m.created_at)} · {m.read ? "✓ Lu" : "⏳ Non lu"}
+                      {fmtDateTime(m.created_at)} · {m.read ? "Lu" : "Non lu"}
                     </div>
                   </div>
                 </div>
@@ -392,7 +393,7 @@ export default function ParentsPage() {
 
       {filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 0" }}>
-          <div style={{ fontSize: 48 }}>👪</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><Users size={48} color={C.gray400} /></div>
           <p style={{ fontWeight: 700, color: C.gray600, marginTop: 12 }}>
             {search ? "Aucun parent trouvé" : "Aucun parent enregistré"}
           </p>
@@ -445,7 +446,7 @@ export default function ParentsPage() {
                   <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 700,
                     background: p.user_id ? C.greenL : C.amberL,
                     color: p.user_id ? C.green : C.amber }}>
-                    {p.user_id ? "✅ Compte actif" : "⏳ Sans compte"}
+                    {p.user_id ? "Compte actif" : "Sans compte"}
                   </span>
                 </div>
               </div>
