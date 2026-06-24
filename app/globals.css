@@ -151,6 +151,10 @@ input, textarea, select, button {
   }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 @theme inline {
   --animate-border-beam: border-beam calc(var(--duration)*1s) infinite linear;
 }

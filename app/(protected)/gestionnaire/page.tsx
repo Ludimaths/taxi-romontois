@@ -4,6 +4,12 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, statusColor, statusLabel, todayStr, isoToday, fmtTime, fmtDateTime } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal } from "@/components/ui";
+import {
+  Bus, Users, UserX, AlertCircle, Bell, Route, Loader2, Menu,
+  Home, FileText, Zap, User, MapPin, BarChart2, CheckCircle2,
+  AlertTriangle, Wrench, Lightbulb, Clock, Baby, Phone, HelpCircle,
+  ShieldAlert, Ban, RefreshCw, Repeat2, Settings,
+} from "lucide-react";
 import type {
   Conducteur, Circuit, Vehicule, AbsenceEnfant, Enfant,
   Incident, Alerte, Reparation,
@@ -61,8 +67,9 @@ function AssignModal({ driver, drivers, circuits, onClose, onAssign }: {
           <InfoBox label="Enfants" value={circ ? `${circ.enfants_count} enfants` : "—"} />
         </div>
         {circ
-          ? <div style={{ background: C.amberL, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, border: `1px solid #FDE68A` }}>
-              ⚠️ Circuit <strong>{circ.nom}</strong> non couvert — assignez un remplaçant.
+          ? <div style={{ background: C.amberL, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, border: `1px solid #FDE68A`, display: "flex", alignItems: "center", gap: 8 }}>
+              <AlertTriangle size={14} color={C.amber} style={{ flexShrink: 0 }} />
+              Circuit <strong>{circ.nom}</strong> non couvert — assignez un remplaçant.
             </div>
           : <div style={{ background: C.gray100, borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
               Ce conducteur n'a pas de circuit assigné.
@@ -100,14 +107,16 @@ function AssignModal({ driver, drivers, circuits, onClose, onAssign }: {
         }
         <div style={{ marginTop: 12 }}>
           <Btn full onClick={doAssign} disabled={!sel || !circ || busy} color={C.green}>
-            {busy ? "Attribution..." : "✅ Attribuer le circuit"}
+            {busy ? "Attribution..." : "Attribuer le circuit"}
           </Btn>
         </div>
       </>}
 
       {step === "done" && (
         <div style={{ textAlign: "center", padding: "32px 0" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+            <CheckCircle2 size={48} color={C.green} />
+          </div>
           <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>Circuit attribué !</div>
           <div style={{ fontSize: 13, color: C.gray600, marginTop: 8 }}>
             Le remplaçant a été notifié et doit confirmer sa prise en charge.
@@ -141,8 +150,8 @@ function ChildAbsModal({ absence, enfants, drivers, circuits, onClose, onTransmi
   return (
     <Modal title="Absence enfant" onClose={onClose}>
       <div style={{ background: C.amberL, borderRadius: 12, padding: 16, marginBottom: 16, border: `1px solid #FDE68A` }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: C.amber, marginBottom: 4 }}>
-          ⚠️ {child?.prenom} {child?.nom}
+        <div style={{ fontSize: 15, fontWeight: 800, color: C.amber, marginBottom: 4, display: "flex", alignItems: "center", gap: 7 }}>
+          <AlertTriangle size={15} /> {child?.prenom} {child?.nom}
         </div>
         <div style={{ fontSize: 13, color: C.gray800 }}>Motif : <strong>{absence.reason}</strong></div>
         <div style={{ fontSize: 12, color: C.gray600, marginTop: 4 }}>
@@ -157,10 +166,10 @@ function ChildAbsModal({ absence, enfants, drivers, circuits, onClose, onTransmi
       </div>
       {!done
         ? <Btn full onClick={doTransmit} color={C.navyL} disabled={busy}>
-            {busy ? "Envoi..." : `📨 Transmettre au conducteur${drv ? ` (${drv.prenom} ${drv.nom})` : ""}`}
+            {busy ? "Envoi..." : `Transmettre au conducteur${drv ? ` (${drv.prenom} ${drv.nom})` : ""}`}
           </Btn>
-        : <div style={{ textAlign: "center", padding: 12, background: C.greenL, borderRadius: 8, color: C.green, fontWeight: 700 }}>
-            ✅ Transmis au conducteur
+        : <div style={{ textAlign: "center", padding: 12, background: C.greenL, borderRadius: 8, color: C.green, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+            <CheckCircle2 size={15} /> Transmis au conducteur
           </div>
       }
     </Modal>
@@ -255,25 +264,25 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
               const vPlaque = vehicles.find(v => v.id === vId)?.plaque || veh?.plaque || "";
               quick(`Transmis au mécanicien — véhicule ${vPlaque}`, `transmis_meca|${vId}`);
             }}>
-              🔧 Envoyer au mécanicien
+              Envoyer au mécanicien
             </button>
             <button style={qBtn} onClick={() => quick(`Véhicule ${veh?.plaque || ""} immobilisé.`, "immobiliser")}>
-              🚫 Immobiliser le véhicule
+              Immobiliser le véhicule
             </button>
           </>}
           {isRetard && <>
             <div style={{ ...labelSt, marginBottom: 8 }}>Actions rapides</div>
             <button style={qBtn} onClick={() => quick("École informée du retard.")}>
-              🏫 Informer l'école
+              Informer l'école
             </button>
             <button style={qBtn} onClick={() => quick("Parents informés du retard.")}>
-              👨‍👩‍👧 Informer les parents
+              Informer les parents
             </button>
           </>}
           {isPers && <>
             <div style={{ ...labelSt, marginBottom: 8 }}>Actions rapides</div>
-            <button style={qBtn} onClick={() => quick("Parent contacté.")}>📞 Contacter le parent</button>
-            <button style={qBtn} onClick={() => quick("École contactée.")}>🏫 Contacter l'école</button>
+            <button style={qBtn} onClick={() => quick("Parent contacté.")}>Contacter le parent</button>
+            <button style={qBtn} onClick={() => quick("École contactée.")}>Contacter l'école</button>
           </>}
           <div style={{ marginTop: 12 }}>
             <label style={labelSt}>Réponse / note</label>
@@ -288,12 +297,12 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
                   background: status === s ? C.greenL : C.white,
                   fontWeight: 700, fontSize: 12, cursor: "pointer",
                   color: status === s ? C.green : C.gray600 }}>
-                {s === "resolu" ? "✅ Résolu" : "🔄 En cours"}
+                {s === "resolu" ? "Résolu" : "En cours"}
               </button>
             ))}
           </div>
           <Btn full onClick={save} color={status === "resolu" ? C.green : C.navyL} disabled={busy}>
-            {busy ? "Sauvegarde..." : status === "resolu" ? "✅ Résoudre" : "💾 Enregistrer"}
+            {busy ? "Sauvegarde..." : status === "resolu" ? "Résoudre" : "Enregistrer"}
           </Btn>
         </div>
       </div>
@@ -507,24 +516,24 @@ export default function GestionnaireDashboard() {
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
       height: "60vh", flexDirection: "column", gap: 12, color: C.gray400 }}>
-      <div style={{ fontSize: 36 }}>⏳</div>
+      <Loader2 size={36} style={{ animation: "spin 1s linear infinite" }} />
       <div style={{ fontWeight: 700, fontSize: 15 }}>Chargement…</div>
     </div>
   );
 
   // Stat card helper
   const stat = (
-    icon: string, label: string, value: number, sub: string,
+    icon: React.ReactNode, label: string, value: number, sub: string,
     borderColor: string, path: string, urgent = false
   ) => (
     <div onClick={() => router.push(path)}
-      style={{ background: C.white, borderRadius: 12, padding: "16px 18px", cursor: "pointer",
-        border: `1px solid ${C.gray200}`, borderTop: `3px solid ${borderColor}`,
-        boxShadow: "0 1px 4px rgba(0,0,0,0.04)", transition: "box-shadow .15s" }}>
-      <div style={{ fontSize: 20, marginBottom: 4 }}>{icon}</div>
-      <div style={{ fontSize: 24, fontWeight: 900, color: urgent ? borderColor : C.gray800 }}>{value}</div>
-      <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>{label}</div>
-      <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>{sub}</div>
+      style={{ background: C.white, borderRadius: 14, padding: "20px", cursor: "pointer",
+        border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        transition: "box-shadow .15s" }}>
+      <div style={{ marginBottom: 12 }}>{icon}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, color: urgent ? borderColor : "#0F172A", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 13, fontWeight: 500, color: C.gray800, marginTop: 4 }}>{label}</div>
+      <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 3 }}>{sub}</div>
     </div>
   );
 
@@ -560,8 +569,8 @@ export default function GestionnaireDashboard() {
       }}>
         <span style={{ fontWeight: 800, fontSize: 14, color: C.navy }}>Tableau de bord</span>
         <button onClick={() => setDrawerOpen(v => !v)}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: 8, fontSize: 22, color: C.navy }}>
-          ☰
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 8, color: C.navy, display: "flex" }}>
+          <Menu size={22} />
         </button>
       </div>
 
@@ -575,25 +584,25 @@ export default function GestionnaireDashboard() {
               fontWeight: 800, fontSize: 15, color: C.navy }}>
               Navigation
             </div>
-            {[
-              { path: "/gestionnaire",               icon: "🏠", label: "Tableau de bord" },
-              { path: "/gestionnaire/rapport",       icon: "📋", label: "Rapport journalier" },
-              { path: "/gestionnaire/imprevus",      icon: "⚡", label: "Imprévus" },
-              { path: "/gestionnaire/conducteurs",   icon: "👤", label: "Conducteurs" },
-              { path: "/gestionnaire/vehicules",     icon: "🚌", label: "Véhicules" },
-              { path: "/gestionnaire/circuits",      icon: "🛣️", label: "Circuits" },
-              { path: "/gestionnaire/incidents",     icon: "🚨", label: "Incidents" },
-              { path: "/gestionnaire/alertes",       icon: "🔔", label: "Alertes" },
-              { path: "/gestionnaire/reparations",   icon: "🔧", label: "Réparations" },
-              { path: "/gestionnaire/parents",       icon: "👪", label: "Parents" },
-              { path: "/gestionnaire/export",        icon: "📊", label: "Exports" },
-            ].map(n => (
+            {([
+              { path: "/gestionnaire",               icon: <Home size={17} />,       label: "Tableau de bord" },
+              { path: "/gestionnaire/rapport",       icon: <FileText size={17} />,   label: "Rapport journalier" },
+              { path: "/gestionnaire/imprevus",      icon: <Zap size={17} />,        label: "Imprévus" },
+              { path: "/gestionnaire/conducteurs",   icon: <User size={17} />,       label: "Conducteurs" },
+              { path: "/gestionnaire/vehicules",     icon: <Bus size={17} />,        label: "Véhicules" },
+              { path: "/gestionnaire/circuits",      icon: <Route size={17} />,      label: "Circuits" },
+              { path: "/gestionnaire/incidents",     icon: <AlertCircle size={17} />,label: "Incidents" },
+              { path: "/gestionnaire/alertes",       icon: <Bell size={17} />,       label: "Alertes" },
+              { path: "/gestionnaire/reparations",   icon: <Wrench size={17} />,     label: "Réparations" },
+              { path: "/gestionnaire/parents",       icon: <Users size={17} />,      label: "Parents" },
+              { path: "/gestionnaire/export",        icon: <BarChart2 size={17} />,  label: "Exports" },
+            ] as { path: string; icon: React.ReactNode; label: string }[]).map(n => (
               <button key={n.path} onClick={() => { router.push(n.path); setDrawerOpen(false); }}
                 style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px",
                   border: "none", background: C.white, color: C.gray800, fontSize: 14,
                   cursor: "pointer", textAlign: "left", borderBottom: `1px solid ${C.gray100}`,
                   width: "100%" }}>
-                <span style={{ fontSize: 18 }}>{n.icon}</span>
+                <span style={{ color: C.gray600 }}>{n.icon}</span>
                 <span>{n.label}</span>
               </button>
             ))}
@@ -614,41 +623,47 @@ export default function GestionnaireDashboard() {
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {openInc.length > 0 && (
-            <div style={{ background: "rgba(220,38,38,0.35)", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>
-              ⚡ {openInc.length} incident(s)
+            <div style={{ background: "rgba(220,38,38,0.35)", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+              <AlertCircle size={12} /> {openInc.length} incident(s)
             </div>
           )}
           {absents.length > 0 && (
-            <div style={{ background: "rgba(217,119,6,0.35)", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>
-              ⚠️ {absents.length} absent(s)
+            <div style={{ background: "rgba(217,119,6,0.35)", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+              <AlertTriangle size={12} /> {absents.length} absent(s)
             </div>
           )}
           {newChildAbs.length > 0 && (
-            <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>
-              👶 {newChildAbs.length} absence(s) enfant
+            <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+              <Baby size={12} /> {newChildAbs.length} absence(s) enfant
             </div>
           )}
         </div>
       </div>
 
       {/* ── 6 Métriques (naviguent vers sous-pages) ───────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 20 }}>
-        {stat("🚌", "Véhicules en service", enServiceVeh.length,
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 20 }}>
+        {stat(<Bus size={22} color={enServiceVeh.length > 0 ? C.green : C.gray400} />,
+          "Véhicules en service", enServiceVeh.length,
           `${vehicles.length - enServiceVeh.length} en atelier / hors service`,
           enServiceVeh.length > 0 ? C.green : C.gray400, "/gestionnaire/vehicules")}
-        {stat("👤", "Conducteurs présents", enServiceDrv.length,
+        {stat(<Users size={22} color={C.navyL} />,
+          "Conducteurs présents", enServiceDrv.length,
           `${drivers.filter(d => d.status === "disponible").length} disponibles`,
           C.navyL, "/gestionnaire/conducteurs?status=en_service")}
-        {stat("⚠️", "Absents du jour", absents.length,
+        {stat(<UserX size={22} color={absents.length > 0 ? C.amber : C.gray400} />,
+          "Absents du jour", absents.length,
           `${absents.filter(d => !!d.circuit_id).length} circuits à couvrir`,
           absents.length > 0 ? C.amber : C.gray400, "/gestionnaire/conducteurs", absents.length > 0)}
-        {stat("🚨", "Incidents ouverts", openInc.length,
-          `Temps réel · màj automatique`,
+        {stat(<AlertCircle size={22} color={openInc.length > 0 ? C.red : C.green} />,
+          "Incidents ouverts", openInc.length,
+          "Temps réel · màj automatique",
           openInc.length > 0 ? C.red : C.green, "/gestionnaire/incidents", openInc.length > 0)}
-        {stat("🔔", "Alertes non lues", unreadAlerts.length,
+        {stat(<Bell size={22} color={unreadAlerts.length > 0 ? C.amber : C.gray400} />,
+          "Alertes non lues", unreadAlerts.length,
           `${newChildAbs.length} nouvelles absences enfants`,
           unreadAlerts.length > 0 ? C.amber : C.gray400, "/gestionnaire/alertes")}
-        {stat("🛣️", "Circuits couverts", coveredCirc.length,
+        {stat(<Route size={22} color={uncoveredCirc.length > 0 ? C.red : C.green} />,
+          "Circuits couverts", coveredCirc.length,
           `sur ${circuits.length} circuits · ${uncoveredCirc.length} non couverts`,
           uncoveredCirc.length > 0 ? C.red : C.green, "/gestionnaire/circuits", uncoveredCirc.length > 0)}
       </div>
@@ -661,22 +676,28 @@ export default function GestionnaireDashboard() {
           <Card>
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.gray200}`,
               display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: C.red }}>🚨 Incidents ouverts</span>
+              <span style={{ fontWeight: 700, fontSize: 14, color: C.red, display: "flex", alignItems: "center", gap: 6 }}><AlertCircle size={15} /> Incidents ouverts</span>
               <button onClick={() => router.push("/gestionnaire/incidents")}
                 style={{ background: "none", border: "none", color: C.navyL, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                 Gérer tout →
               </button>
             </div>
             {openInc.slice(0, 5).map(i => {
-              const TYPE_ICON: Record<string, string> = {
-                panne: "🔧", voyant: "💡", accident: "🚨", retard: "⏰",
-                degradation: "🪟", enfant: "👶", parent: "👨‍👩‍👧", autre: "❓",
+              const TYPE_ICON: Record<string, React.ReactNode> = {
+                panne:       <Wrench size={17} color={C.amber} />,
+                voyant:      <Lightbulb size={17} color={C.amber} />,
+                accident:    <AlertCircle size={17} color={C.red} />,
+                retard:      <Clock size={17} color={C.amber} />,
+                degradation: <ShieldAlert size={17} color={C.amber} />,
+                enfant:      <Baby size={17} color={C.navyL} />,
+                parent:      <Phone size={17} color={C.navyL} />,
+                autre:       <HelpCircle size={17} color={C.gray400} />,
               };
               return (
                 <div key={i.id} onClick={() => setIncModal(i)}
                   style={{ ...row, cursor: "pointer" }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 18, flexShrink: 0 }}>{TYPE_ICON[i.type] || "❓"}</span>
+                    <span style={{ flexShrink: 0 }}>{TYPE_ICON[i.type] || <HelpCircle size={17} color={C.gray400} />}</span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: 13, color: C.gray800 }}>
                         {i.description.slice(0, 70)}{i.description.length > 70 ? "…" : ""}
@@ -702,7 +723,7 @@ export default function GestionnaireDashboard() {
           <Card>
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.gray200}`,
               display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: C.amber }}>⚠️ Conducteurs absents du jour</span>
+              <span style={{ fontWeight: 700, fontSize: 14, color: C.amber, display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={15} /> Conducteurs absents du jour</span>
               <button onClick={() => router.push("/gestionnaire/conducteurs")}
                 style={{ background: "none", border: "none", color: C.navyL, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                 Voir tout →
@@ -738,7 +759,7 @@ export default function GestionnaireDashboard() {
           <Card>
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.gray200}`,
               display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: C.red }}>🛣️ Circuits non couverts</span>
+              <span style={{ fontWeight: 700, fontSize: 14, color: C.red, display: "flex", alignItems: "center", gap: 6 }}><Route size={15} /> Circuits non couverts</span>
             </div>
             {uncoveredCirc.map(circ => {
               const absDrv = drivers.find(d => d.circuit_id === circ.id && d.status === "absent");
@@ -754,8 +775,8 @@ export default function GestionnaireDashboard() {
                   {absDrv && (
                     <button onClick={() => setAbsentModal(absDrv)}
                       style={{ background: C.redL, color: C.red, border: `1px solid #FCA5A5`, borderRadius: 8,
-                        padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      ⚠️ Remplaçant
+                        padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                      <Repeat2 size={12} /> Remplaçant
                     </button>
                   )}
                 </div>
@@ -769,8 +790,8 @@ export default function GestionnaireDashboard() {
           <Card>
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.gray200}`,
               display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>
-                👶 Absences enfants aujourd'hui
+              <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800, display: "flex", alignItems: "center", gap: 6 }}>
+                <Baby size={15} /> Absences enfants aujourd'hui
                 {newChildAbs.length > 0 && (
                   <span style={{ marginLeft: 6, color: C.red, fontSize: 12 }}>({newChildAbs.length} non transmises)</span>
                 )}
@@ -800,8 +821,10 @@ export default function GestionnaireDashboard() {
         {/* All good */}
         {openInc.length === 0 && absents.length === 0 && uncoveredCirc.length === 0 && newChildAbs.length === 0 && (
           <div style={{ textAlign: "center", padding: "32px 0", color: C.gray400 }}>
-            <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Tout est en ordre aujourd'hui</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+              <CheckCircle2 size={40} color={C.green} />
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: C.gray800 }}>Tout est en ordre aujourd'hui</div>
             <div style={{ fontSize: 13, marginTop: 4 }}>Aucun incident · Aucune absence · Tous les circuits couverts</div>
           </div>
         )}
