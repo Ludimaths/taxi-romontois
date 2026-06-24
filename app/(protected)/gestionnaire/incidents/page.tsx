@@ -3,6 +3,10 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDateTime } from "@/lib/constants";
 import { Badge, InfoBox, Btn, Modal } from "@/components/ui";
+import {
+  AlertCircle, Baby, Wrench, Lightbulb, Clock, Phone, ShieldAlert,
+  HelpCircle, CheckCircle2, RefreshCw, Loader2,
+} from "lucide-react";
 import type { Incident } from "@/lib/types";
 
 type DrvMin = { id: number; prenom: string; nom: string; tel?: string };
@@ -13,15 +17,15 @@ type CirMin = { id: string; nom: string; emoji: string; num: string };
 const isoToday  = () => new Date().toISOString().slice(0, 10);
 
 // ── Severity map ──────────────────────────────────────────────────────────────
-const SEV: Record<string, { level: number; label: string; color: string; bg: string; icon: string }> = {
-  accident:    { level: 0, label: "Critique", color: C.red,     bg: C.redL,    icon: "🚨" },
-  enfant:      { level: 1, label: "Urgent",   color: C.amber,   bg: C.amberL,  icon: "👶" },
-  panne:       { level: 1, label: "Urgent",   color: C.amber,   bg: C.amberL,  icon: "🔧" },
-  voyant:      { level: 1, label: "Urgent",   color: C.amber,   bg: C.amberL,  icon: "💡" },
-  retard:      { level: 2, label: "Normal",   color: C.navyL,   bg: C.skyL,    icon: "⏰" },
-  parent:      { level: 2, label: "Normal",   color: C.navyL,   bg: C.skyL,    icon: "👨‍👩‍👧" },
-  degradation: { level: 3, label: "Info",     color: C.gray600, bg: C.gray100, icon: "🪟" },
-  autre:       { level: 3, label: "Info",     color: C.gray600, bg: C.gray100, icon: "❓" },
+const SEV: Record<string, { level: number; label: string; color: string; bg: string; icon: React.ReactNode }> = {
+  accident:    { level: 0, label: "Critique", color: C.red,     bg: C.redL,    icon: <AlertCircle size={18} color={C.red} /> },
+  enfant:      { level: 1, label: "Urgent",   color: C.amber,   bg: C.amberL,  icon: <Baby size={18} color={C.amber} /> },
+  panne:       { level: 1, label: "Urgent",   color: C.amber,   bg: C.amberL,  icon: <Wrench size={18} color={C.amber} /> },
+  voyant:      { level: 1, label: "Urgent",   color: C.amber,   bg: C.amberL,  icon: <Lightbulb size={18} color={C.amber} /> },
+  retard:      { level: 2, label: "Normal",   color: C.navyL,   bg: C.skyL,    icon: <Clock size={18} color={C.navyL} /> },
+  parent:      { level: 2, label: "Normal",   color: C.navyL,   bg: C.skyL,    icon: <Phone size={18} color={C.navyL} /> },
+  degradation: { level: 3, label: "Info",     color: C.gray600, bg: C.gray100, icon: <ShieldAlert size={18} color={C.gray600} /> },
+  autre:       { level: 3, label: "Info",     color: C.gray600, bg: C.gray100, icon: <HelpCircle size={18} color={C.gray600} /> },
 };
 const sevOf = (type: string) => SEV[type] ?? SEV.autre;
 
@@ -90,7 +94,8 @@ function ActionModal({ inc, drivers, vehicles, circuits, onClose, onSave }: {
         <div>
           <div style={{ background: sev.bg, borderRadius: 12, padding: "12px 16px", marginBottom: 12,
             borderLeft: `4px solid ${sev.color}` }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: sev.color, textTransform: "uppercase", marginBottom: 4 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: sev.color, textTransform: "uppercase", marginBottom: 4,
+              display: "flex", alignItems: "center", gap: 6 }}>
               {sev.icon} {sev.label} — {TYPE_LABELS[inc.type] || inc.type}
             </div>
             <p style={{ fontSize: 13, color: C.gray800, margin: 0, lineHeight: 1.5 }}>{inc.description}</p>
@@ -118,10 +123,10 @@ function ActionModal({ inc, drivers, vehicles, circuits, onClose, onSave }: {
               <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase",
                 marginBottom: 8 }}>Actions rapides</div>
               <button style={qBtn} onClick={() => quick(`Transmis au mécanicien — ${veh?.plaque || ""}`, "transmis_meca")}>
-                🔧 Envoyer au mécanicien
+                Envoyer au mécanicien
               </button>
               <button style={qBtn} onClick={() => quick(`Véhicule ${veh?.plaque || ""} immobilisé.`, "immobiliser")}>
-                🚫 Immobiliser le véhicule
+                Immobiliser le véhicule
               </button>
             </div>
           )}
@@ -130,8 +135,8 @@ function ActionModal({ inc, drivers, vehicles, circuits, onClose, onSave }: {
               <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 8 }}>
                 Actions rapides
               </div>
-              <button style={qBtn} onClick={() => quick("École informée du retard.")}>🏫 Informer l'école</button>
-              <button style={qBtn} onClick={() => quick("Parents informés du retard.")}>👨‍👩‍👧 Informer les parents</button>
+              <button style={qBtn} onClick={() => quick("École informée du retard.")}>Informer l'école</button>
+              <button style={qBtn} onClick={() => quick("Parents informés du retard.")}>Informer les parents</button>
             </div>
           )}
           {isPers && (
@@ -139,8 +144,8 @@ function ActionModal({ inc, drivers, vehicles, circuits, onClose, onSave }: {
               <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 8 }}>
                 Actions rapides
               </div>
-              <button style={qBtn} onClick={() => quick("Parent contacté.")}>📞 Contacter le parent</button>
-              <button style={qBtn} onClick={() => quick("École contactée.")}>🏫 Contacter l'école</button>
+              <button style={qBtn} onClick={() => quick("Parent contacté.")}>Contacter le parent</button>
+              <button style={qBtn} onClick={() => quick("École contactée.")}>Contacter l'école</button>
             </div>
           )}
 
@@ -157,12 +162,12 @@ function ActionModal({ inc, drivers, vehicles, circuits, onClose, onSave }: {
                 border: `2px solid ${status === s ? C.green : C.gray200}`,
                 background: status === s ? C.greenL : C.white, cursor: "pointer",
                 fontWeight: 700, fontSize: 12, color: status === s ? C.green : C.gray600 }}>
-                {s === "resolu" ? "✅ Résolu" : "🔄 En cours"}
+                {s === "resolu" ? "Résolu" : "En cours"}
               </button>
             ))}
           </div>
           <Btn full onClick={save} disabled={busy} color={status === "resolu" ? C.green : C.navyL}>
-            {busy ? "Sauvegarde…" : status === "resolu" ? "✅ Résoudre" : "💾 Enregistrer"}
+            {busy ? "Sauvegarde…" : status === "resolu" ? "Résoudre" : "Enregistrer"}
           </Btn>
         </div>
       </div>
@@ -340,7 +345,7 @@ export default function IncidentsPage() {
       {/* Results */}
       {sorted.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 20px" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><CheckCircle2 size={48} color={C.green} /></div>
           <p style={{ fontWeight: 700, fontSize: 16, color: C.gray600, margin: 0 }}>
             {filterStatus === "open" ? "Aucun incident ouvert" : "Aucun incident"}
           </p>
@@ -352,7 +357,7 @@ export default function IncidentsPage() {
             const group = sorted.filter(i => sevOf(i.type).level === level);
             if (!group.length) return null;
             const s = Object.values(SEV).find(x => x.level === level)!;
-            const sevLabels = ["🔴 Critique","🟠 Urgent","🔵 Normal","⚪ Info"];
+            const sevLabels = ["Critique","Urgent","Normal","Info"];
             return (
               <div key={level} style={{ marginBottom: 28 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -386,7 +391,7 @@ function IncCard({ i, onOpen }: { i: Incident; onOpen: () => void }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start",
         gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flex: 1 }}>
-          <span style={{ fontSize: 20 }}>{sev.icon}</span>
+          <span style={{ display: "flex", alignItems: "center" }}>{sev.icon}</span>
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, color: C.gray800, lineHeight: 1.4 }}>
               {i.description.slice(0, 90)}{i.description.length > 90 ? "…" : ""}
@@ -407,14 +412,14 @@ function IncCard({ i, onOpen }: { i: Incident; onOpen: () => void }) {
           <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
             background: i.status === "resolu" ? C.greenL : i.status === "en_cours" ? C.skyL : C.amberL,
             color: i.status === "resolu" ? C.green : i.status === "en_cours" ? C.navyL : C.amber }}>
-            {i.status === "resolu" ? "✅ Résolu" : i.status === "en_cours" ? "🔄 En cours" : "⏳ À traiter"}
+            {i.status === "resolu" ? "Résolu" : i.status === "en_cours" ? "En cours" : "À traiter"}
           </span>
         </div>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 11, color: C.gray400 }}>{fmtDateTime(i.reported_at)}</span>
         {i.response && (
-          <span style={{ fontSize: 11, color: C.navyL, fontWeight: 600 }}>✔ {i.response.slice(0,50)}</span>
+          <span style={{ fontSize: 11, color: C.navyL, fontWeight: 600 }}>{i.response.slice(0,50)}</span>
         )}
       </div>
     </div>
