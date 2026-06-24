@@ -170,7 +170,7 @@ export default function VehiculesPage() {
   useEffect(() => {
     if (sel) {
       fetchReps(sel);
-      setQrUrl(`${window.location.origin}/scan/${sel}`);
+      setQrUrl(`https://taxi-romontois.onrender.com/scan/${sel}`);
     }
   }, [sel, fetchReps]);
 

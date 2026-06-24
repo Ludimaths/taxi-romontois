@@ -7,6 +7,13 @@ import type { Vehicule } from "@/lib/types";
 
 const INCTYPES = ["Panne", "Voyant moteur", "Accident", "Retard", "Dégradation", "Problème enfant", "Problème parent", "Autre"];
 
+const etatLabel = (e: string) =>
+  ({ bon: "En service", atelier: "En réparation", attention: "Attention requise" }[e] ?? e);
+const etatColor = (e: string) =>
+  ({ bon: C.green, atelier: C.red, attention: C.amber }[e] ?? C.gray400);
+const etatBg = (e: string) =>
+  ({ bon: C.greenL, atelier: C.redL, attention: C.amberL }[e] ?? C.gray100);
+
 export default function ScanPage() {
   const params = useParams();
   const vehicleId = decodeURIComponent(String(params.vehicleId));
@@ -59,21 +66,6 @@ export default function ScanPage() {
     setDone(true);
   };
 
-  const handleFin = async () => {
-    if (!vehicle) return;
-    setSaving(true);
-    await supabase.from("service_logs")
-      .update({ heure_fin: new Date().toTimeString().slice(0, 5), status: "termine" })
-      .eq("vehicule_id", vehicle.id)
-      .eq("date_service", new Date().toISOString().slice(0, 10))
-      .eq("status", "en_service");
-    if (vehicle.conducteur_id) {
-      await supabase.from("conducteurs").update({ status: "disponible" }).eq("id", vehicle.conducteur_id);
-    }
-    setSaving(false);
-    setDone(true);
-  };
-
   const handleIncident = async () => {
     if (!vehicle || !incType) return;
     setSaving(true);
@@ -88,7 +80,7 @@ export default function ScanPage() {
     await supabase.from("alertes").insert({
       type: "incident",
       severity: incType === "Accident" ? "critique" : "haute",
-      message: `Incident ${incType} signalé — ${vehicle.plaque} (${vehicle.circuit?.nom || "—"}) : ${incDesc || incType}`,
+      message: `Incident ${incType} signalé — ${vehicle.plaque} (${(vehicle.circuit as { nom?: string } | null)?.nom || "—"}) : ${incDesc || incType}`,
       read: false,
     });
     setSaving(false);
@@ -98,7 +90,7 @@ export default function ScanPage() {
   if (loading) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
       background: C.gray50, fontFamily: "'Inter',sans-serif" }}>
-      <div style={{ color: C.gray400 }}>Chargement…</div>
+      <div style={{ color: C.gray400, fontSize: 14 }}>Chargement…</div>
     </div>
   );
 
@@ -108,7 +100,7 @@ export default function ScanPage() {
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🚫</div>
         <div style={{ fontSize: 18, fontWeight: 800, color: C.gray800, marginBottom: 8 }}>Véhicule non trouvé</div>
-        <div style={{ fontSize: 13, color: C.gray400 }}>ID véhicule : {vehicleId}</div>
+        <div style={{ fontSize: 13, color: C.gray400 }}>ID : {vehicleId}</div>
       </div>
     </div>
   );
@@ -120,12 +112,11 @@ export default function ScanPage() {
         <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
         <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>Enregistré !</div>
         <div style={{ fontSize: 14, opacity: 0.8, marginBottom: 24, maxWidth: 300, margin: "0 auto 24px" }}>
-          {action === "prise" && (isReplacer ? `Vous prenez le service. Le gestionnaire a été notifié.` : "Prise de service enregistrée.")}
-          {action === "fin" && "Fin de service enregistrée. Merci !"}
+          {action === "prise" && (isReplacer ? "Vous prenez le service. Le gestionnaire a été notifié." : "Prise de service enregistrée.")}
           {action === "incident" && `Incident "${incType}" transmis au gestionnaire.`}
         </div>
         <button onClick={() => { setDone(false); setAction(null); setIsReplacer(false); setMyName(""); setIncType(""); setIncDesc(""); }}
-          style={{ padding: "12px 24px", borderRadius: 10, border: `2px solid rgba(255,255,255,0.4)`,
+          style={{ padding: "12px 24px", borderRadius: 10, border: "2px solid rgba(255,255,255,0.4)",
             background: "transparent", color: C.white, fontWeight: 700, cursor: "pointer", fontSize: 14 }}>
           Nouvelle action
         </button>
@@ -133,124 +124,191 @@ export default function ScanPage() {
     </div>
   );
 
+  const v = vehicle!;
+  const cond = v.conducteur as { prenom?: string; nom?: string; tel?: string } | null;
+  const circ = v.circuit as { emoji?: string; nom?: string; cercle?: { nom?: string } } | null;
+  const etat = (v.etat as string) || "bon";
+
   return (
     <div style={{ minHeight: "100vh", background: C.gray50, fontFamily: "'Inter',sans-serif" }}>
-      {/* Header */}
-      <div style={{ background: `linear-gradient(135deg,${C.navy},${C.navyL})`, padding: "20px 24px", color: C.white }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <span style={{ fontSize: 22 }}>🚌</span>
-          <div style={{ fontSize: 11, opacity: 0.6 }}>Taxi Romontois</div>
+
+      {/* ── Header ── */}
+      <div style={{ background: `linear-gradient(135deg,${C.navy},${C.navyL})`, padding: "20px 20px 24px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 18 }}>🚌</span>
+          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: 600, letterSpacing: 1 }}>TAXI ROMONTOIS</span>
         </div>
-        <div style={{ fontSize: 22, fontWeight: 900 }}>{vehicle!.plaque}</div>
-        <div style={{ fontSize: 13, opacity: 0.7, marginTop: 2 }}>{vehicle!.marque} {vehicle!.modele} · {vehicle!.places} places</div>
-        {vehicle!.circuit && (
-          <div style={{ marginTop: 8, background: "rgba(255,255,255,0.1)", padding: "6px 12px", borderRadius: 8, fontSize: 13 }}>
-            {vehicle!.circuit.emoji} Circuit {vehicle!.circuit.nom} · {vehicle!.circuit.cercle?.nom}
+        <div style={{ fontSize: 26, fontWeight: 900, color: C.white, letterSpacing: 1 }}>{v.plaque}</div>
+        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>
+          {v.marque} {v.modele}
+        </div>
+        {circ && (
+          <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6,
+            background: "rgba(255,255,255,0.12)", padding: "6px 12px", borderRadius: 20, fontSize: 13, color: C.white }}>
+            {circ.emoji} Circuit {circ.nom}{circ.cercle?.nom ? ` · ${circ.cercle.nom}` : ""}
           </div>
         )}
       </div>
 
-      <div style={{ padding: 20, maxWidth: 420, margin: "0 auto" }}>
-        {/* Conducteur habituel */}
-        {vehicle!.conducteur && (
-          <div style={{ background: C.white, borderRadius: 12, padding: 16, marginBottom: 16, border: `1px solid ${C.gray200}` }}>
-            <div style={{ fontSize: 11, color: C.gray400, textTransform: "uppercase", marginBottom: 4 }}>Conducteur habituel</div>
-            <div style={{ fontWeight: 700, color: C.gray800 }}>{vehicle!.conducteur.prenom} {vehicle!.conducteur.nom}</div>
-            <div style={{ fontSize: 12, color: C.gray400 }}>{vehicle!.conducteur.tel || "—"}</div>
-          </div>
-        )}
+      <div style={{ padding: "16px 16px 32px", maxWidth: 460, margin: "0 auto" }}>
 
-        {/* Actions */}
-        {!action ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* ── Statut ── */}
+        <div style={{ background: etatBg(etat), border: `1px solid ${etatColor(etat)}40`,
+          borderRadius: 12, padding: "10px 16px", marginBottom: 12,
+          display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: etatColor(etat), flexShrink: 0 }} />
+          <span style={{ fontWeight: 700, fontSize: 14, color: etatColor(etat) }}>{etatLabel(etat)}</span>
+        </div>
+
+        {/* ── Fiche véhicule ── */}
+        <div style={{ background: C.white, borderRadius: 14, border: `1px solid ${C.gray200}`,
+          marginBottom: 14, overflow: "hidden" }}>
+          <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.gray100}`,
+            fontSize: 11, fontWeight: 700, color: C.gray400, textTransform: "uppercase", letterSpacing: 1 }}>
+            Fiche véhicule
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
             {[
-              { key: "prise",    icon: "🟢", label: "Je prends ce véhicule",    sub: "Pointage début de service" },
-              { key: "fin",      icon: "🔵", label: "Je termine mon service",   sub: "Pointage fin de service" },
-              { key: "incident", icon: "⚡", label: "Je signale un incident",   sub: "Alerte immédiate gestionnaire" },
-            ].map(btn => (
-              <button key={btn.key} onClick={() => setAction(btn.key)}
-                style={{ display: "flex", gap: 14, alignItems: "center", padding: "16px",
-                  borderRadius: 12, border: `2px solid ${C.gray200}`, background: C.white,
-                  cursor: "pointer", textAlign: "left", width: "100%" }}>
-                <span style={{ fontSize: 28 }}>{btn.icon}</span>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: C.gray800 }}>{btn.label}</div>
-                  <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>{btn.sub}</div>
-                </div>
-              </button>
+              { label: "Places", value: `${v.places}${v.places_handi > 0 ? ` + ${v.places_handi} handi` : ""}` },
+              { label: "Kilométrage", value: `${(v.km ?? 0).toLocaleString("fr-FR")} km` },
+              { label: "Contrôle technique", value: v.ct_date || "—" },
+              { label: "Assurance", value: v.assurance_date || "—" },
+            ].map((row, i) => (
+              <div key={row.label} style={{
+                padding: "12px 16px",
+                borderRight: i % 2 === 0 ? `1px solid ${C.gray100}` : undefined,
+                borderBottom: i < 2 ? `1px solid ${C.gray100}` : undefined,
+              }}>
+                <div style={{ fontSize: 10, color: C.gray400, textTransform: "uppercase", fontWeight: 700, marginBottom: 3 }}>{row.label}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.gray800 }}>{row.value}</div>
+              </div>
             ))}
           </div>
+        </div>
+
+        {/* ── Conducteur habituel ── */}
+        <div style={{ background: C.white, borderRadius: 14, border: `1px solid ${C.gray200}`,
+          padding: "14px 16px", marginBottom: 20 }}>
+          <div style={{ fontSize: 11, color: C.gray400, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>
+            Conducteur habituel
+          </div>
+          {cond ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 38, height: 38, borderRadius: "50%", background: C.skyL,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontWeight: 900, fontSize: 14, color: C.navyL, flexShrink: 0 }}>
+                {(cond.prenom?.[0] ?? "")}{(cond.nom?.[0] ?? "")}
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: C.gray800 }}>
+                  {cond.prenom} {cond.nom}
+                </div>
+                {cond.tel && <div style={{ fontSize: 12, color: C.gray400, marginTop: 1 }}>{cond.tel}</div>}
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: C.gray400 }}>Aucun conducteur assigné</div>
+          )}
+        </div>
+
+        {/* ── Actions ── */}
+        {!action ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <button onClick={() => setAction("prise")}
+              style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px",
+                borderRadius: 14, border: `2px solid ${C.green}`, background: C.white,
+                cursor: "pointer", textAlign: "left", width: "100%" }}>
+              <span style={{ fontSize: 32 }}>🟢</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: C.green }}>Je prends ce véhicule</div>
+                <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>Pointage début de service</div>
+              </div>
+            </button>
+            <button onClick={() => setAction("incident")}
+              style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px",
+                borderRadius: 14, border: `2px solid ${C.red}`, background: C.white,
+                cursor: "pointer", textAlign: "left", width: "100%" }}>
+              <span style={{ fontSize: 32 }}>⚡</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: C.red }}>Signaler un incident</div>
+                <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>Alerte immédiate au gestionnaire</div>
+              </div>
+            </button>
+          </div>
+
         ) : action === "prise" ? (
-          <div style={{ background: C.white, borderRadius: 12, padding: 20, border: `1px solid ${C.gray200}` }}>
-            <button onClick={() => setAction(null)} style={{ background: "none", border: "none", color: C.gray400, cursor: "pointer", fontSize: 13, padding: 0, marginBottom: 16 }}>← Retour</button>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>Qui prend ce véhicule ?</div>
-            <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+          <div style={{ background: C.white, borderRadius: 14, padding: 20, border: `1px solid ${C.gray200}` }}>
+            <button onClick={() => setAction(null)}
+              style={{ background: "none", border: "none", color: C.gray400, cursor: "pointer",
+                fontSize: 13, padding: 0, marginBottom: 18, display: "flex", alignItems: "center", gap: 4 }}>
+              ← Retour
+            </button>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 16, color: C.gray800 }}>Qui prend ce véhicule ?</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
               <button onClick={() => setIsReplacer(false)}
-                style={{ flex: 1, padding: 12, borderRadius: 10, border: `2px solid ${!isReplacer ? C.navyL : C.gray200}`,
-                  background: !isReplacer ? C.skyL : C.white, fontWeight: 700, cursor: "pointer", fontSize: 12,
-                  color: !isReplacer ? C.navy : C.gray600 }}>
+                style={{ padding: "14px 10px", borderRadius: 12,
+                  border: `2px solid ${!isReplacer ? C.navyL : C.gray200}`,
+                  background: !isReplacer ? C.skyL : C.white,
+                  fontWeight: 700, cursor: "pointer", fontSize: 13,
+                  color: !isReplacer ? C.navy : C.gray600, textAlign: "center" }}>
                 ✅ Conducteur habituel
-                <div style={{ fontSize: 10, fontWeight: 400, color: C.gray400, marginTop: 3 }}>
-                  {vehicle!.conducteur ? `${vehicle!.conducteur.prenom} ${vehicle!.conducteur.nom}` : "—"}
+                <div style={{ fontSize: 11, fontWeight: 400, color: C.gray400, marginTop: 4 }}>
+                  {cond ? `${cond.prenom} ${cond.nom}` : "—"}
                 </div>
               </button>
               <button onClick={() => setIsReplacer(true)}
-                style={{ flex: 1, padding: 12, borderRadius: 10, border: `2px solid ${isReplacer ? C.amber : C.gray200}`,
-                  background: isReplacer ? C.amberL : C.white, fontWeight: 700, cursor: "pointer", fontSize: 12,
-                  color: isReplacer ? C.amber : C.gray600 }}>
-                🔄 Je suis remplaçant
-                <div style={{ fontSize: 10, fontWeight: 400, color: C.gray400, marginTop: 3 }}>Autre conducteur</div>
+                style={{ padding: "14px 10px", borderRadius: 12,
+                  border: `2px solid ${isReplacer ? C.amber : C.gray200}`,
+                  background: isReplacer ? C.amberL : C.white,
+                  fontWeight: 700, cursor: "pointer", fontSize: 13,
+                  color: isReplacer ? C.amber : C.gray600, textAlign: "center" }}>
+                🔄 Remplaçant
+                <div style={{ fontSize: 11, fontWeight: 400, color: C.gray400, marginTop: 4 }}>Autre conducteur</div>
               </button>
             </div>
             {isReplacer && (
-              <input value={myName} onChange={e => setMyName(e.target.value)} placeholder="Votre prénom et nom…"
-                style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: `1px solid ${C.gray200}`,
-                  fontSize: 14, marginBottom: 14, boxSizing: "border-box" }} />
+              <input value={myName} onChange={e => setMyName(e.target.value)}
+                placeholder="Votre prénom et nom…"
+                style={{ width: "100%", padding: "13px 14px", borderRadius: 10,
+                  border: `1px solid ${C.gray200}`, fontSize: 15, marginBottom: 14,
+                  boxSizing: "border-box" }} />
             )}
             <button onClick={handlePrise} disabled={saving || (isReplacer && !myName)}
-              style={{ width: "100%", padding: 14, borderRadius: 10, border: "none",
+              style={{ width: "100%", padding: 16, borderRadius: 12, border: "none",
                 background: saving || (isReplacer && !myName) ? C.gray200 : C.green,
-                color: C.white, fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
+                color: C.white, fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
               {saving ? "Enregistrement…" : "🟢 Valider la prise de service"}
             </button>
           </div>
-        ) : action === "fin" ? (
-          <div style={{ background: C.white, borderRadius: 12, padding: 20, border: `1px solid ${C.gray200}` }}>
-            <button onClick={() => setAction(null)} style={{ background: "none", border: "none", color: C.gray400, cursor: "pointer", fontSize: 13, padding: 0, marginBottom: 16 }}>← Retour</button>
-            <div style={{ background: C.gray50, borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13 }}>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>Confirmation fin de service</div>
-              <div style={{ color: C.gray400 }}>{vehicle!.conducteur ? `${vehicle!.conducteur.prenom} ${vehicle!.conducteur.nom}` : "—"} · {vehicle!.plaque}</div>
-              <div style={{ fontWeight: 700, color: C.navyL, marginTop: 8 }}>Heure de fin : {nowStr()}</div>
-            </div>
-            <button onClick={handleFin} disabled={saving}
-              style={{ width: "100%", padding: 14, borderRadius: 10, border: "none",
-                background: saving ? C.gray200 : C.navyL, color: C.white, fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
-              {saving ? "Enregistrement…" : "🔵 Confirmer la fin de service"}
-            </button>
-          </div>
+
         ) : (
-          <div style={{ background: C.white, borderRadius: 12, padding: 20, border: `1px solid ${C.gray200}` }}>
-            <button onClick={() => setAction(null)} style={{ background: "none", border: "none", color: C.gray400, cursor: "pointer", fontSize: 13, padding: 0, marginBottom: 16 }}>← Retour</button>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>Type d'incident</div>
+          <div style={{ background: C.white, borderRadius: 14, padding: 20, border: `1px solid ${C.gray200}` }}>
+            <button onClick={() => setAction(null)}
+              style={{ background: "none", border: "none", color: C.gray400, cursor: "pointer",
+                fontSize: 13, padding: 0, marginBottom: 18 }}>
+              ← Retour
+            </button>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 14, color: C.gray800 }}>Type d'incident</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
               {INCTYPES.map(t => (
                 <button key={t} onClick={() => setIncType(t)}
-                  style={{ padding: 10, borderRadius: 8, fontSize: 12, fontWeight: 600,
-                    border: `2px solid ${incType === t ? C.navyL : C.gray200}`,
-                    background: incType === t ? C.skyL : C.white,
-                    color: incType === t ? C.navyL : C.gray600, cursor: "pointer" }}>
+                  style={{ padding: "11px 8px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+                    border: `2px solid ${incType === t ? C.red : C.gray200}`,
+                    background: incType === t ? C.redL : C.white,
+                    color: incType === t ? C.red : C.gray600, cursor: "pointer" }}>
                   {t}
                 </button>
               ))}
             </div>
             <textarea value={incDesc} onChange={e => setIncDesc(e.target.value)}
               placeholder="Description (optionnel)…"
-              style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: `1px solid ${C.gray200}`,
-                fontSize: 13, minHeight: 70, resize: "none", boxSizing: "border-box", marginBottom: 14 }} />
+              style={{ width: "100%", padding: "13px 14px", borderRadius: 10,
+                border: `1px solid ${C.gray200}`, fontSize: 14, minHeight: 80,
+                resize: "none", boxSizing: "border-box", marginBottom: 14 }} />
             <button onClick={handleIncident} disabled={!incType || saving}
-              style={{ width: "100%", padding: 14, borderRadius: 10, border: "none",
+              style={{ width: "100%", padding: 16, borderRadius: 12, border: "none",
                 background: !incType || saving ? C.gray200 : C.red,
-                color: C.white, fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
+                color: C.white, fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
               {saving ? "Envoi…" : "⚡ Envoyer l'incident"}
             </button>
           </div>

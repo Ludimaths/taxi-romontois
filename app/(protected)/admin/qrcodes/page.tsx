@@ -6,7 +6,7 @@ import { Btn, Badge } from "@/components/ui";
 import { QRCodeSVG as QRCode } from "qrcode.react";
 import type { Vehicule } from "@/lib/types";
 
-const DOMAIN = typeof window !== "undefined" ? window.location.origin : "https://taxi-romontois.vercel.app";
+const DOMAIN = "https://taxi-romontois.onrender.com";
 
 export default function QRCodesPage() {
   const supabase = createClient();
