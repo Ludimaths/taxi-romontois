@@ -42,7 +42,7 @@ function CircuitForm({ init, cercles, conducteurs, onSave, onCancel, saving, isN
       </div>
       <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
         <Btn full onClick={() => onSave(f)} disabled={saving || (isNew && (!f.id || !f.nom))} color={C.green}>
-          {saving ? "Enregistrement…" : "✅ Enregistrer"}
+          {saving ? "Enregistrement…" : "Enregistrer"}
         </Btn>
         <Btn outline onClick={onCancel} color={C.gray600}>Annuler</Btn>
       </div>
@@ -147,11 +147,11 @@ export default function CircuitsPage() {
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <Badge color={drv ? "green" : "red"}>{drv ? "Couvert" : "Incomplet"}</Badge>
-                  <Btn small onClick={() => setEditId(c.id)} color={C.navyL}>✏️</Btn>
+                  <Btn small onClick={() => setEditId(c.id)} color={C.navyL}>Modifier</Btn>
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9 }}>
-                <InfoBox label="Conducteur" value={drv ? `${drv.prenom} ${drv.nom}` : "⚠ Non affecté"} highlight={!drv ? C.red : undefined} />
+                <InfoBox label="Conducteur" value={drv ? `${drv.prenom} ${drv.nom}` : "Non affecté"} highlight={!drv ? C.red : undefined} />
                 <InfoBox label="Véhicule" value={drv?.vehicule?.plaque || "—"} />
                 <InfoBox label="Kilomètres" value={c.km_aller ? `${c.km_aller} km` : "—"} />
                 <InfoBox label="N° tournée" value={c.num} />
