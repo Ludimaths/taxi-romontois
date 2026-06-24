@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C, isoToday, fmtHHMM, nowTimeStr } from "@/lib/constants";
 import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant } from "@/lib/types";
+import { Bus, Home, FileText, Activity, AlertCircle, Mail, History } from "lucide-react";
 import { BSheet, BigBtn, Inp, TA, Chip, StatusBadge, SIGN_LABELS, schoolYearStart } from "./tabs/shared";
 import { TabDashboard } from "./tabs/Dashboard";
 import { TabFiche } from "./tabs/Fiche";
@@ -191,7 +192,7 @@ export default function ConducteurPage(){
     if(!driver)return;
     await sb.from("conducteurs").update({status:"disponible",absence_motif:null}).eq("id",driver.id);
     await sb.from("alertes").insert({type:"conducteur",severity:"normale",
-      message:`✅ ${driver.prenom} ${driver.nom} reprend le service aujourd'hui`,read:false});
+      message:`${driver.prenom} ${driver.nom} reprend le service aujourd'hui`,read:false});
     setDriver(p=>p?{...p,status:"disponible",absence_motif:undefined}:p);
     setShowReprise(false);
   }
@@ -244,13 +245,21 @@ export default function ConducteurPage(){
   });
   const logsForYearMonth=(y:number,mon:number)=>logsForYear(y).filter(l=>new Date(l.date_service).getMonth()+1===mon);
 
+  const TAB_ICONS = {
+    dashboard:    <Home size={14} />,
+    fiche:        <FileText size={14} />,
+    service:      <Activity size={14} />,
+    signalements: <AlertCircle size={14} />,
+    messages:     <Mail size={14} />,
+    historique:   <History size={14} />,
+  };
   const TABS:{id:Tab;label:string;badge?:number}[]=[
-    {id:"dashboard",    label:"🏠 Dashboard"},
-    {id:"fiche",        label:"📋 Ma fiche"},
-    {id:"service",      label:"🚦 Mon service"},
-    {id:"signalements", label:"⚡ Signalements",badge:pendingInc||undefined},
-    {id:"messages",     label:"📨 Messages",    badge:unreadMsg||undefined},
-    {id:"historique",   label:"📊 Historique"},
+    {id:"dashboard",    label:"Dashboard"},
+    {id:"fiche",        label:"Ma fiche"},
+    {id:"service",      label:"Mon service"},
+    {id:"signalements", label:"Signalements",badge:pendingInc||undefined},
+    {id:"messages",     label:"Messages",    badge:unreadMsg||undefined},
+    {id:"historique",   label:"Historique"},
   ];
 
   // ── Guards ────────────────────────────────────────────────────────────────────
@@ -261,7 +270,7 @@ export default function ConducteurPage(){
   );
   if(!driver)return(
     <div style={{textAlign:"center",padding:"60px 20px",color:C.gray}}>
-      <div style={{fontSize:48}}>🚌</div>
+      <div style={{display:"flex",justifyContent:"center",marginBottom:10}}><Bus size={48} color={C.gray400} /></div>
       <p style={{fontWeight:700,marginTop:12}}>Aucun conducteur associé à votre compte.</p>
     </div>
   );
@@ -271,18 +280,26 @@ export default function ConducteurPage(){
     <div style={{maxWidth:860,margin:"0 auto",paddingBottom:80}}>
 
       {/* Bannière d'accueil */}
-      <div style={{background:`linear-gradient(135deg,${C.greenD},${C.green})`,
+      <div style={{background:`linear-gradient(135deg,${C.navy},${C.navyL})`,
         borderRadius:18,padding:"20px 22px",color:"#fff",marginBottom:20}}>
-        <p style={{fontSize:13,opacity:0.75,marginBottom:2}}>Bonjour,</p>
-        <h1 style={{fontSize:22,fontWeight:900,marginBottom:8}}>{driver.prenom} {driver.nom} 👋</h1>
-        <p style={{fontSize:13,opacity:0.85,lineHeight:1.5}}>
-          Bienvenue dans votre espace conducteur.<br/>
+        <div style={{display:"flex",gap:16,alignItems:"center",marginBottom:14}}>
+          <div style={{width:56,height:56,borderRadius:28,background:"rgba(255,255,255,0.2)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize:20,fontWeight:900,color:"#fff",flexShrink:0,letterSpacing:1}}>
+            {(driver.prenom[0]??"").toUpperCase()}{(driver.nom[0]??"").toUpperCase()}
+          </div>
+          <div>
+            <p style={{fontSize:12,opacity:0.7,margin:"0 0 2px"}}>Bonjour,</p>
+            <h1 style={{fontSize:20,fontWeight:900,margin:0}}>{driver.prenom} {driver.nom}</h1>
+          </div>
+        </div>
+        <p style={{fontSize:13,opacity:0.85,lineHeight:1.5,margin:"0 0 14px"}}>
           Pensez à pointer votre prise de service et votre fin de service chaque jour.
         </p>
-        <div style={{display:"flex",gap:10,marginTop:14,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
           <StatusBadge status={driver.status}/>
           {circ&&<span style={{fontSize:13,opacity:0.85,fontWeight:600}}>{circ.emoji} Circuit {circ.nom}</span>}
-          {veh&&<span style={{fontSize:13,opacity:0.75}}>🚌 {veh.plaque}</span>}
+          {veh&&<span style={{fontSize:13,opacity:0.75,display:"flex",alignItems:"center",gap:4}}><Bus size={13} /> {veh.plaque}</span>}
         </div>
       </div>
 
@@ -293,8 +310,8 @@ export default function ConducteurPage(){
             style={{padding:"10px 14px",borderRadius:12,border:"none",cursor:"pointer",
               fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:5,
               whiteSpace:"nowrap",flexShrink:0,
-              background:tab===t.id?C.green:"#E2E8F0",color:tab===t.id?"#fff":C.gray}}>
-            {t.label}
+              background:tab===t.id?C.navy:"#E2E8F0",color:tab===t.id?"#fff":C.gray}}>
+            {TAB_ICONS[t.id]} {t.label}
             {t.badge!=null&&t.badge>0&&(
               <span style={{background:tab===t.id?"rgba(255,255,255,0.3)":C.red,
                 color:"#fff",borderRadius:20,padding:"1px 6px",fontSize:11,fontWeight:800}}>
@@ -361,7 +378,7 @@ export default function ConducteurPage(){
               Heure enregistrée automatiquement.
             </p>:<p style={{fontSize:14,color:C.gray}}>Aucun circuit assigné. Contactez le gestionnaire.</p>}
           </div>
-          <BigBtn label="✅ Confirmer la prise de service" onClick={handlePrendreService} disabled={!circ}/>
+          <BigBtn label="Confirmer la prise de service" onClick={handlePrendreService} disabled={!circ}/>
           <BigBtn label="Annuler" onClick={()=>setShowConfirm(false)} color={C.gray} outline/>
         </BSheet>
       )}
@@ -371,7 +388,7 @@ export default function ConducteurPage(){
           <Inp label="Nom du conducteur remplacé" value={replRemplace} onChange={setReplRemplace} placeholder="ex: Jean Dupont"/>
           <Inp label="Circuit effectué"            value={replCircuit}  onChange={setReplCircuit}  placeholder="ex: C007 / Chat"/>
           <Inp label="Plaque du véhicule utilisé" value={replVehicle}  onChange={setReplVehicle}  placeholder="ex: FR 80058"/>
-          <BigBtn label="🔄 Confirmer le remplacement" onClick={handleRemplacerService}
+          <BigBtn label="Confirmer le remplacement" onClick={handleRemplacerService}
             disabled={!replRemplace.trim()||!replCircuit.trim()}/>
           <BigBtn label="Annuler" onClick={()=>setShowReplace(false)} color={C.gray} outline/>
         </BSheet>
@@ -385,7 +402,7 @@ export default function ConducteurPage(){
               {todayLog?.heure_debut&&<>Vous avez commencé à <strong>{fmtHHMM(todayLog.heure_debut)}</strong>.</>}
             </p>
           </div>
-          <BigBtn label="🔵 Terminer le service" onClick={handleTerminerService} color={C.navy}/>
+          <BigBtn label="Terminer le service" onClick={handleTerminerService} color={C.navy}/>
           <BigBtn label="Annuler" onClick={()=>setShowFin(false)} color={C.gray} outline/>
         </BSheet>
       )}
@@ -403,9 +420,9 @@ export default function ConducteurPage(){
           <TA label="Informations complémentaires (optionnel)" value={absNotes} onChange={setAbsNotes}
             rows={2} placeholder="Précisions éventuelles…"/>
           <div style={{background:C.redL,borderRadius:10,padding:12,marginBottom:16,fontSize:13,color:C.red,fontWeight:600}}>
-            ⚠️ Le gestionnaire sera notifié immédiatement. Votre circuit sera marqué "Non couvert".
+            Le gestionnaire sera notifié immédiatement. Votre circuit sera marqué "Non couvert".
           </div>
-          <BigBtn label="🤒 Confirmer mon absence" onClick={handleSignalerAbsence} disabled={!absMotif} color={C.red}/>
+          <BigBtn label="Confirmer mon absence" onClick={handleSignalerAbsence} disabled={!absMotif} color={C.red}/>
           <BigBtn label="Annuler" onClick={()=>setShowAbsence(false)} color={C.gray} outline/>
         </BSheet>
       )}
@@ -417,7 +434,7 @@ export default function ConducteurPage(){
               Votre statut repassera à "Disponible".<br/>Le gestionnaire sera notifié.
             </p>
           </div>
-          <BigBtn label="✅ Je reprends le service" onClick={handleRepriseService}/>
+          <BigBtn label="Je reprends le service" onClick={handleRepriseService}/>
           <BigBtn label="Annuler" onClick={()=>setShowReprise(false)} color={C.gray} outline/>
         </BSheet>
       )}

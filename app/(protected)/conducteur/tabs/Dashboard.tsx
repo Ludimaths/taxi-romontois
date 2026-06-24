@@ -1,4 +1,5 @@
 "use client";
+import { CheckCircle2, XCircle, Circle, MapPin, Bus, Baby, RefreshCw } from "lucide-react";
 import { C, fmtHHMM, fmtDateTime, isoToday } from "@/lib/constants";
 import type { Conducteur, ServiceLog, AbsenceEnfant, Enfant, Alerte } from "@/lib/types";
 import { StatusBadge, BigBtn, calcDuration } from "./shared";
@@ -37,16 +38,16 @@ export function TabDashboard({
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
         {[
           {label:"Statut",val:driver.status==="en_service"?"En service":driver.status==="absent"?"Absent":"Disponible",
-           icon:driver.status==="en_service"?"🟢":driver.status==="absent"?"🔴":"🔵",
+           icon:driver.status==="en_service"?<CheckCircle2 size={20} color={C.green}/>:driver.status==="absent"?<XCircle size={20} color={C.red}/>:<Circle size={20} color={C.blue}/>,
            c:driver.status==="en_service"?C.green:driver.status==="absent"?C.red:C.blue,
            bg:driver.status==="en_service"?C.greenL:driver.status==="absent"?C.redL:C.blueL},
-          {label:"Circuit aujourd'hui",val:circ?`${circ.emoji} ${circ.nom}`:"Non assigné",icon:"🗺️",c:C.navy,bg:"#EFF6FF"},
-          {label:"Véhicule",val:veh?.plaque||"Non assigné",icon:"🚌",c:C.green,bg:C.greenL},
-          {label:"Enfants du circuit",val:circ?.enfants_count!=null?`${circ.enfants_count} enfants`:"—",icon:"👶",c:C.purple,bg:"#EDE9FE"},
+          {label:"Circuit aujourd'hui",val:circ?`${circ.emoji} ${circ.nom}`:"Non assigné",icon:<MapPin size={20} color={C.navy}/>,c:C.navy,bg:"#EFF6FF"},
+          {label:"Véhicule",val:veh?.plaque||"Non assigné",icon:<Bus size={20} color={C.green}/>,c:C.green,bg:C.greenL},
+          {label:"Enfants du circuit",val:circ?.enfants_count!=null?`${circ.enfants_count} enfants`:"—",icon:<Baby size={20} color={C.purple}/>,c:C.purple,bg:"#EDE9FE"},
         ].map(c=>(
           <div key={c.label} style={{background:c.bg,borderRadius:16,padding:"14px 16px",border:`1px solid ${c.c}22`}}>
-            <div style={{fontSize:20}}>{c.icon}</div>
-            <div style={{fontSize:15,fontWeight:900,color:c.c,lineHeight:1.3,marginTop:4}}>{c.val}</div>
+            <div style={{display:"flex",alignItems:"center",marginBottom:4}}>{c.icon}</div>
+            <div style={{fontSize:15,fontWeight:900,color:c.c,lineHeight:1.3}}>{c.val}</div>
             <div style={{fontSize:11,color:C.gray,marginTop:2}}>{c.label}</div>
           </div>
         ))}
@@ -56,14 +57,14 @@ export function TabDashboard({
       {todayLog&&(
         <div style={{background:"#fff",borderRadius:16,padding:16,marginBottom:16,
           boxShadow:"0 2px 8px rgba(0,0,0,0.06)",borderLeft:`4px solid ${C.green}`}}>
-          <div style={{fontWeight:800,color:C.navy,marginBottom:8}}>⏱ Service aujourd'hui</div>
+          <div style={{fontWeight:800,color:C.navy,marginBottom:8}}>Service aujourd'hui</div>
           <div style={{display:"flex",gap:16,fontSize:14}}>
             <span>Début : <strong>{fmtHHMM(todayLog.heure_debut)}</strong></span>
             {todayLog.heure_fin&&<span>Fin : <strong>{fmtHHMM(todayLog.heure_fin)}</strong></span>}
             {todayLog.heure_debut&&todayLog.heure_fin&&(
               <span style={{color:C.green}}>Durée : <strong>{calcDuration(todayLog.heure_debut,todayLog.heure_fin)}</strong></span>
             )}
-            {todayLog.is_replacement&&<span style={{color:C.amber}}>🔄 Remplacement</span>}
+            {todayLog.is_replacement&&<span style={{color:C.amber}}>Remplacement</span>}
           </div>
         </div>
       )}
@@ -72,7 +73,7 @@ export function TabDashboard({
       {todayAbsences.length>0&&(
         <div style={{background:C.amberL,borderRadius:16,padding:16,marginBottom:16,border:`1px solid #FDE68A`}}>
           <div style={{fontWeight:800,color:C.amber,marginBottom:10,fontSize:14}}>
-            ⚠️ Modifications du jour — {todayAbsences.length} absence(s) enfants
+            Modifications du jour — {todayAbsences.length} absence(s) enfants
           </div>
           {todayAbsences.slice(0,5).map(a=>{
             const enf=enfants.find(e=>e.id===a.enfant_id);
@@ -92,10 +93,10 @@ export function TabDashboard({
                   <button onClick={()=>onConfirmerAbsence(a.id)}
                     style={{fontSize:11,padding:"5px 10px",borderRadius:8,border:`1px solid ${C.green}`,
                       background:C.greenL,color:C.greenD,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-                    ✓ Lu
+                    Lu
                   </button>
                 ):(
-                  <span style={{fontSize:11,color:C.green,fontWeight:700}}>✓ Lu</span>
+                  <span style={{fontSize:11,color:C.green,fontWeight:700}}>Lu</span>
                 )}
               </div>
             );
@@ -109,7 +110,7 @@ export function TabDashboard({
         <div key={m.id} style={{background:C.amberL,borderRadius:16,padding:16,marginBottom:16,
           border:`2px solid ${C.amber}`,boxShadow:"0 2px 12px rgba(217,119,6,0.2)"}}>
           <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:10}}>
-            <span style={{fontSize:28}}>🔄</span>
+            <span style={{display:"flex",alignItems:"center"}}><RefreshCw size={28} color={C.amber} /></span>
             <div>
               <div style={{fontWeight:900,fontSize:15,color:C.amber}}>Mission de remplacement</div>
               <div style={{fontSize:11,color:C.gray,marginTop:1}}>{fmtDateTime(m.created_at)}</div>
@@ -120,7 +121,7 @@ export function TabDashboard({
             style={{width:"100%",padding:"13px",borderRadius:12,background:C.green,
               color:"#fff",border:"none",fontWeight:900,fontSize:15,cursor:"pointer",
               boxShadow:"0 2px 8px rgba(22,163,74,0.3)"}}>
-            ✅ J'ai pris connaissance
+            J'ai pris connaissance
           </button>
         </div>
       ))}
@@ -129,7 +130,7 @@ export function TabDashboard({
       {messages.filter(m=>m.type!=="remplacement").length>0&&(
         <div style={{background:"#fff",borderRadius:16,padding:16,marginBottom:16,
           boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-          <div style={{fontWeight:800,color:C.navy,marginBottom:8,fontSize:14}}>📨 Dernier message gestionnaire</div>
+          <div style={{fontWeight:800,color:C.navy,marginBottom:8,fontSize:14}}>Dernier message gestionnaire</div>
           {(()=>{
             const m=messages.filter(x=>x.type!=="remplacement")[0];
             return(<>
@@ -150,15 +151,15 @@ export function TabDashboard({
       {/* Boutons rapides */}
       <div style={{marginTop:8}}>
         {driver.status==="disponible"&&(<>
-          <BigBtn label="🟢 Je prends mon service"      onClick={onShowConfirm}/>
-          <BigBtn label="🔄 Je remplace un collègue"    onClick={onShowReplace} color={C.blue}/>
-          <BigBtn label="🤒 Je suis absent aujourd'hui" onClick={onShowAbsence} color={C.red}/>
+          <BigBtn label="Je prends mon service"      onClick={onShowConfirm}/>
+          <BigBtn label="Je remplace un collègue"    onClick={onShowReplace} color={C.blue}/>
+          <BigBtn label="Je suis absent aujourd'hui" onClick={onShowAbsence} color={C.red}/>
         </>)}
         {driver.status==="en_service"&&(
-          <BigBtn label="🔵 Je termine mon service" onClick={onShowFin} color={C.navy}/>
+          <BigBtn label="Je termine mon service" onClick={onShowFin} color={C.navy}/>
         )}
         {driver.status==="absent"&&(
-          <BigBtn label="✅ Je reprends le service" onClick={onShowReprise}/>
+          <BigBtn label="Je reprends le service" onClick={onShowReprise}/>
         )}
       </div>
     </div>

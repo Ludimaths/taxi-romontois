@@ -31,7 +31,7 @@ export function TabSignalements({
       {signSent&&(
         <div style={{background:C.greenL,borderRadius:14,padding:14,marginBottom:16,
           border:`1px solid #86EFAC`,fontWeight:700,color:C.greenD}}>
-          ✅ Signalement envoyé — le gestionnaire a été notifié.
+          Signalement envoyé — le gestionnaire a été notifié.
         </div>
       )}
 
@@ -46,7 +46,7 @@ export function TabSignalements({
           </label>
           <div style={{display:"flex",flexWrap:"wrap",gap:0}}>
             {SIGN_TYPES.map(s=>(
-              <Chip key={s.v} label={`${s.e} ${s.l}`} active={signType===s.v} onClick={()=>onSetSignType(s.v)}/>
+              <Chip key={s.v} label={s.l} active={signType===s.v} onClick={()=>onSetSignType(s.v)}/>
             ))}
           </div>
         </div>
@@ -59,12 +59,12 @@ export function TabSignalements({
             Niveau d'urgence
           </label>
           <div style={{display:"flex",gap:8}}>
-            <Chip label="🟢 Normal" active={signUrgence==="normal"} onClick={()=>onSetSignUrgence("normal")} color={C.green}/>
-            <Chip label="🔴 Urgent" active={signUrgence==="urgent"} onClick={()=>onSetSignUrgence("urgent")} color={C.red}/>
+            <Chip label="Normal" active={signUrgence==="normal"} onClick={()=>onSetSignUrgence("normal")} color={C.green}/>
+            <Chip label="Urgent" active={signUrgence==="urgent"} onClick={()=>onSetSignUrgence("urgent")} color={C.red}/>
           </div>
         </div>
 
-        <BigBtn label="📤 Envoyer au gestionnaire"
+        <BigBtn label="Envoyer au gestionnaire"
           onClick={onEnvoyer}
           disabled={!signType||!signDesc.trim()}
           color={signUrgence==="urgent"?C.red:C.green}/>
@@ -84,7 +84,7 @@ export function TabSignalements({
                   alignItems:"flex-start",marginBottom:8,gap:8}}>
                   <div>
                     <span style={{fontWeight:800,fontSize:14,color:C.navy}}>
-                      {stype?.e||"⚡"} {stype?.l||inc.type}
+                      {stype?.l||inc.type}
                     </span>
                     <span style={{display:"inline-block",marginLeft:8,padding:"2px 8px",
                       borderRadius:20,fontSize:11,fontWeight:700,background:st.bg,color:st.c}}>
@@ -101,7 +101,7 @@ export function TabSignalements({
                 {inc.response&&(
                   <div style={{background:C.greenL,borderRadius:10,padding:"10px 12px",
                     fontSize:13,color:C.greenD,fontWeight:600}}>
-                    💬 Réponse gestionnaire : {inc.response}
+                    Réponse gestionnaire : {inc.response}
                   </div>
                 )}
               </div>

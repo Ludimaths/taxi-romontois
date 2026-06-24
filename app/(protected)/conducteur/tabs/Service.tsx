@@ -50,25 +50,25 @@ export function TabService({driver,todayLog,circ,veh,onShowConfirm,onShowReplace
       {driver.status==="disponible"&&!todayLog&&(<>
         <div style={{background:C.greenL,borderRadius:16,padding:16,marginBottom:12}}>
           <p style={{fontSize:14,fontWeight:700,color:C.greenD,marginBottom:12}}>
-            🟢 Situation A — Prise de service normale
+            Situation A — Prise de service normale
           </p>
           {circ&&<p style={{fontSize:14,color:"#1E293B",marginBottom:8}}>
             Vous allez prendre le circuit <strong>{circ.emoji} {circ.nom}</strong>
             {veh&&<> avec le véhicule <strong>{veh.plaque}</strong></>}.
           </p>}
-          <BigBtn label="🟢 Je prends mon service" onClick={onShowConfirm}/>
+          <BigBtn label="Je prends mon service" onClick={onShowConfirm}/>
         </div>
         <div style={{background:C.blueL,borderRadius:16,padding:16,marginBottom:12}}>
           <p style={{fontSize:14,fontWeight:700,color:C.blue,marginBottom:12}}>
-            🔄 Situation B — Je suis remplaçant
+            Situation B — Je suis remplaçant
           </p>
-          <BigBtn label="🔄 Je remplace un collègue" onClick={onShowReplace} color={C.blue}/>
+          <BigBtn label="Je remplace un collègue" onClick={onShowReplace} color={C.blue}/>
         </div>
         <div style={{background:C.redL,borderRadius:16,padding:16}}>
           <p style={{fontSize:14,fontWeight:700,color:C.red,marginBottom:12}}>
-            🤒 Situation D — Signaler une absence
+            Situation D — Signaler une absence
           </p>
-          <BigBtn label="🤒 Je suis absent aujourd'hui" onClick={onShowAbsence} color={C.red}/>
+          <BigBtn label="Je suis absent aujourd'hui" onClick={onShowAbsence} color={C.red}/>
         </div>
       </>)}
 
@@ -76,23 +76,23 @@ export function TabService({driver,todayLog,circ,veh,onShowConfirm,onShowReplace
       {driver.status==="en_service"&&(
         <div style={{background:"#EFF6FF",borderRadius:16,padding:16}}>
           <p style={{fontSize:14,fontWeight:700,color:C.navy,marginBottom:12}}>
-            🔵 Situation C — Fin de service
+            Situation C — Fin de service
           </p>
-          <BigBtn label="🔵 Je termine mon service" onClick={onShowFin} color={C.navy}/>
+          <BigBtn label="Je termine mon service" onClick={onShowFin} color={C.navy}/>
         </div>
       )}
 
       {/* Absent → reprendre */}
       {driver.status==="absent"&&(<>
         <div style={{background:C.redL,borderRadius:16,padding:16,marginBottom:12,border:`1px solid #FCA5A5`}}>
-          <p style={{fontWeight:700,color:C.red,marginBottom:4}}>🤒 Absence en cours</p>
+          <p style={{fontWeight:700,color:C.red,marginBottom:4}}>Absence en cours</p>
           {driver.absence_motif&&<p style={{fontSize:14,color:"#1E293B"}}>Motif : {driver.absence_motif}</p>}
         </div>
         <div style={{background:C.greenL,borderRadius:16,padding:16}}>
           <p style={{fontSize:14,fontWeight:700,color:C.greenD,marginBottom:12}}>
-            ✅ Situation E — Retour de maladie
+            Situation E — Retour de maladie
           </p>
-          <BigBtn label="✅ Je reprends le service" onClick={onShowReprise}/>
+          <BigBtn label="Je reprends le service" onClick={onShowReprise}/>
         </div>
       </>)}
     </div>

@@ -125,14 +125,14 @@ export function DL({label,value}:{label:string;value:string}){
 // ── Constantes signalements ───────────────────────────────────────────────────
 
 export const SIGN_TYPES=[
-  {v:"panne",       e:"🔧",l:"Panne véhicule"},
-  {v:"voyant",      e:"💡",l:"Voyant moteur"},
-  {v:"accident",    e:"🚨",l:"Accident"},
-  {v:"retard",      e:"⏰",l:"Retard"},
-  {v:"degradation", e:"🪟",l:"Dégradation véhicule"},
-  {v:"enfant",      e:"👶",l:"Problème enfant"},
-  {v:"parent",      e:"👨‍👩‍👧",l:"Problème parent"},
-  {v:"autre",       e:"❓",l:"Autre"},
+  {v:"panne",       l:"Panne véhicule"},
+  {v:"voyant",      l:"Voyant moteur"},
+  {v:"accident",    l:"Accident"},
+  {v:"retard",      l:"Retard"},
+  {v:"degradation", l:"Dégradation véhicule"},
+  {v:"enfant",      l:"Problème enfant"},
+  {v:"parent",      l:"Problème parent"},
+  {v:"autre",       l:"Autre"},
 ];
 export const SIGN_LABELS:Record<string,string>=Object.fromEntries(SIGN_TYPES.map(s=>[s.v,s.l]));
 

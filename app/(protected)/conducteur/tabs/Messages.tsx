@@ -1,4 +1,5 @@
 "use client";
+import { RefreshCw, Zap, Inbox } from "lucide-react";
 import { C, fmtDateTime, isoToday } from "@/lib/constants";
 import type { Alerte, Incident, AbsenceEnfant, Enfant } from "@/lib/types";
 import { SIGN_TYPES } from "./shared";
@@ -28,7 +29,7 @@ export function TabMessages({
       <div style={{marginBottom:24}}>
         <div style={{fontWeight:800,fontSize:13,color:C.navy,textTransform:"uppercase",
           letterSpacing:0.5,marginBottom:12}}>
-          📨 Messages du gestionnaire
+          Messages du gestionnaire
           {unreadMsg>0&&<span style={{marginLeft:8,background:C.red,color:"#fff",
             borderRadius:99,padding:"2px 7px",fontSize:11}}>{unreadMsg} non lu(s)</span>}
         </div>
@@ -46,7 +47,7 @@ export function TabMessages({
                 padding:16,marginBottom:10,border:`2px solid ${isNew?C.amber:C.gray200}`,
                 boxShadow:isNew?"0 2px 12px rgba(217,119,6,0.15)":"none",opacity:isNew?1:0.75}}>
                 <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
-                  <span style={{fontSize:22}}>🔄</span>
+                  <span style={{display:"flex",alignItems:"center"}}><RefreshCw size={22} color={C.amber} /></span>
                   <div>
                     <div style={{fontWeight:800,fontSize:14,color:isNew?C.amber:C.gray}}>
                       Mission de remplacement
@@ -64,10 +65,10 @@ export function TabMessages({
                     background:C.green,color:"#fff",border:"none",
                     fontWeight:800,fontSize:14,cursor:"pointer",
                     boxShadow:"0 2px 8px rgba(22,163,74,0.25)"}}>
-                    ✅ J'ai pris connaissance
+                    J'ai pris connaissance
                   </button>
                 ):(
-                  <div style={{fontSize:12,color:C.green,fontWeight:700}}>✅ Prise en charge confirmée</div>
+                  <div style={{fontSize:12,color:C.green,fontWeight:700}}>Prise en charge confirmée</div>
                 )}
               </div>
             );
@@ -79,7 +80,7 @@ export function TabMessages({
                 padding:16,marginBottom:10,border:`2px solid ${isNew?"#3B82F6":C.gray200}`,
                 boxShadow:isNew?"0 2px 12px rgba(59,130,246,0.15)":"none",opacity:isNew?1:0.75}}>
                 <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
-                  <span style={{fontSize:22}}>⚡</span>
+                  <span style={{display:"flex",alignItems:"center"}}><Zap size={22} color="#2563EB" /></span>
                   <div>
                     <div style={{fontWeight:800,fontSize:14,color:isNew?"#2563EB":C.gray}}>
                       Message du gestionnaire
@@ -97,10 +98,10 @@ export function TabMessages({
                     background:"#2563EB",color:"#fff",border:"none",
                     fontWeight:800,fontSize:14,cursor:"pointer",
                     boxShadow:"0 2px 8px rgba(37,99,235,0.25)"}}>
-                    ✅ Confirmer lecture
+                    Confirmer lecture
                   </button>
                 ):(
-                  <div style={{fontSize:12,color:"#2563EB",fontWeight:700}}>✅ Lu et confirmé</div>
+                  <div style={{fontSize:12,color:"#2563EB",fontWeight:700}}>Lu et confirmé</div>
                 )}
               </div>
             );
@@ -122,7 +123,7 @@ export function TabMessages({
                   <span style={{fontSize:11,fontWeight:700,color:isNew?col:C.gray,
                     background:isNew?bg:"transparent",borderRadius:99,
                     padding:isNew?"2px 8px":"0"}}>
-                    {sev==="critique"?"🔴 Critique":sev==="haute"?"🟠 Important":"🔵 Info"}
+                    {sev==="critique"?"Critique":sev==="haute"?"Important":"Info"}
                   </span>
                 </div>
                 <span style={{fontSize:12,color:C.gray}}>{fmtDateTime(m.created_at)}</span>
@@ -136,7 +137,7 @@ export function TabMessages({
                   fontSize:12,padding:"6px 12px",borderRadius:8,
                   border:`1px solid ${C.green}`,background:C.greenL,
                   color:C.greenD,fontWeight:700,cursor:"pointer"}}>
-                  Lu ✓
+                  Lu
                 </button>
               )}
             </div>
@@ -149,7 +150,7 @@ export function TabMessages({
         <div style={{marginBottom:24}}>
           <div style={{fontWeight:800,fontSize:13,color:C.navy,textTransform:"uppercase",
             letterSpacing:0.5,marginBottom:12}}>
-            💬 Réponses à mes signalements
+            Réponses à mes signalements
           </div>
           {incWithResponse.map(inc=>{
             const stype=SIGN_TYPES.find(s=>s.v===inc.type);
@@ -159,7 +160,7 @@ export function TabMessages({
                 <div style={{display:"flex",justifyContent:"space-between",
                   alignItems:"flex-start",marginBottom:8,gap:8,flexWrap:"wrap"}}>
                   <span style={{fontWeight:700,fontSize:14,color:C.navy}}>
-                    {stype?.e||"⚡"} {stype?.l||inc.type}
+                    {stype?.l||inc.type}
                   </span>
                   <span style={{fontSize:12,color:C.gray}}>
                     {new Date(inc.reported_at).toLocaleDateString("fr-CH")}
@@ -170,7 +171,7 @@ export function TabMessages({
                 </p>
                 <div style={{background:C.greenL,borderRadius:10,padding:"10px 12px",
                   fontSize:14,color:C.green,fontWeight:600,lineHeight:1.5}}>
-                  {inc.response ? `💬 Réponse : ${inc.response}` : "✅ Signalement résolu par le gestionnaire"}
+                  {inc.response ? `Réponse : ${inc.response}` : "Signalement résolu par le gestionnaire"}
                 </div>
               </div>
             );
@@ -183,7 +184,7 @@ export function TabMessages({
         <div>
           <div style={{fontWeight:800,fontSize:13,color:C.navy,textTransform:"uppercase",
             letterSpacing:0.5,marginBottom:12}}>
-            👶 Absences de mon circuit — 30 derniers jours
+            Absences de mon circuit — 30 derniers jours
           </div>
           {absences.map(a=>{
             const enf=(a.enfant as{prenom?:string;nom?:string}|undefined);
@@ -216,7 +217,7 @@ export function TabMessages({
 
       {messages.length===0&&incWithResponse.length===0&&absences.length===0&&(
         <div style={{textAlign:"center",padding:"60px 20px",color:C.gray}}>
-          <div style={{fontSize:48}}>📭</div>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:10}}><Inbox size={48} color={C.gray400} /></div>
           <p style={{fontWeight:700,marginTop:12}}>Aucun message</p>
         </div>
       )}

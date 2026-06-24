@@ -1,4 +1,5 @@
 "use client";
+import { Inbox, BarChart2 } from "lucide-react";
 import { C, fmtHHMM } from "@/lib/constants";
 import type { ServiceLog, Incident } from "@/lib/types";
 import { schoolYearStart, SCHOOL_MONTHS, MON, calcDuration, SIGN_TYPES } from "./shared";
@@ -58,11 +59,11 @@ export function TabHistorique({
         <button onClick={()=>window.print()}
           style={{padding:"10px 16px",borderRadius:10,border:`1px solid ${C.green}`,
             background:C.greenL,color:C.greenD,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:16}}>
-          🖨️ Télécharger ce mois PDF
+          Télécharger ce mois PDF
         </button>
         {logs.length===0?(
           <div style={{textAlign:"center",padding:"32px 20px",color:C.gray}}>
-            <div style={{fontSize:40}}>📭</div>
+            <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><Inbox size={40} color={C.gray400} /></div>
             <p style={{fontWeight:700,marginTop:10}}>Aucun service ce mois</p>
           </div>
         ):logs.map(l=>(
@@ -77,15 +78,15 @@ export function TabHistorique({
                 <div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}>
                   {l.is_replacement&&(
                     <span style={{fontSize:11,fontWeight:700,color:C.blue,background:C.blueL,
-                      borderRadius:99,padding:"2px 7px"}}>🔄 Remplacement</span>
+                      borderRadius:99,padding:"2px 7px"}}>Remplacement</span>
                   )}
                   {l.status==="absent"&&(
                     <span style={{fontSize:11,fontWeight:700,color:C.red,background:C.redL,
-                      borderRadius:99,padding:"2px 7px"}}>🤒 Absent</span>
+                      borderRadius:99,padding:"2px 7px"}}>Absent</span>
                   )}
                   {l.status!=="absent"&&!l.is_replacement&&(
                     <span style={{fontSize:11,fontWeight:700,color:C.greenD,background:C.greenL,
-                      borderRadius:99,padding:"2px 7px"}}>✅ Service effectué</span>
+                      borderRadius:99,padding:"2px 7px"}}>Service effectué</span>
                   )}
                 </div>
               </div>
@@ -120,7 +121,7 @@ export function TabHistorique({
             <div style={{marginTop:20}}>
               <div style={{fontWeight:800,fontSize:13,color:C.navy,textTransform:"uppercase",
                 letterSpacing:0.5,marginBottom:12}}>
-                ⚡ Signalements ({monthIncs.length})
+                Signalements ({monthIncs.length})
               </div>
               {monthIncs.map(inc=>{
                 const stype=SIGN_TYPES.find(s=>s.v===inc.type);
@@ -132,7 +133,7 @@ export function TabHistorique({
                       alignItems:"flex-start",gap:8,marginBottom:6}}>
                       <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                         <span style={{fontWeight:700,fontSize:13,color:"#1E293B"}}>
-                          {stype?.e||"⚡"} {stype?.l||inc.type}
+                          {stype?.l||inc.type}
                         </span>
                         <span style={{fontSize:11,fontWeight:700,color:st.c,
                           background:st.bg,borderRadius:99,padding:"2px 7px"}}>
@@ -149,7 +150,7 @@ export function TabHistorique({
                     {inc.response&&(
                       <div style={{background:C.greenL,borderRadius:8,padding:"8px 10px",
                         fontSize:12,color:C.greenD,fontWeight:600}}>
-                        💬 {inc.response}
+                        {inc.response}
                       </div>
                     )}
                   </div>
@@ -174,7 +175,7 @@ export function TabHistorique({
         </button>
         <h2 style={{fontWeight:900,color:C.navy,fontSize:18,marginBottom:16}}>
           {histYear}-{histYear+1}
-          {histYear===currentSY&&" ⭐ (en cours)"}
+          {histYear===currentSY&&" (en cours)"}
         </h2>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
           {[
@@ -202,8 +203,8 @@ export function TabHistorique({
                   marginBottom:8,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
                 <span style={{fontWeight:700,color:"#1E293B",fontSize:14}}>{MON[mon]}</span>
                 <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                  {worked>0&&<span style={{fontSize:12,color:C.green,fontWeight:700}}>✅ {worked}j</span>}
-                  {absent>0&&<span style={{fontSize:12,color:C.red,fontWeight:700}}>🤒 {absent}j</span>}
+                  {worked>0&&<span style={{fontSize:12,color:C.green,fontWeight:700}}>{worked}j</span>}
+                  {absent>0&&<span style={{fontSize:12,color:C.red,fontWeight:700}}>{absent}j</span>}
                   {mLogs.length===0&&<span style={{fontSize:12,color:C.gray}}>—</span>}
                   <span style={{color:C.green,fontSize:16}}>→</span>
                 </div>
@@ -218,10 +219,10 @@ export function TabHistorique({
   // Niveau 1 — liste des années
   return(
     <div>
-      <h2 style={{fontWeight:900,color:C.navy,fontSize:18,marginBottom:16}}>📊 Mon historique</h2>
+      <h2 style={{fontWeight:900,color:C.navy,fontSize:18,marginBottom:16}}>Mon historique</h2>
       {histLogs.length===0?(
         <div style={{textAlign:"center",padding:"60px 20px",color:C.gray}}>
-          <div style={{fontSize:48}}>📋</div>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><BarChart2 size={48} color={C.gray400} /></div>
           <p style={{fontWeight:700,marginTop:12}}>Aucun historique disponible</p>
         </div>
       ):(
@@ -229,7 +230,7 @@ export function TabHistorique({
           <button onClick={()=>window.print()}
             style={{padding:"10px 16px",borderRadius:10,border:`1px solid ${C.green}`,
               background:C.greenL,color:C.greenD,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:16}}>
-            🖨️ Télécharger mon historique PDF
+            Télécharger mon historique PDF
           </button>
           {allYears.map(y=>{
             const yLogs=logsForYear(y);
@@ -248,7 +249,7 @@ export function TabHistorique({
                     {y}-{y+1}
                     {isCurrent&&<span style={{marginLeft:8,fontSize:12,fontWeight:700,
                       color:C.green,background:C.greenL,borderRadius:99,padding:"2px 8px"}}>
-                      En cours ⭐
+                      En cours
                     </span>}
                   </div>
                   <div style={{fontSize:12,color:C.gray,marginTop:4}}>

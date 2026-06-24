@@ -51,7 +51,7 @@ export function TabFiche({driver,circ,veh,enfantsCircuit,editTel,telValue,telSav
       <div style={{background:"#fff",borderRadius:16,padding:16,marginBottom:16,
         boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <span style={{fontWeight:700,color:C.navy,fontSize:14}}>📞 Téléphone</span>
+          <span style={{fontWeight:700,color:C.navy,fontSize:14}}>Téléphone</span>
           {!editTel&&(
             <button onClick={()=>{onSetEditTel(true);onSetTelValue(driver.tel||"");}}
               style={{fontSize:13,color:C.green,background:"none",border:"none",cursor:"pointer",fontWeight:700}}>
@@ -80,7 +80,7 @@ export function TabFiche({driver,circ,veh,enfantsCircuit,editTel,telValue,telSav
       {/* Circuit + véhicule */}
       {circ&&(
         <div style={{background:C.greenL,borderRadius:16,padding:16,marginBottom:16}}>
-          <div style={{fontWeight:800,color:C.greenD,marginBottom:10,fontSize:14}}>🗺️ Circuit habituel</div>
+          <div style={{fontWeight:800,color:C.greenD,marginBottom:10,fontSize:14}}>Circuit habituel</div>
           <DL label="Circuit"   value={`${circ.emoji||""} ${circ.nom||"—"}`}/>
           <DL label="École"     value={circ.cercle?.nom||"—"}/>
           <DL label="Enfants"   value={circ.enfants_count!=null?`${circ.enfants_count} enfants`:"—"}/>
@@ -92,7 +92,7 @@ export function TabFiche({driver,circ,veh,enfantsCircuit,editTel,telValue,telSav
       {enfantsCircuit.length>0&&(
         <div style={{background:"#fff",borderRadius:16,padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
           <div style={{fontWeight:800,color:C.navy,marginBottom:12,fontSize:14}}>
-            👶 Enfants du circuit ({enfantsCircuit.length})
+            Enfants du circuit ({enfantsCircuit.length})
           </div>
           {enfantsCircuit.map(e=>(
             <div key={e.id} style={{padding:"8px 0",borderBottom:"1px solid #F1F5F9",
