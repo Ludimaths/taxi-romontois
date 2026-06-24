@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDate } from "@/lib/constants";
 import { Badge, Card, InfoBox, Btn, Modal, TabBar } from "@/components/ui";
+import { CheckCircle2, AlertTriangle, Wrench } from "lucide-react";
 import type { Vehicule, Circuit, Conducteur } from "@/lib/types";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -115,7 +116,7 @@ function VehiculeForm({ init, circuits, conducteurs, onSave, onCancel, saving, i
         <Btn full onClick={() => onSave(f as Partial<Vehicule> & { conducteur_new_id?: number })}
           disabled={saving || (!!isNew && (!(f.id as string) || !(f.plaque as string) || !(f.marque as string) || !(f.modele as string)))}
           color={C.green}>
-          {saving ? "Enregistrement…" : "✅ Enregistrer"}
+          {saving ? "Enregistrement…" : "Enregistrer"}
         </Btn>
         <Btn outline onClick={onCancel} color={C.gray600}>Annuler</Btn>
       </div>
@@ -240,14 +241,14 @@ export default function VehiculesPage() {
               fontWeight: 700, fontSize: 14, padding: 0 }}>
             ← Tous les véhicules
           </button>
-          <Btn small onClick={() => setEditModal(true)} color={C.navyL}>✏️ Modifier</Btn>
+          <Btn small onClick={() => setEditModal(true)} color={C.navyL}>Modifier</Btn>
         </div>
 
         {activeRep && (
           <div style={{ background: C.redL, borderRadius: 10, padding: "10px 16px", marginBottom: 14,
             border: `1px solid #FCA5A5`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <span style={{ fontWeight: 700, fontSize: 13, color: C.red }}>🔧 Réparation en cours — </span>
+              <span style={{ fontWeight: 700, fontSize: 13, color: C.red, display: "inline-flex", alignItems: "center", gap: 5 }}><Wrench size={13} /> Réparation en cours — </span>
               <span style={{ fontSize: 13, color: C.red }}>{activeRep.description}</span>
             </div>
             <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, fontWeight: 700,
@@ -280,8 +281,9 @@ export default function VehiculesPage() {
               </div>
               {(ctWarn || assWarn) && (
                 <div style={{ marginTop: 12, padding: "8px 12px", background: C.redL, borderRadius: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.red }}>
-                    ⚠ {ctWarn && "CT "}
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.red, display: "flex", alignItems: "center", gap: 5 }}>
+                    <AlertTriangle size={12} />
+                    {ctWarn && "CT "}
                     {ctWarn && assWarn && "· "}
                     {assWarn && "Assurance "}
                     expire bientôt (&lt; 60 jours)
@@ -330,8 +332,9 @@ export default function VehiculesPage() {
                 {v.notes && (
                   <div style={{ marginTop: 12, padding: "10px 14px", background: C.amberL, borderRadius: 10,
                     borderLeft: `3px solid ${C.amber}` }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, textTransform: "uppercase", marginBottom: 4 }}>
-                      🔧 Remarques mécanicien
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, textTransform: "uppercase", marginBottom: 4,
+                      display: "flex", alignItems: "center", gap: 5 }}>
+                      <Wrench size={11} /> Remarques mécanicien
                     </div>
                     <div style={{ fontSize: 13, color: C.gray800, lineHeight: 1.5 }}>{v.notes}</div>
                   </div>
@@ -359,8 +362,8 @@ export default function VehiculesPage() {
               <div>
                 {reparations.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "40px 0", color: C.gray400 }}>
-                    <div style={{ fontSize: 36 }}>✅</div>
-                    <p style={{ fontWeight: 700, marginTop: 10 }}>Aucune réparation enregistrée</p>
+                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}><CheckCircle2 size={36} color={C.green} /></div>
+                    <p style={{ fontWeight: 700, marginTop: 0 }}>Aucune réparation enregistrée</p>
                   </div>
                 ) : (
                   <div>
@@ -376,7 +379,7 @@ export default function VehiculesPage() {
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 700, fontSize: 13, color: isActive ? C.red : C.gray800 }}>
-                                {isActive ? "🔧 " : ""}{r.description}
+                                {r.description}
                               </div>
                               <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>
                                 {new Date(r.created_at).toLocaleDateString("fr-FR", {
@@ -486,7 +489,7 @@ export default function VehiculesPage() {
                 <div style={{ background: C.gray50, borderRadius: 6, padding: "6px 9px", gridColumn: "1/-1" }}>
                   <div style={{ fontSize: 9, color: C.gray400, textTransform: "uppercase" }}>Conducteur</div>
                   <div style={{ fontWeight: 600, color: cond ? C.gray800 : C.amber, marginTop: 1 }}>
-                    {cond ? `${cond.prenom} ${cond.nom}` : "⚠ Non affecté"}
+                    {cond ? `${cond.prenom} ${cond.nom}` : "Non affecté"}
                   </div>
                 </div>
                 {circ && (
