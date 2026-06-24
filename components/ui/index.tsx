@@ -140,3 +140,82 @@ export function Stat({ label, value, sub, icon, color, onClick }:
     </div>
   );
 }
+
+// ── BottomSheet ────────────────────────────────────────────────────────────────
+export function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "flex-end", background: "rgba(0,0,0,0.55)" }} onClick={onClose}>
+      <div style={{ width: "100%", maxHeight: "94vh", overflowY: "auto", background: C.white, borderRadius: "24px 24px 0 0", padding: "24px 20px 80px" }} onClick={e => e.stopPropagation()}>
+        <div style={{ width: 40, height: 4, background: "#CBD5E1", borderRadius: 4, margin: "0 auto 20px" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: C.navy, margin: 0 }}>{title}</h2>
+          <button onClick={onClose} style={{ fontSize: 28, background: "none", border: "none", cursor: "pointer", color: C.gray600, lineHeight: 1, padding: "0 4px", minWidth: 44, minHeight: 44 }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── BigButton ──────────────────────────────────────────────────────────────────
+export function BigButton({ icon, label, onClick, color = C.navy, outline = false, disabled = false }: {
+  icon?: string; label: string; onClick: () => void;
+  color?: string; outline?: boolean; disabled?: boolean;
+}) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      width: "100%", padding: "16px 20px", marginBottom: 10, borderRadius: 16,
+      fontWeight: 800, fontSize: 15, cursor: disabled ? "not-allowed" : "pointer",
+      border: outline ? `2px solid ${color}` : "none",
+      background: outline ? C.white : disabled ? "#CBD5E1" : color,
+      color: outline ? color : C.white,
+      opacity: disabled ? 0.6 : 1,
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 52,
+    }}>
+      {icon && <span style={{ fontSize: 18 }}>{icon}</span>}{label}
+    </button>
+  );
+}
+
+// ── FormField ──────────────────────────────────────────────────────────────────
+const fieldInp: CSSProperties = {
+  width: "100%", padding: "14px 16px", borderRadius: 12,
+  border: "1.5px solid #CBD5E1", fontSize: 15, color: C.gray800,
+  background: C.white, boxSizing: "border-box",
+};
+export function FormField({ label, type = "text", value, onChange, placeholder = "", required = false }: {
+  label: string; type?: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; required?: boolean;
+}) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.gray600, marginBottom: 6 }}>
+        {label}{required && <span style={{ color: C.red }}> *</span>}
+      </label>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={fieldInp} />
+    </div>
+  );
+}
+
+// ── TextAreaField ──────────────────────────────────────────────────────────────
+export function TextAreaField({ label, value, onChange, rows = 3, placeholder = "" }: {
+  label: string; value: string; onChange: (v: string) => void; rows?: number; placeholder?: string;
+}) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.gray600, marginBottom: 6 }}>{label}</label>
+      <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows} placeholder={placeholder}
+        style={{ ...fieldInp, resize: "vertical" } as CSSProperties} />
+    </div>
+  );
+}
+
+// ── DataRow ────────────────────────────────────────────────────────────────────
+export function DataRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.gray100}`, fontSize: 14 }}>
+      <span style={{ color: C.gray600, fontWeight: 600 }}>{label}</span>
+      <span style={{ color: C.gray800, fontWeight: 700, textAlign: "right", maxWidth: "65%" }}>{value}</span>
+    </div>
+  );
+}

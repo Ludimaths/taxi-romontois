@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C } from "@/lib/constants";
+import { C, fmtDateTime } from "@/lib/constants";
 import { Badge, Btn, Modal, InfoBox } from "@/components/ui";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -37,13 +37,6 @@ interface Message {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmtDTLong = (d: string) => {
-  const dt = new Date(d);
-  const date = dt.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const h = String(dt.getHours()).padStart(2, "0");
-  const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${date} à ${h}h${m}`;
-};
 
 const inp: React.CSSProperties = {
   width: "100%", padding: "10px 12px", borderRadius: 10,
@@ -358,7 +351,7 @@ export default function ParentsPage() {
                       {m.message.replace(/^\[Pour[^\]]+\]\s*/, "")}
                     </p>
                     <div style={{ fontSize: 11, color: C.gray400, marginTop: 3 }}>
-                      {fmtDTLong(m.created_at)} · {m.read ? "✓ Lu" : "⏳ Non lu"}
+                      {fmtDateTime(m.created_at)} · {m.read ? "✓ Lu" : "⏳ Non lu"}
                     </div>
                   </div>
                 </div>

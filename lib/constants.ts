@@ -3,14 +3,18 @@ export const C = {
   navyL: "#1565C0",
   sky: "#42A5F5",
   skyL: "#E3F2FD",
+  blue: "#3B82F6",
+  blueL: "#DBEAFE",
   green: "#16A34A",
   greenL: "#DCFCE7",
+  greenD: "#15803D",
   red: "#DC2626",
   redL: "#FEE2E2",
   amber: "#D97706",
   amberL: "#FEF3C7",
   purple: "#7C3AED",
   purpleL: "#EDE9FE",
+  gray: "#64748B",
   gray50: "#F8FAFC",
   gray100: "#F1F5F9",
   gray200: "#E2E8F0",
@@ -143,6 +147,23 @@ export const fmtDateTime = (d?: string | null): string => {
   const m     = String(dt.getMinutes()).padStart(2, "0");
   return `${day}/${month}/${year} à ${h}h${m}`;
 };
+
+// Date ISO du jour : "2026-06-24"
+export const isoToday = (): string => new Date().toISOString().slice(0, 10);
+
+// Heure HH:MM depuis une date ISO timestamp
+export const fmtTime = (d: string): string =>
+  new Date(d).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
+
+// Heure HH:MM depuis un timestamp ISO ou une chaîne "HH:MM:SS"
+export const fmtHHMM = (d?: string | null): string => {
+  if (!d) return "—";
+  const t = d.includes("T") ? new Date(d) : new Date(`1970-01-01T${d}`);
+  return t.toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
+};
+
+// Heure courante pour insertion DB : "14:30:00"
+export const nowTimeStr = (): string => new Date().toTimeString().slice(0, 8);
 
 // Email conducteur depuis prenom + nom
 export const conducteurEmail = (prenom: string, nom: string): string => {

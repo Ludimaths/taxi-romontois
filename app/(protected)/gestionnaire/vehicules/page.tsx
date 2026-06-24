@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C } from "@/lib/constants";
+import { C, fmtDate } from "@/lib/constants";
 import { Badge, Card, InfoBox, Btn, Modal, TabBar } from "@/components/ui";
 import type { Vehicule, Circuit, Conducteur } from "@/lib/types";
 import { QRCodeSVG } from "qrcode.react";
@@ -25,12 +25,11 @@ const daysBetween = (d?: string | null) => {
 const alertCT = (v: Vehicule) => daysBetween(v.ct_date) < 60;
 const alertAss = (v: Vehicule) => daysBetween(v.assurance_date) < 60;
 
-const fd = (d?: string | null) => d || "—";
 
 interface Reparation {
   id: number;
   description: string;
-  status: string;
+  statut: string;
   montant?: number;
   created_at: string;
   notes?: string;
@@ -221,7 +220,7 @@ export default function VehiculesPage() {
   if (sel && v) {
     const cond = v.conducteur as Conducteur | undefined;
     const circ = v.circuit as Circuit | undefined;
-    const activeRep = reparations.find(r => ACTIVE_REP.includes(r.status));
+    const activeRep = reparations.find(r => ACTIVE_REP.includes(r.statut));
     const ctWarn = alertCT(v);
     const assWarn = alertAss(v);
 
@@ -252,9 +251,9 @@ export default function VehiculesPage() {
               <span style={{ fontSize: 13, color: C.red }}>{activeRep.description}</span>
             </div>
             <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, fontWeight: 700,
-              background: REP_STATUS[activeRep.status]?.bg ?? C.amberL,
-              color: REP_STATUS[activeRep.status]?.color ?? C.amber }}>
-              {REP_STATUS[activeRep.status]?.label ?? activeRep.status}
+              background: REP_STATUS[activeRep.statut]?.bg ?? C.amberL,
+              color: REP_STATUS[activeRep.statut]?.color ?? C.amber }}>
+              {REP_STATUS[activeRep.statut]?.label ?? activeRep.statut}
             </span>
           </div>
         )}
@@ -273,8 +272,8 @@ export default function VehiculesPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <InfoBox label="Places"       value={`${v.places}${v.places_handi > 0 ? ` + ${v.places_handi} ha` : ""}`} />
                 <InfoBox label="Kilométrage"  value={`${(v.km ?? 0).toLocaleString("fr-FR")} km`} highlight={(v.km ?? 0) > 130000 ? C.red : undefined} />
-                <InfoBox label="CT"           value={fd(v.ct_date)}  highlight={ctWarn ? C.red : undefined} />
-                <InfoBox label="Assurance"    value={fd(v.assurance_date)} highlight={assWarn ? C.red : undefined} />
+                <InfoBox label="CT"           value={fmtDate(v.ct_date)}  highlight={ctWarn ? C.red : undefined} />
+                <InfoBox label="Assurance"    value={fmtDate(v.assurance_date)} highlight={assWarn ? C.red : undefined} />
                 <InfoBox label="Conducteur"   value={cond ? `${cond.prenom} ${cond.nom}` : "Non affecté"}
                   highlight={!cond ? C.amber : undefined} />
                 <InfoBox label="Circuit"      value={circ ? `${circ.emoji} ${circ.nom}` : "—"} />
@@ -324,8 +323,8 @@ export default function VehiculesPage() {
                   <InfoBox label="Places handi"  value={String(v.places_handi)} />
                   <InfoBox label="Kilométrage"   value={`${(v.km ?? 0).toLocaleString("fr-FR")} km`} />
                   <InfoBox label="État"          value={stateLabel(v.etat as string)} />
-                  <InfoBox label="Contrôle technique" value={fd(v.ct_date)} highlight={ctWarn ? C.red : undefined} />
-                  <InfoBox label="Assurance"     value={fd(v.assurance_date)} highlight={assWarn ? C.red : undefined} />
+                  <InfoBox label="Contrôle technique" value={fmtDate(v.ct_date)} highlight={ctWarn ? C.red : undefined} />
+                  <InfoBox label="Assurance"     value={fmtDate(v.assurance_date)} highlight={assWarn ? C.red : undefined} />
                   {v.date_vidange && <InfoBox label="Dernière vidange" value={v.date_vidange} />}
                 </div>
                 {cond && (
@@ -357,12 +356,12 @@ export default function VehiculesPage() {
                 ) : (
                   <div>
                     <p style={{ fontSize: 13, color: C.gray600, marginBottom: 14 }}>
-                      {reparations.filter(r => ACTIVE_REP.includes(r.status)).length} réparation(s) active(s) ·{" "}
+                      {reparations.filter(r => ACTIVE_REP.includes(r.statut)).length} réparation(s) active(s) ·{" "}
                       {reparations.length} au total
                     </p>
                     {reparations.map(r => {
-                      const cfg = REP_STATUS[r.status] ?? { label: r.status, color: C.gray600, bg: C.gray100 };
-                      const isActive = ACTIVE_REP.includes(r.status);
+                      const cfg = REP_STATUS[r.statut] ?? { label: r.statut, color: C.gray600, bg: C.gray100 };
+                      const isActive = ACTIVE_REP.includes(r.statut);
                       return (
                         <div key={r.id} style={{ padding: "12px 0", borderBottom: `1px solid ${C.gray100}` }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
@@ -490,8 +489,8 @@ export default function VehiculesPage() {
               </div>
               <div style={{ borderTop: `1px solid ${C.gray100}`, paddingTop: 8, fontSize: 11, color: C.gray400,
                 display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ color: ctW ? C.red : undefined, fontWeight: ctW ? 700 : undefined }}>CT: {fd(veh.ct_date)}</span>
-                <span style={{ color: assW ? C.red : undefined, fontWeight: assW ? 700 : undefined }}>Ass: {fd(veh.assurance_date)}</span>
+                <span style={{ color: ctW ? C.red : undefined, fontWeight: ctW ? 700 : undefined }}>CT: {fmtDate(veh.ct_date)}</span>
+                <span style={{ color: assW ? C.red : undefined, fontWeight: assW ? 700 : undefined }}>Ass: {fmtDate(veh.assurance_date)}</span>
               </div>
             </Card>
           );

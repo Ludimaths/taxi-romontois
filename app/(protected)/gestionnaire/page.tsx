@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { C, statusColor, statusLabel, todayStr } from "@/lib/constants";
+import { C, statusColor, statusLabel, todayStr, isoToday, fmtTime, fmtDateTime } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal } from "@/components/ui";
 import type {
   Conducteur, Circuit, Vehicule, AbsenceEnfant, Enfant,
@@ -12,10 +12,6 @@ import type {
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SB = ReturnType<typeof createClient>;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const isoToday = () => new Date().toISOString().slice(0, 10);
-const fmtTime  = (d: string) => new Date(d).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
-const fmtDT    = (d: string) => new Date(d).toLocaleString("fr-CH", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 const inputSt: React.CSSProperties = {
   width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.gray200}`,
@@ -231,7 +227,7 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
             {incident.description}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <InfoBox label="Signalé le" value={fmtDT(incident.reported_at)} />
+            <InfoBox label="Signalé le" value={fmtDateTime(incident.reported_at)} />
             <InfoBox label="Conducteur" value={drv ? `${drv.prenom} ${drv.nom}` : "—"} />
             <InfoBox label="Véhicule"   value={veh?.plaque || "—"} />
             <InfoBox label="Circuit"    value={circ ? `${circ.emoji} ${circ.nom}` : "—"} />
@@ -652,7 +648,7 @@ export default function GestionnaireDashboard() {
                       <div style={{ fontSize: 11, color: C.gray400, marginTop: 1 }}>
                         {i.conducteur ? `${i.conducteur.prenom} ${i.conducteur.nom}` : "—"}
                         {i.vehicule ? ` · ${i.vehicule.plaque}` : ""}
-                        {" · "}{fmtDT(i.reported_at)}
+                        {" · "}{fmtDateTime(i.reported_at)}
                       </div>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 export type Role = "gestionnaire" | "conducteur" | "mecanicien" | "parent" | "admin";
 
 export type DriverStatus = "en_service" | "en_attente" | "absent" | "disponible" | "termine";
-export type VehicleState = "en_service" | "receptionne" | "en_attente_piece" | "en_reparation" | "repare" | "attention";
+export type VehicleState = "en_service" | "bon" | "receptionne" | "atelier" | "en_attente_piece" | "en_reparation" | "repare" | "attention";
 export type IncidentStatus = "en_attente" | "en_cours" | "resolu";
 export type AlertSeverity = "normale" | "haute" | "critique";
 export type RepairStatus = "receptionne" | "en_attente_validation" | "en_attente_piece" | "en_reparation" | "repare" | "remis_en_circulation" | "annulee";

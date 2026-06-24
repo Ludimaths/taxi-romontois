@@ -1,20 +1,10 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C, statusColor, statusLabel, fmtDate, fmtDateTime, conducteurEmail } from "@/lib/constants";
+import { C, statusColor, statusLabel, fmtDate, fmtDateTime, conducteurEmail, isoToday } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal, TabBar } from "@/components/ui";
 import type { Conducteur, Circuit, Vehicule } from "@/lib/types";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const isoToday   = () => new Date().toISOString().slice(0, 10);
-const fd         = (d?: string | null) => d ? new Date(d).toLocaleDateString("fr-CH") : "—";
-const fmtDTLong  = (d: string) => {
-  const dt = new Date(d);
-  const date = dt.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const h = String(dt.getHours()).padStart(2, "0");
-  const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${date} à ${h}h${m}`;
-};
 
 function genPassword() {
   const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -335,7 +325,7 @@ export default function ConducteursPage() {
                 <InfoBox label="Véhicule"      value={d.vehicule?.plaque} />
                 <InfoBox label="Circuit"       value={circ ? `${circ.emoji} ${circ.nom}` : "—"} />
                 <InfoBox label="Permis"        value={d.permis || "—"} highlight={permisExpireSoon ? C.red : undefined} />
-                <InfoBox label="Validité"      value={d.permis_exp ? fd(d.permis_exp) : "—"} highlight={permisExpireSoon ? C.red : undefined} />
+                <InfoBox label="Validité"      value={d.permis_exp ? fmtDate(d.permis_exp) : "—"} highlight={permisExpireSoon ? C.red : undefined} />
                 <InfoBox label="École"         value={circ?.cercle?.nom} />
                 <InfoBox label="Tachygraphe"   value={d.tachygraphe ? "Requis" : "Non requis"} />
                 {d.absence_motif && <InfoBox label="Motif absence" value={d.absence_motif} full highlight={C.red} />}

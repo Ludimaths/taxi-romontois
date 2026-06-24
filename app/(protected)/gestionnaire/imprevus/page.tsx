@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C } from "@/lib/constants";
+import { C, fmtDateTime } from "@/lib/constants";
 import type { Conducteur, Alerte } from "@/lib/types";
 
 type ImprevuType = "absence" | "ecole" | "parent" | "vehicule" | "meteo" | "autre";
@@ -41,9 +41,6 @@ const SEVERITY_MAP: Record<ImprevuType, "haute" | "normale"> = {
   autre:    "normale",
 };
 
-const fmtDT = (d: string) => new Date(d).toLocaleString("fr-CH", {
-  day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
-});
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
   false:  { label: "En attente", color: C.amber,  bg: C.amberL },
@@ -409,7 +406,7 @@ export default function ImprevusPage() {
                       {g.message.replace(/^\[.*?\]\s*/, "").length > 120 ? "…" : ""}
                     </div>
                     <div style={{ fontSize: 11, color: C.gray400, marginTop: 4 }}>
-                      {fmtDT(g.at)} · {totalCount} destinataire(s)
+                      {fmtDateTime(g.at)} · {totalCount} destinataire(s)
                     </div>
                   </div>
                 </div>
