@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,12 +11,15 @@ export async function POST(req: NextRequest) {
     if (password.length < 8) {
       return NextResponse.json({ error: "Mot de passe trop court (min 8 caractères)" }, { status: 400 });
     }
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error("[set-password] SUPABASE_SERVICE_ROLE_KEY manquant");
-      return NextResponse.json({ error: "Configuration serveur manquante" }, { status: 500 });
-    }
 
-    const supabase = await createServiceClient();
+    let supabase;
+    try {
+      supabase = createAdminClient();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[set-password]", msg);
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
 
     // Vérifier que l'utilisateur existe dans auth.users
     const { data: userData, error: fetchErr } = await supabase.auth.admin.getUserById(userId);
@@ -32,27 +35,21 @@ export async function POST(req: NextRequest) {
     console.log("[set-password] utilisateur trouvé:", {
       email: u.email,
       confirmed: u.email_confirmed_at,
-      created: u.created_at,
       id: u.id,
     });
 
-    // Mise à jour du mot de passe + confirmation forcée de l'email
-    // email_confirm: true garantit que email_confirmed_at est renseigné → connexion possible
+    // Mise à jour mot de passe + confirmation email forcée
     const { data: updateData, error: updateErr } = await supabase.auth.admin.updateUserById(
       userId,
       { password, email_confirm: true }
     );
 
     if (updateErr) {
-      console.error("[set-password] erreur updateUserById:", updateErr.message, updateErr);
+      console.error("[set-password] erreur updateUserById:", updateErr.message);
       return NextResponse.json({ error: updateErr.message }, { status: 500 });
     }
 
-    console.log("[set-password] succès:", {
-      email: updateData?.user?.email,
-      confirmed: updateData?.user?.email_confirmed_at,
-    });
-
+    console.log("[set-password] succès:", updateData?.user?.email);
     return NextResponse.json({
       ok: true,
       email: updateData?.user?.email ?? u.email,

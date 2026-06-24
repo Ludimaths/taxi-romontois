@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 
 function buildEmail(prenom: string, nom: string): string {
   const clean = (s: string) =>
@@ -31,7 +31,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "conducteurId, prenom et nom sont requis" }, { status: 400 });
     }
 
-    const supabase = await createServiceClient();
+    let supabase;
+    try {
+      supabase = createAdminClient();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[create-account]", msg);
+      return NextResponse.json({ error: msg }, { status: 500 });
+    }
+
     const email = buildEmail(prenom, nom);
     const password = buildPassword();
 
@@ -68,7 +76,6 @@ export async function POST(req: NextRequest) {
 
     if (profErr) {
       console.error("[create-account] Profile error:", profErr.message);
-      // Nettoyage : supprime le compte Auth si le profil échoue
       await supabase.auth.admin.deleteUser(uid);
       return NextResponse.json({ error: `Erreur création profil : ${profErr.message}` }, { status: 500 });
     }
