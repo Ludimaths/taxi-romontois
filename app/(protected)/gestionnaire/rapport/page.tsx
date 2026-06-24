@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { C, statusLabel, todayStr, fmtDate, fmtDateTime } from "@/lib/constants";
 import { Badge, Card, Avatar } from "@/components/ui";
 import type { Conducteur, Circuit, Incident, Alerte, AbsenceEnfant, Reparation } from "@/lib/types";
+import { AlertTriangle, MapPin, AlertCircle, Bell, Wrench, Baby, UserX, RefreshCw } from "lucide-react";
 
 type Periode = "jour" | "semaine" | "mois";
 
@@ -106,15 +107,15 @@ export default function RapportPage() {
       {/* Résumé flash */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 22 }}>
         {[
-          { label: "Absents", val: absents.length, color: absents.length > 0 ? C.red : C.green, icon: "⚠️" },
-          { label: "Circuits non couverts", val: nonCouverts.length, color: nonCouverts.length > 0 ? C.red : C.green, icon: "🗺" },
-          { label: "Incidents", val: incidents.length, color: incidents.length > 0 ? C.amber : C.green, icon: "⚡" },
-          { label: "Alertes critiques", val: alertesCritiques.length, color: alertesCritiques.length > 0 ? C.red : C.green, icon: "🔴" },
+          { label: "Absents", val: absents.length, color: absents.length > 0 ? C.red : C.green, icon: <UserX size={28} color={absents.length > 0 ? C.red : C.green} /> },
+          { label: "Circuits non couverts", val: nonCouverts.length, color: nonCouverts.length > 0 ? C.red : C.green, icon: <MapPin size={28} color={nonCouverts.length > 0 ? C.red : C.green} /> },
+          { label: "Incidents", val: incidents.length, color: incidents.length > 0 ? C.amber : C.green, icon: <AlertCircle size={28} color={incidents.length > 0 ? C.amber : C.green} /> },
+          { label: "Alertes critiques", val: alertesCritiques.length, color: alertesCritiques.length > 0 ? C.red : C.green, icon: <Bell size={28} color={alertesCritiques.length > 0 ? C.red : C.green} /> },
         ].map(s => (
           <div key={s.label} style={{ background: C.white, borderRadius: 12, padding: "18px 22px",
             border: `2px solid ${s.val > 0 ? s.color + "60" : C.gray200}`,
             display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ fontSize: 28 }}>{s.icon}</div>
+            <div style={{ display: "flex", alignItems: "center" }}>{s.icon}</div>
             <div>
               <div style={{ fontSize: 32, fontWeight: 900, color: s.val > 0 ? s.color : C.gray800 }}>{s.val}</div>
               <div style={{ fontSize: 12, color: C.gray600 }}>{s.label}</div>
@@ -128,7 +129,7 @@ export default function RapportPage() {
         <Card style={{ marginBottom: 22 }}>
           <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.gray100}`,
             fontWeight: 700, color: C.gray800, fontSize: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>🔄 Remplacements du jour ({remplacements.length})</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 7 }}><RefreshCw size={15} /> Remplacements du jour ({remplacements.length})</span>
             {remplacements.length > 0 && (
               <span style={{ fontSize: 12, color: remplacements.every(r => r.remplacant_id) ? C.green : C.amber, fontWeight: 700 }}>
                 {remplacements.filter(r => r.status === "couvert").length}/{remplacements.length} couverts
@@ -137,7 +138,7 @@ export default function RapportPage() {
           </div>
           {remplacements.length === 0 ? (
             <div style={{ padding: "20px 18px", textAlign: "center", color: C.green, fontWeight: 600, fontSize: 13 }}>
-              ✅ Aucun remplacement aujourd'hui
+              Aucun remplacement aujourd'hui
             </div>
           ) : remplacements.map(r => {
             const circ = r.circuit as { emoji?: string; nom?: string; num?: string } | undefined;
@@ -181,10 +182,10 @@ export default function RapportPage() {
                         <div style={{ fontWeight: 800, fontSize: 14, color: C.gray800 }}>
                           {r.remplacant?.prenom} {r.remplacant?.nom}
                         </div>
-                        <div style={{ fontSize: 12, color: C.green, marginTop: 3 }}>✅ En service</div>
+                        <div style={{ fontSize: 12, color: C.green, marginTop: 3 }}>En service</div>
                       </>
                     ) : (
-                      <div style={{ fontWeight: 700, fontSize: 13, color: C.amber }}>⚠️ À assigner</div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: C.amber }}>À assigner</div>
                     )}
                   </div>
                 </div>
@@ -204,10 +205,10 @@ export default function RapportPage() {
         {/* Conducteurs absents + remplacements */}
         <Card>
           <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.gray100}`, fontWeight: 700, color: C.gray800, fontSize: 14 }}>
-            ⚠️ Conducteurs absents ({absents.length})
+            Conducteurs absents ({absents.length})
           </div>
           {absents.length === 0
-            ? <div style={{ padding: 20, textAlign: "center", color: C.green, fontWeight: 600, fontSize: 13 }}>✅ Aucun absent</div>
+            ? <div style={{ padding: 20, textAlign: "center", color: C.green, fontWeight: 600, fontSize: 13 }}>Aucun absent</div>
             : absents.map(d => {
               const circ = circuits.find(c => c.id === d.circuit_id);
               const remplacant = drivers.find(r => r.circuit_id === d.circuit_id && r.id !== d.id && r.status === "en_service");
@@ -226,9 +227,9 @@ export default function RapportPage() {
                       <strong>{circ.emoji} {circ.nom}</strong>
                       {remplacant
                         ? <div style={{ marginTop: 4, color: C.green, fontWeight: 600 }}>
-                            ✅ Remplacé par {remplacant.prenom} {remplacant.nom}
+                            Remplacé par {remplacant.prenom} {remplacant.nom}
                           </div>
-                        : <div style={{ marginTop: 4, color: C.red, fontWeight: 600 }}>⚠ Non couvert</div>
+                        : <div style={{ marginTop: 4, color: C.red, fontWeight: 600 }}>Non couvert</div>
                       }
                     </div>
                   )}
@@ -241,10 +242,10 @@ export default function RapportPage() {
         {/* Circuits non couverts */}
         <Card>
           <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.gray100}`, fontWeight: 700, color: C.gray800, fontSize: 14 }}>
-            🗺 Circuits non couverts ({nonCouverts.length})
+            Circuits non couverts ({nonCouverts.length})
           </div>
           {nonCouverts.length === 0
-            ? <div style={{ padding: 20, textAlign: "center", color: C.green, fontWeight: 600, fontSize: 13 }}>✅ Tous les circuits sont couverts</div>
+            ? <div style={{ padding: 20, textAlign: "center", color: C.green, fontWeight: 600, fontSize: 13 }}>Tous les circuits sont couverts</div>
             : nonCouverts.map(c => (
               <div key={c.id} style={{ padding: "12px 18px", borderBottom: `1px solid ${C.gray100}`,
                 display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -261,7 +262,7 @@ export default function RapportPage() {
         {/* Absences enfants */}
         <Card>
           <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.gray100}`, fontWeight: 700, color: C.gray800, fontSize: 14 }}>
-            🧒 Absences enfants ({absences.length})
+            Absences enfants ({absences.length})
           </div>
           {absences.length === 0
             ? <div style={{ padding: 20, textAlign: "center", color: C.gray400, fontSize: 13 }}>Aucune absence signalée</div>
@@ -284,7 +285,7 @@ export default function RapportPage() {
         {/* Incidents */}
         <Card>
           <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.gray100}`, fontWeight: 700, color: C.gray800, fontSize: 14 }}>
-            ⚡ Incidents ({incidents.length})
+            Incidents ({incidents.length})
           </div>
           {incidents.length === 0
             ? <div style={{ padding: 20, textAlign: "center", color: C.gray400, fontSize: 13 }}>Aucun incident</div>
@@ -307,7 +308,7 @@ export default function RapportPage() {
         {/* Alertes */}
         <Card>
           <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.gray100}`, fontWeight: 700, color: C.gray800, fontSize: 14 }}>
-            🔔 Alertes ({alertes.length})
+            Alertes ({alertes.length})
           </div>
           {alertes.length === 0
             ? <div style={{ padding: 20, textAlign: "center", color: C.gray400, fontSize: 13 }}>Aucune alerte</div>
@@ -330,7 +331,7 @@ export default function RapportPage() {
         {/* Réparations en cours */}
         <Card>
           <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.gray100}`, fontWeight: 700, color: C.gray800, fontSize: 14 }}>
-            🔧 Réparations ({reparations.length} · {repEnCours.length} en cours)
+            Réparations ({reparations.length} · {repEnCours.length} en cours)
           </div>
           {reparations.length === 0
             ? <div style={{ padding: 20, textAlign: "center", color: C.gray400, fontSize: 13 }}>Aucune réparation sur la période</div>
