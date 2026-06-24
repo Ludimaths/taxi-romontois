@@ -185,10 +185,12 @@ export default function AdminPage() {
     const plaque = vv?.plaque || rep.vehicule_id;
     await sb.from("reparations").update({ statut: "en_reparation" }).eq("id", rep.id);
     await sb.from("alertes").insert([
+      // Notification gestionnaire
       { type: "reparation", severity: "normale", read: false, vehicle_id: rep.vehicule_id,
         message: `✅ Réparation validée — ${plaque} (${(rep.cout_estime ?? 0).toLocaleString("fr-CH")} CHF)` },
-      { type: "vehicule", severity: "normale", read: false, vehicle_id: rep.vehicule_id,
-        message: `✅ Budget validé par l'admin — ${plaque} : réparation en cours` },
+      // Notification mécanicien (transmis_meca = seul type qu'il lit en Alertes)
+      { type: "transmis_meca", severity: "normale", read: false, vehicle_id: rep.vehicule_id,
+        message: `✅ Admin a validé la réparation de ${plaque} — ${(rep.cout_estime ?? 0).toLocaleString("fr-CH")} CHF. Vous pouvez continuer.` },
     ]);
     setValBusy(false);
     load();
@@ -202,10 +204,12 @@ export default function AdminPage() {
     await sb.from("reparations").update({ statut: "receptionne",
       commentaire_mecanicien: `[Refusé par admin: ${refusMotif.trim()}]` }).eq("id", rep.id);
     await sb.from("alertes").insert([
+      // Notification gestionnaire
       { type: "reparation", severity: "haute", read: false, vehicle_id: rep.vehicule_id,
         message: `❌ Réparation refusée — ${plaque} : ${refusMotif.trim()}` },
-      { type: "vehicule", severity: "haute", read: false, vehicle_id: rep.vehicule_id,
-        message: `❌ Budget refusé par l'admin — ${plaque}` },
+      // Notification mécanicien
+      { type: "transmis_meca", severity: "haute", read: false, vehicle_id: rep.vehicule_id,
+        message: `❌ Admin a refusé la réparation de ${plaque} — Motif : ${refusMotif.trim()}` },
     ]);
     setRefusOpen(null); setRefusMotif(""); setValBusy(false);
     load();

@@ -129,11 +129,19 @@ export default function MecanicienPage() {
   const [vehicules,   setVehicules]   = useState<Vehicule[]>([]);
   const [conducteurs, setConducteurs] = useState<{ id: number; prenom: string; nom: string }[]>([]);
 
-  // Réception form
+  // Réception depuis alerte
   const [recepAlerte, setRecepAlerte] = useState<Alerte | null>(null);
   const [recepF,      setRecepF]      = useState({ description: "", etat_visuel: "", km: "", notes: "" });
   const [recepPhotos, setRecepPhotos] = useState<File[]>([]);
   const [recepBusy,   setRecepBusy]   = useState(false);
+  const [recepErr,    setRecepErr]    = useState("");
+
+  // Réception directe (sans alerte)
+  const [directRecep,      setDirectRecep]      = useState(false);
+  const [directRecepVehId, setDirectRecepVehId] = useState("");
+  const [directRecepF,     setDirectRecepF]     = useState({ description: "", etat_visuel: "", km: "", notes: "" });
+  const [directRecepBusy,  setDirectRecepBusy]  = useState(false);
+  const [directRecepErr,   setDirectRecepErr]   = useState("");
 
   // Suivi atelier form
   const [suiviRep,  setSuiviRep]  = useState<Reparation | null>(null);
@@ -216,11 +224,11 @@ export default function MecanicienPage() {
   async function doReceptionner() {
     if (!recepAlerte || !recepF.description.trim()) return;
     setRecepBusy(true);
+    setRecepErr("");
     const vId = recepAlerte.vehicle_id;
     if (!vId) { setRecepBusy(false); return; }
     const plaque = plaqueOf(vId);
 
-    // Upload photos
     const urls: string[] = [];
     for (const f of recepPhotos) {
       const { data } = await sb.storage.from("vehicule-photos")
@@ -228,17 +236,27 @@ export default function MecanicienPage() {
       if (data) urls.push(data.path);
     }
 
-    const notes = [recepF.notes, urls.length ? `Photos:${urls.join(",")}` : ""].filter(Boolean).join(" | ");
+    const notesArr = [
+      recepF.etat_visuel ? `État: ${recepF.etat_visuel}` : "",
+      recepF.notes,
+      urls.length ? `Photos:${urls.join(",")}` : "",
+    ].filter(Boolean);
 
-    await sb.from("reparations").insert({
+    const { error } = await sb.from("reparations").insert({
       vehicule_id: vId,
       statut: "receptionne",
       description: recepF.description.trim(),
-      etat_visuel: recepF.etat_visuel || null,
       km_reception: recepF.km ? +recepF.km : null,
       date_reception: isoToday(),
-      commentaire_mecanicien: notes || null,
+      commentaire_mecanicien: notesArr.join(" | ") || null,
     });
+
+    if (error) {
+      console.error("[doReceptionner]", error.message);
+      setRecepErr(error.message);
+      setRecepBusy(false);
+      return;
+    }
 
     await sb.from("vehicules").update({ etat: "atelier" }).eq("id", vId);
     await sb.from("alertes").update({ read: true, read_at: new Date().toISOString() }).eq("id", recepAlerte.id);
@@ -250,7 +268,51 @@ export default function MecanicienPage() {
     setRecepAlerte(null);
     setRecepF({ description: "", etat_visuel: "", km: "", notes: "" });
     setRecepPhotos([]);
+    setRecepErr("");
     setRecepBusy(false);
+    setTab("atelier");
+    load();
+  }
+
+  async function doReceptionnerDirect() {
+    if (!directRecepVehId || !directRecepF.description.trim()) return;
+    setDirectRecepBusy(true);
+    setDirectRecepErr("");
+    const vId = directRecepVehId;
+    const plaque = plaqueOf(vId);
+
+    const notesArr = [
+      directRecepF.etat_visuel ? `État: ${directRecepF.etat_visuel}` : "",
+      directRecepF.notes,
+    ].filter(Boolean);
+
+    const { error } = await sb.from("reparations").insert({
+      vehicule_id: vId,
+      statut: "receptionne",
+      description: directRecepF.description.trim(),
+      km_reception: directRecepF.km ? +directRecepF.km : null,
+      date_reception: isoToday(),
+      commentaire_mecanicien: notesArr.join(" | ") || null,
+    });
+
+    if (error) {
+      console.error("[doReceptionnerDirect]", error.message);
+      setDirectRecepErr(error.message);
+      setDirectRecepBusy(false);
+      return;
+    }
+
+    await sb.from("vehicules").update({ etat: "atelier" }).eq("id", vId);
+    await sb.from("alertes").insert({
+      type: "vehicule", severity: "normale", read: false, vehicle_id: vId,
+      message: `🔧 Véhicule ${plaque} réceptionné directement à l'atelier — ${directRecepF.description.slice(0, 80)}`,
+    });
+
+    setDirectRecep(false);
+    setDirectRecepVehId("");
+    setDirectRecepF({ description: "", etat_visuel: "", km: "", notes: "" });
+    setDirectRecepErr("");
+    setDirectRecepBusy(false);
     setTab("atelier");
     load();
   }
@@ -486,8 +548,20 @@ export default function MecanicienPage() {
       {/* ── TAB ATELIER ───────────────────────────────────────────────────────── */}
       {tab === "atelier" && (
         <div>
+          {/* Bouton réception directe */}
+          <button onClick={() => {
+            setDirectRecep(true);
+            setDirectRecepVehId("");
+            setDirectRecepF({ description: "", etat_visuel: "", km: "", notes: "" });
+            setDirectRecepErr("");
+          }} style={{ width: "100%", marginBottom: 16, padding: "14px 0", borderRadius: 14,
+            border: `2px dashed ${C.navyL}`, background: "#F0F7FF", color: C.navyL,
+            fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+            + Réceptionner un véhicule directement
+          </button>
+
           {atelierReps.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
+            <div style={{ textAlign: "center", padding: "40px 20px", color: C.gray400 }}>
               <div style={{ fontSize: 48, marginBottom: 12 }}>🔧</div>
               <p style={{ fontWeight: 700, fontSize: 15 }}>Aucun véhicule en atelier</p>
             </div>
@@ -697,8 +771,60 @@ export default function MecanicienPage() {
               </div>
             )}
           </div>
+          {recepErr && (
+            <div style={{ background: C.redL, color: C.red, borderRadius: 10,
+              padding: "10px 14px", fontSize: 13, marginBottom: 12 }}>
+              ❌ Erreur : {recepErr}
+            </div>
+          )}
           <BigBtn icon="🔧" label={recepBusy ? "Enregistrement…" : "Réceptionner et mettre en atelier"}
             onClick={doReceptionner} disabled={recepBusy || !recepF.description.trim()} color={C.navy} />
+        </Sheet>
+      )}
+
+      {/* ── SHEET : Réception directe ──────────────────────────────────────────── */}
+      {directRecep && (
+        <Sheet title="Réceptionner un véhicule" onClose={() => setDirectRecep(false)}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.gray600, marginBottom: 6 }}>
+              Véhicule *
+            </label>
+            <select value={directRecepVehId}
+              onChange={e => {
+                const v = vehicules.find(x => x.id === e.target.value);
+                setDirectRecepVehId(e.target.value);
+                setDirectRecepF(p => ({ ...p, km: String(v?.km ?? "") }));
+              }}
+              style={{ ...inp, appearance: "none" } as React.CSSProperties}>
+              <option value="">— Sélectionner un véhicule —</option>
+              {vehicules.map(v => (
+                <option key={v.id} value={v.id}>{v.plaque} · {v.marque} {v.modele}</option>
+              ))}
+            </select>
+          </div>
+          <F label="Description du problème *" value={directRecepF.description}
+            onChange={v => setDirectRecepF(p => ({ ...p, description: v }))}
+            placeholder="Ex: Voyant moteur, bruit suspect, panne…" required />
+          <F label="État à l'arrivée" value={directRecepF.etat_visuel}
+            onChange={v => setDirectRecepF(p => ({ ...p, etat_visuel: v }))}
+            placeholder="Ex: Carrosserie OK, pneus usés…" />
+          <F label="Kilométrage" type="number" value={directRecepF.km}
+            onChange={v => setDirectRecepF(p => ({ ...p, km: v }))}
+            placeholder="Ex: 125000" />
+          <TA label="Notes mécanicien" value={directRecepF.notes}
+            onChange={v => setDirectRecepF(p => ({ ...p, notes: v }))}
+            placeholder="Observations initiales…" />
+          {directRecepErr && (
+            <div style={{ background: C.redL, color: C.red, borderRadius: 10,
+              padding: "10px 14px", fontSize: 13, marginBottom: 12 }}>
+              ❌ Erreur : {directRecepErr}
+            </div>
+          )}
+          <BigBtn icon="🔧"
+            label={directRecepBusy ? "Enregistrement…" : "Réceptionner et mettre en atelier"}
+            onClick={doReceptionnerDirect}
+            disabled={directRecepBusy || !directRecepVehId || !directRecepF.description.trim()}
+            color={C.navy} />
         </Sheet>
       )}
 
