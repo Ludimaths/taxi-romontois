@@ -164,6 +164,7 @@ export default function MecanicienPage() {
 
   const [veSheet, setVeSheet] = useState<Vehicule | null>(null);
   const [veF,     setVeF]     = useState({ km:"", ct_date:"", date_vidange:"", etat:"", notes:"" });
+  const [saveErr,  setSaveErr]  = useState("");
 
   // ── Load ──────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -278,7 +279,7 @@ export default function MecanicienPage() {
     if (f.type_intervention === "piece")         { nextSt="en_attente_piece";      nextVe="en_attente_piece"; }
     else if (cout >= BUDGET_SEUIL)               { nextSt="en_attente_validation"; nextVe="receptionne"; }
     else                                          { nextSt="en_reparation";         nextVe="en_reparation"; }
-    await sb.from("reparations").update({
+    const { error: crErr } = await sb.from("reparations").update({
       statut:nextSt, type_intervention:f.type_intervention,
       nom_garage: f.type_intervention==="externe" ? f.nom_garage : null,
       piece_nom: f.type_intervention==="piece" ? f.piece_nom : null,
@@ -290,6 +291,7 @@ export default function MecanicienPage() {
       commentaire_mecanicien: f.notes || null,
       responsable: `${f.type_intervention}|${f.urgence}`,
     }).eq("id", createRep.id);
+    if (crErr) { console.error("[doCreateRep]", crErr.message); return; }
     await sb.from("vehicules").update({ etat:nextVe }).eq("id", createRep.vehicule_id);
     if (nextSt === "en_attente_validation") {
       const plaque = (createRep.vehicule as { plaque?:string } | undefined)?.plaque || createRep.vehicule_id;
@@ -300,7 +302,8 @@ export default function MecanicienPage() {
 
   async function doPiece() {
     if (!pieceOpen) return;
-    await sb.from("reparations").update({ statut:"en_reparation", date_reception_piece_reelle:pieceF.date_reception_piece_reelle||null, date_debut_reparation:pieceF.date_debut_reparation||null }).eq("id", pieceOpen.id);
+    const { error } = await sb.from("reparations").update({ statut:"en_reparation", date_reception_piece_reelle:pieceF.date_reception_piece_reelle||null, date_debut_reparation:pieceF.date_debut_reparation||null }).eq("id", pieceOpen.id);
+    if (error) { console.error("[doPiece]", error.message); return; }
     await sb.from("vehicules").update({ etat:"en_reparation" }).eq("id", pieceOpen.vehicule_id);
     setPieceOpen(null);
   }
@@ -310,7 +313,8 @@ export default function MecanicienPage() {
     const f = repareF;
     const upd: Record<string,unknown> = { statut:"repare", date_fin_reparation:f.date_fin_reparation||null, cout:f.cout?+f.cout:null, km_sortie:f.km_sortie?+f.km_sortie:null, commentaire_mecanicien:f.commentaire_mecanicien||repareOpen.commentaire_mecanicien||null };
     if (repareOpen.date_debut_reparation && f.date_fin_reparation) upd.duree_jours = nbJ(repareOpen.date_debut_reparation, f.date_fin_reparation);
-    await sb.from("reparations").update(upd).eq("id", repareOpen.id);
+    const { error: repErr } = await sb.from("reparations").update(upd).eq("id", repareOpen.id);
+    if (repErr) { console.error("[doRepare]", repErr.message); return; }
     await sb.from("vehicules").update({ etat:"repare" }).eq("id", repareOpen.vehicule_id);
     setRepareOpen(null);
     setRepareF({ date_fin_reparation:isoToday(), cout:"", km_sortie:"", commentaire_mecanicien:"" });
@@ -326,26 +330,31 @@ export default function MecanicienPage() {
     } else {
       recupLabel = recupNom;
     }
-    await sb.from("reparations").update({ statut:"remis_en_circulation", date_remise_circulation:remettreD||null }).eq("id", remettreRep.id);
-    const vu: Record<string,unknown> = { etat:"en_service" };
+    const { error: retErr } = await sb.from("reparations").update({ statut:"remis_en_circulation", date_remise_circulation:remettreD||null }).eq("id", remettreRep.id);
+    if (retErr) { console.error("[doRemettre]", retErr.message); return; }
+    const vu: Record<string,unknown> = { etat:"bon" };
     if (remettreRep.km_sortie) vu.km = remettreRep.km_sortie;
     await sb.from("vehicules").update(vu).eq("id", remettreRep.vehicule_id);
     const msg = recupLabel
-      ? `✅ Véhicule ${plaque} remis en service le ${fmtDate(remettreD)} — Récupéré par ${recupLabel}`
-      : `✅ Véhicule ${plaque} remis en service le ${fmtDate(remettreD)}`;
+      ? `✅ Véhicule ${plaque} récupéré par ${recupLabel} le ${fmtDate(remettreD)}`
+      : `✅ Véhicule ${plaque} remis en circulation le ${fmtDate(remettreD)}`;
     await sb.from("alertes").insert({ type:"remise_circulation", severity:"normale", message:msg, vehicle_id:remettreRep.vehicule_id, read:false });
+    await load();
     setRemettreRep(null); setRemettreD(isoToday()); setRecupPar("conducteur"); setRecupNom("");
   }
 
   async function doVeSave() {
     if (!veSheet) return;
-    await sb.from("vehicules").update({
+    setSaveErr("");
+    const { error } = await sb.from("vehicules").update({
       km: veF.km ? +veF.km : veSheet.km,
       ct_date: veF.ct_date || null,
       date_vidange: veF.date_vidange || null,
       etat: (veF.etat || veSheet.etat) as Vehicule["etat"],
       notes: veF.notes || null,
     }).eq("id", veSheet.id);
+    if (error) { console.error("[doVeSave]", error.message); setSaveErr(error.message); return; }
+    await load();
     setVeSheet(null);
   }
 
@@ -866,6 +875,7 @@ export default function MecanicienPage() {
                 </div>
               );
             })()}
+            {saveErr && <div style={{ background:"#FEE2E2", color:"#DC2626", borderRadius:8, padding:"10px 14px", fontSize:13, marginBottom:10 }}>❌ {saveErr}</div>}
             <BigBtn icon="💾" label="Enregistrer" onClick={doVeSave} />
           </Sheet>
         );

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, statusColor, statusLabel, fmtDate, fmtDateTime, conducteurEmail, isoToday } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal, TabBar } from "@/components/ui";
@@ -128,13 +129,14 @@ function DriverForm({ init, circuits, vehicules, onSave, onCancel, saving }: {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ConducteursPage() {
   const sb = createClient();
+  const searchParams = useSearchParams();
   const [drivers,   setDrivers]   = useState<Conducteur[]>([]);
   const [circuits,  setCircuits]  = useState<Circuit[]>([]);
   const [vehicules, setVehicules] = useState<Vehicule[]>([]);
   const [sel,       setSel]       = useState<number | null>(null);
   const [tab,       setTab]       = useState("infos");
   const [search,    setSearch]    = useState("");
-  const [filterSt,  setFilterSt]  = useState("all");
+  const [filterSt,  setFilterSt]  = useState(() => searchParams.get("status") ?? "all");
   const [editModal, setEditModal] = useState(false);
   const [addModal,  setAddModal]  = useState(false);
   const [saving,    setSaving]    = useState(false);

@@ -436,6 +436,14 @@ export default function GestionnaireDashboard() {
     await sb.from("incidents")
       .update({ response, status, resolved_at: status === "resolu" ? new Date().toISOString() : null })
       .eq("id", id);
+    const inc = incidents.find(i => i.id === id);
+    if (inc?.conducteur_id && response.trim()) {
+      await sb.from("alertes").insert({
+        type: "conducteur", severity: "normale",
+        message: `📋 Votre signalement a été traité : ${response}`,
+        read: false, driver_id: inc.conducteur_id,
+      });
+    }
     if (extra === "transmis_meca") {
       const inc = incidents.find(i => i.id === id);
       await sb.from("alertes").insert({
@@ -602,7 +610,7 @@ export default function GestionnaireDashboard() {
           enServiceVeh.length > 0 ? C.green : C.gray400, "/gestionnaire/vehicules")}
         {stat("👤", "Conducteurs présents", enServiceDrv.length,
           `${drivers.filter(d => d.status === "disponible").length} disponibles`,
-          C.navyL, "/gestionnaire/conducteurs")}
+          C.navyL, "/gestionnaire/conducteurs?status=en_service")}
         {stat("⚠️", "Absents du jour", absents.length,
           `${absents.filter(d => !!d.circuit_id).length} circuits à couvrir`,
           absents.length > 0 ? C.amber : C.gray400, "/gestionnaire/conducteurs", absents.length > 0)}

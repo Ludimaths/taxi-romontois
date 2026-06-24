@@ -25,16 +25,26 @@ export default function ScanPage() {
 
   useEffect(() => {
     console.log("[scan] vehicleId depuis URL:", vehicleId);
-    supabase.from("vehicules")
-      .select("*, circuit:circuits(*,cercle:cercles_scolaires(*)), conducteur:conducteurs(*)")
-      .eq("id", vehicleId)
-      .single()
-      .then(({ data, error }) => {
-        console.log("[scan] résultat:", { data: data?.id, error: error?.message });
-        if (error || !data) setNotFound(true);
-        else setVehicle(data);
-        setLoading(false);
-      });
+    const sel = "*, circuit:circuits(*,cercle:cercles_scolaires(*)), conducteur:conducteurs(*)";
+    async function findVehicle() {
+      // Stratégie 1 : par id exact (ex: "FR-80058")
+      let { data } = await supabase.from("vehicules").select(sel).eq("id", vehicleId).maybeSingle();
+      if (!data) {
+        // Stratégie 2 : par plaque avec tirets → espaces (ex: "FR-80058" → "FR 80058")
+        const withSpace = vehicleId.replace(/-/g, " ");
+        ({ data } = await supabase.from("vehicules").select(sel).eq("plaque", withSpace).maybeSingle());
+      }
+      if (!data) {
+        // Stratégie 3 : par id avec tirets → espaces
+        const withSpace = vehicleId.replace(/-/g, " ");
+        ({ data } = await supabase.from("vehicules").select(sel).eq("id", withSpace).maybeSingle());
+      }
+      console.log("[scan] résultat:", data?.id ?? "introuvable");
+      if (!data) setNotFound(true);
+      else setVehicle(data);
+      setLoading(false);
+    }
+    findVehicle();
   }, [vehicleId]);
 
   const handlePrise = async () => {

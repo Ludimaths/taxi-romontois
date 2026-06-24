@@ -188,11 +188,6 @@ export default function ConducteurPage(){
       type:signType,conducteur_id:driver.id,vehicule_id:driver.vehicule_id||null,
       circuit_id:driver.circuit_id||null,description:signDesc,status:"en_attente",
     });
-    await sb.from("alertes").insert({
-      type:"conducteur",severity:signUrgence==="urgent"?"haute":"normale",
-      message:`${signType==="accident"?"🚨":signType==="panne"?"🔧":signType==="retard"?"⏰":"⚡"} [${SIGN_LABELS[signType]||signType}] ${driver.prenom} ${driver.nom} — ${signDesc}`,
-      read:false,
-    });
     setSignType("");setSignDesc("");setSignUrgence("normal");setSignSent(true);
     setTimeout(()=>setSignSent(false),4000);
     load();
