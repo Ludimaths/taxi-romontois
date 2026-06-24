@@ -67,7 +67,7 @@ export default function QRCodesPage() {
           <div style={{ fontSize: 22, fontWeight: 900 }}>QR Codes Véhicules</div>
           <div style={{ fontSize: 13, opacity: 0.7, marginTop: 3 }}>{vehicles.length} véhicules · scan → fiche véhicule</div>
         </div>
-        <Btn onClick={handlePrintAll} color={C.sky}>🖨 Imprimer tous les QR codes</Btn>
+        <Btn onClick={handlePrintAll} color={C.sky}>Imprimer tous les QR codes</Btn>
       </div>
 
       {/* Grille individuelle avec boutons */}
@@ -84,7 +84,7 @@ export default function QRCodesPage() {
                 {`${DOMAIN}/scan/${v.id}`}
               </div>
             </div>
-            <Btn small onClick={() => handlePrintOne(v.id)} color={C.navyL}>🖨 Imprimer</Btn>
+            <Btn small onClick={() => handlePrintOne(v.id)} color={C.navyL}>Imprimer</Btn>
           </div>
         ))}
       </div>

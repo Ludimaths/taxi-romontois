@@ -195,10 +195,10 @@ export default function AdminPage() {
     await sb.from("alertes").insert([
       // Notification gestionnaire
       { type: "reparation", severity: "normale", read: false, vehicle_id: rep.vehicule_id,
-        message: `✅ Réparation validée — ${plaque} (${(rep.cout_estime ?? 0).toLocaleString("fr-CH")} CHF)` },
+        message: `Réparation validée — ${plaque} (${(rep.cout_estime ?? 0).toLocaleString("fr-CH")} CHF)` },
       // Notification mécanicien → onglet Messages
       { type: "decision_admin", severity: "normale", read: false, vehicle_id: rep.vehicule_id,
-        message: `✅ Admin a validé la réparation de ${plaque} — ${(rep.cout_estime ?? 0).toLocaleString("fr-CH")} CHF. Vous pouvez continuer.` },
+        message: `Admin a validé la réparation de ${plaque} — ${(rep.cout_estime ?? 0).toLocaleString("fr-CH")} CHF. Vous pouvez continuer.` },
     ]);
     setValBusy(false);
     load();
@@ -214,10 +214,10 @@ export default function AdminPage() {
     await sb.from("alertes").insert([
       // Notification gestionnaire
       { type: "reparation", severity: "haute", read: false, vehicle_id: rep.vehicule_id,
-        message: `❌ Réparation refusée — ${plaque} : ${refusMotif.trim()}` },
+        message: `Réparation refusée — ${plaque} : ${refusMotif.trim()}` },
       // Notification mécanicien → onglet Messages
       { type: "decision_admin", severity: "haute", read: false, vehicle_id: rep.vehicule_id,
-        message: `❌ Admin a refusé la réparation de ${plaque} — Motif : ${refusMotif.trim()}` },
+        message: `Admin a refusé la réparation de ${plaque} — Motif : ${refusMotif.trim()}` },
     ]);
     setRefusOpen(null); setRefusMotif(""); setValBusy(false);
     load();
@@ -387,7 +387,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
               <div style={{ background: C.redL, borderRadius: 14, padding: 18,
                 borderLeft: `4px solid ${C.red}`, marginBottom: 16 }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.red, marginBottom: 12 }}>
-                  ⚠️ {repAValider.length} réparation(s) en attente de validation
+                  <span style={{display:"flex",alignItems:"center",gap:8}}><AlertTriangle size={15} color={C.red} /> {repAValider.length} réparation(s) en attente de validation</span>
                 </div>
                 {repAValider.map(r => {
                   const vv = r.vehicule as { plaque?: string } | undefined;
@@ -545,7 +545,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                     <div>
                       <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>{vv?.plaque || r.vehicule_id}</div>
                       <div style={{ fontSize: 12, color: C.gray400 }}>{vv?.marque} {vv?.modele}</div>
-                      {r.date_reception && <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>📥 Réceptionné {fmtDate(r.date_reception)}</div>}
+                      {r.date_reception && <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>Réceptionné {fmtDate(r.date_reception)}</div>}
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontSize: 26, fontWeight: 900, color: C.red }}>{(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF</div>
@@ -557,7 +557,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                   {r.commentaire_mecanicien && !r.commentaire_mecanicien.startsWith("[Refusé") && (
                     <div style={{ background: C.gray50, borderRadius: 10, padding: "8px 12px",
                       fontSize: 13, color: C.gray600, marginBottom: 14, fontStyle: "italic" }}>
-                      💬 {r.commentaire_mecanicien.split(" | ").filter(s => !s.startsWith("Photos:")).join(" | ")}
+                      {r.commentaire_mecanicien.split(" | ").filter(s => !s.startsWith("Photos:")).join(" | ")}
                     </div>
                   )}
                   {isRefusing && (
@@ -576,17 +576,17 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                         <button onClick={() => doValider(r)} disabled={valBusy}
                           style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
                             border: "none", background: C.green, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                          ✅ Valider
+                          <span style={{display:"flex",alignItems:"center",gap:6}}><CheckCircle2 size={15} /> Valider</span>
                         </button>
                         <button onClick={() => { setRefusOpen(r.id); setRefusMotif(""); }}
                           style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
                             border: `2px solid ${C.red}`, background: C.white, color: C.red, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                          ❌ Refuser
+                          Refuser
                         </button>
                         <button onClick={() => printFiche(r)}
                           style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
                             background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                          🖨 Imprimer
+                          Imprimer
                         </button>
                       </>
                     ) : (
@@ -705,9 +705,9 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                         {MONTHS_FR[m - 1]}
                       </div>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {data.incidents > 0 && <span style={{ fontSize: 11, color: C.red }}>🚨 {data.incidents}</span>}
-                        {data.absences > 0 && <span style={{ fontSize: 11, color: C.amber }}>👤 {data.absences}</span>}
-                        {data.reparations > 0 && <span style={{ fontSize: 11, color: C.navyL }}>🔧 {data.reparations}</span>}
+                        {data.incidents > 0 && <span style={{ fontSize: 11, color: C.red }}>{data.incidents} inc.</span>}
+                        {data.absences > 0 && <span style={{ fontSize: 11, color: C.amber }}>{data.absences} abs.</span>}
+                        {data.reparations > 0 && <span style={{ fontSize: 11, color: C.navyL }}>{data.reparations} rép.</span>}
                         {!hasData && <span style={{ fontSize: 11, color: C.gray400 }}>—</span>}
                       </div>
                       {data.cout > 0 && (
@@ -814,7 +814,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                       {di.map(i => (
                         <div key={i.id} style={{ background: C.white, borderRadius: 12, padding: 14,
                           marginBottom: 8, borderLeft: `3px solid ${C.red}` }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: C.red }}>🚨 {i.type}</div>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: C.red }}><span style={{display:"flex",alignItems:"center",gap:6}}><AlertTriangle size={13} color={C.red} /> {i.type}</span></div>
                           <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>{i.description}</div>
                         </div>
                       ))}
@@ -824,10 +824,10 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                           <div key={a.id} style={{ background: C.white, borderRadius: 12, padding: 14,
                             marginBottom: 8, borderLeft: `3px solid ${C.amber}` }}>
                             <div style={{ fontWeight: 700, fontSize: 14, color: C.amber }}>
-                              👤 {cond?.prenom} {cond?.nom}
+                              <span style={{display:"flex",alignItems:"center",gap:6}}><Users size={13} color={C.amber} /> {cond?.prenom} {cond?.nom}</span>
                             </div>
                             <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>
-                              {a.motif || "—"} · {a.status === "couvert" ? "✅ Couvert" : "⚠️ Non couvert"}
+                              {a.motif || "—"} · {a.status === "couvert" ? "Couvert" : "Non couvert"}
                             </div>
                           </div>
                         );
@@ -837,7 +837,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                         return (
                           <div key={r.id} style={{ background: C.white, borderRadius: 12, padding: 14,
                             marginBottom: 8, borderLeft: `3px solid ${C.navy}` }}>
-                            <div style={{ fontWeight: 700, fontSize: 14, color: C.navy }}>🔧 {vv?.plaque || r.vehicule_id}</div>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: C.navy }}><span style={{display:"flex",alignItems:"center",gap:6}}><Wrench size={13} color={C.navy} /> {vv?.plaque || r.vehicule_id}</span></div>
                             <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>{r.description}</div>
                           </div>
                         );
@@ -865,7 +865,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                 <div style={{ display: "flex", justifyContent: "space-between",
                   alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, color: C.navyL }}>
-                    🔧 Mécanicien
+                    Mécanicien
                     {!m.read && (
                       <span style={{ marginLeft: 8, background: C.navyL, color: C.white,
                         borderRadius: 99, padding: "1px 7px", fontSize: 10, fontWeight: 900 }}>
@@ -878,7 +878,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                   </div>
                 </div>
                 <p style={{ fontSize: 14, color: "#1E293B", lineHeight: 1.5, margin: "0 0 12px" }}>
-                  {(m.message || "").replace("💬 Message du mécanicien : ", "")}
+                  {(m.message || "").replace("Message du mécanicien : ", "")}
                 </p>
                 {!m.read && (
                   <button onClick={async () => {
@@ -888,7 +888,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                   }} style={{ padding: "9px 20px", borderRadius: 10,
                     border: `2px solid ${C.navyL}`, background: C.white,
                     color: C.navyL, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
-                    Lu ✓
+                    Lu
                   </button>
                 )}
               </div>

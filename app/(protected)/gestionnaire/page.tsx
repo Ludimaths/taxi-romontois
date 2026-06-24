@@ -194,9 +194,9 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
   const circ = incident.circuit    || circuits.find(c => c.id === incident.circuit_id);
 
   const TYPE_LABEL: Record<string, string> = {
-    panne: "🔧 Panne véhicule", voyant: "💡 Voyant moteur", accident: "🚨 Accident",
-    retard: "⏰ Retard", degradation: "🪟 Dégradation", enfant: "👶 Problème enfant",
-    parent: "👨‍👩‍👧 Problème parent", autre: "❓ Autre",
+    panne: "Panne véhicule", voyant: "Voyant moteur", accident: "Accident",
+    retard: "Retard", degradation: "Dégradation", enfant: "Problème enfant",
+    parent: "Problème parent", autre: "Autre",
   };
 
   const isPanne  = ["panne", "voyant", "accident", "degradation"].includes(incident.type);
@@ -465,9 +465,9 @@ export default function GestionnaireDashboard() {
     const inc = incidents.find(i => i.id === id);
     if (inc?.conducteur_id) {
       const notifMsg = response.trim()
-        ? `📋 Votre signalement a été traité : ${response}`
+        ? `Votre signalement a été traité : ${response}`
         : status === "resolu"
-          ? `✅ Votre signalement a été résolu.`
+          ? `Votre signalement a été résolu.`
           : null;
       if (notifMsg) {
         await sb.from("alertes").insert({

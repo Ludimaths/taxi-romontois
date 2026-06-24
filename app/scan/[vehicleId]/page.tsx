@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, nowStr } from "@/lib/constants";
+import { Bus, CheckCircle2, Zap } from "lucide-react";
 import type { Vehicule } from "@/lib/types";
 
 const INCTYPES = ["Panne", "Voyant moteur", "Accident", "Retard", "Dégradation", "Problème enfant", "Problème parent", "Autre"];
@@ -109,7 +110,7 @@ export default function ScanPage() {
     <div style={{ minHeight: "100vh", background: `linear-gradient(135deg,${C.navy},${C.navyL})`,
       display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter',sans-serif", padding: 24 }}>
       <div style={{ textAlign: "center", color: C.white }}>
-        <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
+        <div style={{ display:"flex",justifyContent:"center",marginBottom:16 }}><CheckCircle2 size={64} color={C.white} /></div>
         <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>Enregistré !</div>
         <div style={{ fontSize: 14, opacity: 0.8, marginBottom: 24, maxWidth: 300, margin: "0 auto 24px" }}>
           {action === "prise" && (isReplacer ? "Vous prenez le service. Le gestionnaire a été notifié." : "Prise de service enregistrée.")}
@@ -135,7 +136,7 @@ export default function ScanPage() {
       {/* ── Header ── */}
       <div style={{ background: `linear-gradient(135deg,${C.navy},${C.navyL})`, padding: "20px 20px 24px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <span style={{ fontSize: 18 }}>🚌</span>
+          <span style={{ display:"flex",alignItems:"center" }}><Bus size={18} color="rgba(255,255,255,0.6)" /></span>
           <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: 600, letterSpacing: 1 }}>TAXI ROMONTOIS</span>
         </div>
         <div style={{ fontSize: 26, fontWeight: 900, color: C.white, letterSpacing: 1 }}>{v.plaque}</div>
@@ -218,7 +219,7 @@ export default function ScanPage() {
               style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px",
                 borderRadius: 14, border: `2px solid ${C.green}`, background: C.white,
                 cursor: "pointer", textAlign: "left", width: "100%" }}>
-              <span style={{ fontSize: 32 }}>🟢</span>
+              <span style={{ display:"flex",alignItems:"center" }}><CheckCircle2 size={32} color={C.green} /></span>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 16, color: C.green }}>Je prends ce véhicule</div>
                 <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>Pointage début de service</div>
@@ -228,7 +229,7 @@ export default function ScanPage() {
               style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 20px",
                 borderRadius: 14, border: `2px solid ${C.red}`, background: C.white,
                 cursor: "pointer", textAlign: "left", width: "100%" }}>
-              <span style={{ fontSize: 32 }}>⚡</span>
+              <span style={{ display:"flex",alignItems:"center" }}><Zap size={32} color={C.red} /></span>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 16, color: C.red }}>Signaler un incident</div>
                 <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>Alerte immédiate au gestionnaire</div>
@@ -251,7 +252,7 @@ export default function ScanPage() {
                   background: !isReplacer ? C.skyL : C.white,
                   fontWeight: 700, cursor: "pointer", fontSize: 13,
                   color: !isReplacer ? C.navy : C.gray600, textAlign: "center" }}>
-                ✅ Conducteur habituel
+                Conducteur habituel
                 <div style={{ fontSize: 11, fontWeight: 400, color: C.gray400, marginTop: 4 }}>
                   {cond ? `${cond.prenom} ${cond.nom}` : "—"}
                 </div>
@@ -262,7 +263,7 @@ export default function ScanPage() {
                   background: isReplacer ? C.amberL : C.white,
                   fontWeight: 700, cursor: "pointer", fontSize: 13,
                   color: isReplacer ? C.amber : C.gray600, textAlign: "center" }}>
-                🔄 Remplaçant
+                Remplaçant
                 <div style={{ fontSize: 11, fontWeight: 400, color: C.gray400, marginTop: 4 }}>Autre conducteur</div>
               </button>
             </div>
@@ -277,7 +278,7 @@ export default function ScanPage() {
               style={{ width: "100%", padding: 16, borderRadius: 12, border: "none",
                 background: saving || (isReplacer && !myName) ? C.gray200 : C.green,
                 color: C.white, fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
-              {saving ? "Enregistrement…" : "🟢 Valider la prise de service"}
+              {saving ? "Enregistrement…" : "Valider la prise de service"}
             </button>
           </div>
 
@@ -309,7 +310,7 @@ export default function ScanPage() {
               style={{ width: "100%", padding: 16, borderRadius: 12, border: "none",
                 background: !incType || saving ? C.gray200 : C.red,
                 color: C.white, fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
-              {saving ? "Envoi…" : "⚡ Envoyer l'incident"}
+              {saving ? "Envoi…" : "Envoyer l'incident"}
             </button>
           </div>
         )}

@@ -182,7 +182,7 @@ export default function ConducteurPage(){
       motif:absMotif+(absNotes?` — ${absNotes}`:""),circuit_id:driver.circuit_id||null,status:"non_couvert",
     });
     await sb.from("alertes").insert({type:"conducteur",severity:"haute",
-      message:`🤒 ${driver.prenom} ${driver.nom} absent — Motif : ${absMotif}${absNotes?` (${absNotes})`:""}${circ?` — Circuit ${circ.nom} non couvert`:""}`,
+      message:`${driver.prenom} ${driver.nom} absent — Motif : ${absMotif}${absNotes?` (${absNotes})`:""}${circ?` — Circuit ${circ.nom} non couvert`:""}`,
       read:false});
     setDriver(p=>p?{...p,status:"absent",absence_motif:absMotif}:p);
     setShowAbsence(false);setAbsMotif("");setAbsNotes("");

@@ -1,6 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import {
+  Bus, AlertTriangle, MapPin, School, User, RefreshCw,
+  Thermometer, Home, Edit3, CheckCircle2, Calendar, Printer, Send,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Enfant, AbsenceEnfant, Circuit, Profile, Conducteur } from "@/lib/types";
 
@@ -14,14 +18,14 @@ const G = {
   border: "#E2E8F0", white:  "#FFFFFF", text:   "#1E293B",
 };
 
-const MOTIFS = [
-  { key: "malade",    label: "Mon enfant est malade",                   icon: "🤒" },
-  { key: "maison",    label: "Reste à la maison aujourd'hui",           icon: "🏠" },
-  { key: "pere",      label: "Va chez son père ce soir",                icon: "👨" },
-  { key: "mere",      label: "Va chez sa mère ce soir",                 icon: "👩" },
-  { key: "ne_rentre", label: "Ne rentre pas ce soir",                   icon: "🔄" },
-  { key: "adresse",   label: "Changement d'adresse de prise en charge", icon: "📍" },
-  { key: "autre",     label: "Autre",                                    icon: "✏️" },
+const MOTIFS: { key: string; label: string; icon: ReactNode }[] = [
+  { key: "malade",    label: "Mon enfant est malade",                   icon: <Thermometer size={22} color={G.amber} /> },
+  { key: "maison",    label: "Reste à la maison aujourd'hui",           icon: <Home size={22} color={G.navy} /> },
+  { key: "pere",      label: "Va chez son père ce soir",                icon: <User size={22} color={G.blue} /> },
+  { key: "mere",      label: "Va chez sa mère ce soir",                 icon: <User size={22} color={G.blue} /> },
+  { key: "ne_rentre", label: "Ne rentre pas ce soir",                   icon: <RefreshCw size={22} color={G.orange} /> },
+  { key: "adresse",   label: "Changement d'adresse de prise en charge", icon: <MapPin size={22} color={G.green} /> },
+  { key: "autre",     label: "Autre",                                    icon: <Edit3 size={22} color={G.gray} /> },
 ];
 
 const MOIS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin",
@@ -51,12 +55,12 @@ function monthLabel(mk: string) {
 }
 
 /* ─── small components ─── */
-function InfoRow({ icon, label, value, orange }: { icon: string; label: string; value: string; orange?: boolean }) {
+function InfoRow({ icon, label, value, orange }: { icon: ReactNode; label: string; value: string; orange?: boolean }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px",
       background: orange ? G.orangeL : G.grayL, borderRadius: 12,
       border: `1px solid ${orange ? "#FDBA74" : G.border}` }}>
-      <span style={{ fontSize: 22, flexShrink: 0 }}>{icon}</span>
+      <span style={{ display:"flex", alignItems:"center", flexShrink: 0 }}>{icon}</span>
       <div>
         <div style={{ fontSize: 11, color: orange ? G.orange : G.gray, fontWeight: 700,
           textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
@@ -179,8 +183,8 @@ export default function ParentPage() {
     if (!child || !motif) return;
     const m = MOTIFS.find(x => x.key === motif)!;
     const reason = complement.trim()
-      ? `${m.icon} ${m.label} — ${complement.trim()}`
-      : `${m.icon} ${m.label}`;
+      ? `${m.label} — ${complement.trim()}`
+      : m.label;
     const today = new Date().toISOString().slice(0,10);
     await supabase.from("absences_enfants").insert({
       enfant_id: child.id, circuit_id: child.circuit_id,
@@ -221,14 +225,16 @@ export default function ParentPage() {
   if (loading) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
       justifyContent:"center", minHeight:300, gap:14, color:G.gray }}>
-      <div style={{ fontSize:36 }}>🚌</div>
+      <Bus size={36} color={G.gray} />
       <div style={{ fontSize:17 }}>Chargement de votre espace…</div>
     </div>
   );
 
   if (!child) return (
     <div style={{ textAlign:"center", padding:"48px 24px" }}>
-      <div style={{ fontSize:40, marginBottom:14 }}>⚠️</div>
+      <div style={{ display:"flex", justifyContent:"center", marginBottom:14 }}>
+        <AlertTriangle size={40} color={G.amber} />
+      </div>
       <div style={{ fontSize:17, color:G.gray, lineHeight:1.7 }}>
         Aucun enfant associé à votre compte.<br />Contactez le gestionnaire.
       </div>
@@ -256,8 +262,9 @@ export default function ParentPage() {
       {lastConfirmed && (
         <div style={{ background:G.blueL, borderRadius:14, padding:"18px 20px",
           marginBottom:18, border:"1px solid #BFDBFE" }}>
-          <div style={{ fontSize:16, fontWeight:800, color:G.blue, marginBottom:8 }}>
-            ✅ Signalement confirmé
+          <div style={{ fontSize:16, fontWeight:800, color:G.blue, marginBottom:8,
+            display:"flex", alignItems:"center", gap:8 }}>
+            <CheckCircle2 size={18} color={G.blue} /> Signalement confirmé
           </div>
           <div style={{ fontSize:15, color:"#1E40AF", lineHeight:1.8 }}>
             {civility} {profile?.nom},<br />
@@ -278,7 +285,7 @@ export default function ParentPage() {
           <div style={{ width:56, height:56, borderRadius:"50%", background:G.greenM,
             display:"flex", alignItems:"center", justifyContent:"center",
             fontSize:26, flexShrink:0 }}>
-            {circuit?.emoji ?? "🚌"}
+            {circuit?.emoji ?? <Bus size={26} color={G.green} />}
           </div>
           <div>
             <div style={{ fontSize:22, fontWeight:900, color:G.navy }}>
@@ -290,14 +297,14 @@ export default function ParentPage() {
           </div>
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          <InfoRow icon="🗺" label="Circuit habituel"
+          <InfoRow icon={<MapPin size={20} color={G.gray} />} label="Circuit habituel"
             value={circuit ? `${circuit.emoji} ${circuit.nom}` : "—"} />
-          <InfoRow icon="🏫" label="École"
+          <InfoRow icon={<School size={20} color={G.gray} />} label="École"
             value={circuit?.cercle?.nom ?? "—"} />
-          <InfoRow icon="🚌" label="Conducteur habituel"
+          <InfoRow icon={<Bus size={20} color={G.gray} />} label="Conducteur habituel"
             value={conducteur ? `${conducteur.prenom} ${conducteur.nom}` : "—"} />
           {remplacant && (
-            <InfoRow icon="🔄" label="Remplaçant aujourd'hui"
+            <InfoRow icon={<RefreshCw size={20} color={G.orange} />} label="Remplaçant aujourd'hui"
               value={`${remplacant.prenom} ${remplacant.nom}`} orange />
           )}
         </div>
@@ -317,10 +324,10 @@ export default function ParentPage() {
                     border:`2px solid ${active ? G.blue : G.border}`,
                     background: active ? G.blueL : G.white,
                     cursor:"pointer", textAlign:"left", transition:"all .15s" }}>
-                  <span style={{ fontSize:24, flexShrink:0 }}>{m.icon}</span>
+                  <span style={{ display:"flex", alignItems:"center", flexShrink:0 }}>{m.icon}</span>
                   <span style={{ fontSize:16, fontWeight: active ? 700 : 500,
                     color: active ? G.blue : G.text, flex:1 }}>{m.label}</span>
-                  {active && <span style={{ color:G.blue, fontSize:20 }}>✓</span>}
+                  {active && <CheckCircle2 size={20} color={G.blue} />}
                 </button>
               );
             })}
@@ -340,14 +347,17 @@ export default function ParentPage() {
               cursor: motif ? "pointer" : "not-allowed", transition:"all .2s",
               background: motif ? `linear-gradient(135deg,${G.navy},${G.blue})` : G.border,
               color: motif ? G.white : G.gray }}>
-            📨 Envoyer au gestionnaire
+            <span style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
+              <Send size={18} /> Envoyer au gestionnaire
+            </span>
           </button>
         </Card>
       ) : (
         <div style={{ background:G.greenL, borderRadius:18, padding:"24px 20px",
           marginBottom:18, border:"2px solid #86EFAC" }}>
-          <div style={{ fontSize:22, fontWeight:900, color:G.green, marginBottom:12 }}>
-            ✅ Signalement envoyé
+          <div style={{ fontSize:22, fontWeight:900, color:G.green, marginBottom:12,
+            display:"flex", alignItems:"center", gap:10 }}>
+            <CheckCircle2 size={24} color={G.green} /> Signalement envoyé
           </div>
           <div style={{ fontSize:16, color:G.greenD, lineHeight:1.85 }}>
             {civility} {profile?.nom},<br />
@@ -380,7 +390,9 @@ export default function ParentPage() {
 
             {absForMonth(selMonth).length === 0 ? (
               <div style={{ textAlign:"center", padding:"24px 0", color:G.gray }}>
-                <div style={{ fontSize:28, marginBottom:8 }}>✅</div>
+                <div style={{ display:"flex", justifyContent:"center", marginBottom:8 }}>
+                  <CheckCircle2 size={28} color={G.green} />
+                </div>
                 <div style={{ fontSize:16 }}>Aucun signalement ce mois-ci</div>
               </div>
             ) : (
@@ -400,10 +412,10 @@ export default function ParentPage() {
                             { weekday:"long", day:"numeric", month:"long" })}
                         </div>
                         {confirmed
-                          ? <Pill color={G.green} bg={G.greenM}>✅ Transmis</Pill>
+                          ? <Pill color={G.green} bg={G.greenM}>Transmis</Pill>
                           : readOnly
-                          ? <Pill color={G.blue}  bg="#DBEAFE">📋 Lu</Pill>
-                          : <Pill color={G.amber} bg="#FEF9C3">⏳ En attente</Pill>
+                          ? <Pill color={G.blue}  bg="#DBEAFE">Lu</Pill>
+                          : <Pill color={G.amber} bg="#FEF9C3">En attente</Pill>
                         }
                       </div>
                       <div style={{ fontSize:15, color:G.text, marginBottom:6 }}>{a.reason}</div>
@@ -422,7 +434,9 @@ export default function ParentPage() {
               style={{ width:"100%", marginTop:20, padding:"14px 16px", borderRadius:12,
                 border:`2px solid ${G.navy}`, background:"transparent",
                 color:G.navy, fontSize:15, fontWeight:700, cursor:"pointer", minHeight:50 }}>
-              🖨 Télécharger ce mois en PDF
+              <span style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+                <Printer size={16} /> Télécharger ce mois en PDF
+              </span>
             </button>
           </>
         ) : selYear ? (
@@ -434,7 +448,9 @@ export default function ParentPage() {
             </div>
             {monthsForYear(selYear).length === 0 ? (
               <div style={{ textAlign:"center", padding:"24px 0", color:G.gray }}>
-                <div style={{ fontSize:28, marginBottom:8 }}>📅</div>
+                <div style={{ display:"flex", justifyContent:"center", marginBottom:8 }}>
+                  <Calendar size={28} color={G.gray} />
+                </div>
                 <div style={{ fontSize:16 }}>Aucun signalement enregistré cette année</div>
               </div>
             ) : (
@@ -446,8 +462,9 @@ export default function ParentPage() {
                       style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
                         padding:"16px 18px", borderRadius:14, border:`1px solid ${G.border}`,
                         background:G.grayL, cursor:"pointer", minHeight:58, textAlign:"left" }}>
-                      <div style={{ fontSize:17, fontWeight:700, color:G.text }}>
-                        📅 {monthLabel(mk)}
+                      <div style={{ display:"flex", alignItems:"center", gap:10,
+                        fontSize:17, fontWeight:700, color:G.text }}>
+                        <Calendar size={16} color={G.gray} /> {monthLabel(mk)}
                       </div>
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         {count > 0 && (
