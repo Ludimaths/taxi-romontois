@@ -327,6 +327,15 @@ export default function VehiculesPage() {
                   <InfoBox label="Assurance"     value={fmtDate(v.assurance_date)} highlight={assWarn ? C.red : undefined} />
                   {v.date_vidange && <InfoBox label="Dernière vidange" value={v.date_vidange} />}
                 </div>
+                {v.notes && (
+                  <div style={{ marginTop: 12, padding: "10px 14px", background: C.amberL, borderRadius: 10,
+                    borderLeft: `3px solid ${C.amber}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, textTransform: "uppercase", marginBottom: 4 }}>
+                      🔧 Remarques mécanicien
+                    </div>
+                    <div style={{ fontSize: 13, color: C.gray800, lineHeight: 1.5 }}>{v.notes}</div>
+                  </div>
+                )}
                 {cond && (
                   <div style={{ marginTop: 16, padding: "12px 14px", background: C.skyL, borderRadius: 10 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: C.navyL, textTransform: "uppercase", marginBottom: 6 }}>
