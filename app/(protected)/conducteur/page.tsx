@@ -56,6 +56,9 @@ export default function ConducteurPage(){
   // Absences confirmées localement
   const [absConfirmed, setAbsConfirmed] = useState<Set<number>>(new Set());
 
+  // ID conducteur (entier) — nécessaire pour le filtre Realtime alertes
+  const [condId, setCondId] = useState<number|null>(null);
+
   // Navigation historique
   const [histYear,  setHistYear]  = useState<number|null>(null);
   const [histMonth, setHistMonth] = useState<number|null>(null);
@@ -67,6 +70,7 @@ export default function ConducteurPage(){
     const{data:prof}=await sb.from("profiles").select("conducteur_id").eq("id",user.id).single();
     if(!prof?.conducteur_id){setLoading(false);return;}
     const cid=prof.conducteur_id;
+    setCondId(cid);
 
     const[drv,log,abs,enf,inc,msg,hist]=await Promise.all([
       sb.from("conducteurs").select("*,circuit:circuits(*,cercle:cercles_scolaires(*)),vehicule:vehicules(*)")
@@ -104,10 +108,20 @@ export default function ConducteurPage(){
       .on("postgres_changes",{event:"*",schema:"public",table:"absences_enfants"},load)
       .on("postgres_changes",{event:"*",schema:"public",table:"incidents"},load)
       .on("postgres_changes",{event:"*",schema:"public",table:"service_logs"},load)
-      .on("postgres_changes",{event:"*",schema:"public",table:"alertes"},load)
       .subscribe();
     return()=>{sb.removeChannel(ch);};
   },[load,sb]);
+
+  // Canal séparé pour alertes avec filtre driver_id — requis car RLS integer FK
+  // ne garantit pas la livraison Realtime sans filtre explicite côté client
+  useEffect(()=>{
+    if(!condId)return;
+    const ch=sb.channel(`cond-alertes-${condId}`)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"alertes",
+        filter:`driver_id=eq.${condId}`},load)
+      .subscribe();
+    return()=>{sb.removeChannel(ch);};
+  },[condId,load,sb]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
