@@ -336,38 +336,18 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
           gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, marginBottom: 24 }}>
           {NAV_CARDS.map(c => (
             <div key={c.path} onClick={() => router.push(c.path)}
-              style={{ background: C.white, borderRadius: 16, padding: "20px 16px",
+              style={{ background: C.white, borderRadius: 16, padding: "18px 14px",
                 cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.07)",
                 borderTop: `3px solid ${c.color}`, display: "flex",
-                flexDirection: "column", alignItems: "flex-start", gap: 10,
-                transition: "box-shadow 0.15s" }}>
+                flexDirection: "column", alignItems: "flex-start", gap: 8,
+                transition: "box-shadow 0.15s", minWidth: 0 }}>
               <span style={{ color: c.color }}>{c.icon}</span>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 900, color: C.navy }}>{c.label}</div>
-                <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>{c.sub}</div>
+              <div style={{ minWidth: 0, width: "100%" }}>
+                <div style={{ fontSize: 13, fontWeight: 900, color: C.navy,
+                  wordBreak: "break-word", lineHeight: 1.3 }}>{c.label}</div>
+                <div style={{ fontSize: 11, color: C.gray400, marginTop: 2,
+                  wordBreak: "break-word", lineHeight: 1.3 }}>{c.sub}</div>
               </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Chiffres clés (discrets) ──────────────────────────────────────── */}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 28,
-          background: C.white, borderRadius: 14, padding: "14px 18px",
-          boxShadow: "0 1px 6px rgba(0,0,0,0.05)" }}>
-          {[
-            { label: "Véhicules en service",      value: vEnService,        color: C.green  },
-            { label: "Conducteurs présents",       value: cPresents,         color: C.navy   },
-            { label: "Incidents ouverts",          value: incOuverts,        color: incOuverts > 0 ? C.red : C.green  },
-            { label: "Réparations à valider",      value: repAValider.length, color: repAValider.length > 0 ? C.red : C.green, badge: true },
-          ].map(s => (
-            <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8,
-              paddingRight: 16, borderRight: `1px solid ${C.gray200}` }}>
-              <span style={{ fontSize: 20, fontWeight: 900, color: s.color }}>{s.value}</span>
-              <span style={{ fontSize: 12, color: C.gray600 }}>{s.label}</span>
-              {s.badge && s.value > 0 && (
-                <span style={{ background: C.red, color: C.white, borderRadius: 99,
-                  padding: "1px 6px", fontSize: 10, fontWeight: 900 }}>!</span>
-              )}
             </div>
           ))}
         </div>
@@ -375,20 +355,21 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
         {/* ══ TAB : TABLEAU DE BORD ════════════════════════════════════════════ */}
         {tab === "dashboard" && (
           <div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 24 }}>
               {[
-                { label: "En service / disponibles", value: vEnService,        color: C.green  },
-                { label: "En réparation / atelier",  value: vReparation,       color: C.amber  },
-                { label: "Attention requise",         value: vAttention,        color: C.red    },
-                { label: "Conducteurs présents",      value: cPresents,         color: C.navyL  },
-                { label: "Absents aujourd'hui",       value: cAbsents,          color: C.red    },
-                { label: "Incidents ouverts",         value: incOuverts,        color: incOuverts > 0 ? C.red : C.green },
+                { label: "Véhicules en service",     value: vEnService,   color: C.green  },
+                { label: "En réparation / atelier",  value: vReparation,  color: C.amber  },
+                { label: "Attention requise",         value: vAttention,   color: C.red    },
+                { label: "Conducteurs présents",      value: cPresents,    color: C.navyL  },
+                { label: "Absents aujourd'hui",       value: cAbsents,     color: C.red    },
+                { label: "Incidents ouverts",         value: incOuverts,   color: incOuverts > 0 ? C.red : C.green },
               ].map(s => (
                 <div key={s.label} style={{ background: C.white, borderRadius: 14,
-                  padding: "16px 18px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                  borderTop: `3px solid ${s.color}` }}>
-                  <div style={{ fontSize: 30, fontWeight: 900, color: s.color }}>{s.value}</div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.gray600, marginTop: 3 }}>{s.label}</div>
+                  padding: "16px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                  borderTop: `3px solid ${s.color}`, minWidth: 0 }}>
+                  <div style={{ fontSize: 28, fontWeight: 900, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, marginTop: 4,
+                    lineHeight: 1.3, wordBreak: "break-word" }}>{s.label}</div>
                 </div>
               ))}
             </div>

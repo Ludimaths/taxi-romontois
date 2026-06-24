@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDate, fmtDateTime, isoToday } from "@/lib/constants";
 import type { Vehicule, Reparation, Alerte } from "@/lib/types";
@@ -118,7 +118,8 @@ function BigBtn({ icon = "", label, onClick, color = C.navy, outline = false, di
 // ── Page principale ───────────────────────────────────────────────────────────
 
 export default function MecanicienPage() {
-  const sb = createClient();
+  // useMemo : référence stable → useCallback([sb]) ne change pas chaque render → Realtime stable
+  const sb = useMemo(() => createClient(), []);
 
   const [tab,         setTab]         = useState<MTab>("alertes");
   const [loading,     setLoading]     = useState(true);
@@ -226,13 +227,21 @@ export default function MecanicienPage() {
     setRecepBusy(true);
     setRecepErr("");
     const vId = recepAlerte.vehicle_id;
-    if (!vId) { setRecepBusy(false); return; }
+    console.log("[doReceptionner] vehicle_id:", vId);
+    if (!vId) {
+      console.error("[doReceptionner] vehicle_id manquant sur l'alerte", recepAlerte);
+      setRecepErr("Alerte sans véhicule associé — contactez le gestionnaire");
+      setRecepBusy(false);
+      return;
+    }
     const plaque = plaqueOf(vId);
+    console.log("[doReceptionner] plaque:", plaque, "description:", recepF.description);
 
     const urls: string[] = [];
     for (const f of recepPhotos) {
-      const { data } = await sb.storage.from("vehicule-photos")
+      const { data, error: stErr } = await sb.storage.from("vehicule-photos")
         .upload(`${vId}/${Date.now()}-${f.name}`, f, { upsert: true });
+      if (stErr) console.warn("[doReceptionner] storage:", stErr.message);
       if (data) urls.push(data.path);
     }
 
@@ -242,6 +251,7 @@ export default function MecanicienPage() {
       urls.length ? `Photos:${urls.join(",")}` : "",
     ].filter(Boolean);
 
+    console.log("[doReceptionner] INSERT reparation…");
     const { error } = await sb.from("reparations").insert({
       vehicule_id: vId,
       statut: "receptionne",
@@ -249,21 +259,29 @@ export default function MecanicienPage() {
       km_reception: recepF.km ? +recepF.km : null,
       date_reception: isoToday(),
       commentaire_mecanicien: notesArr.join(" | ") || null,
+      alerte_envoyee: false,
     });
 
     if (error) {
-      console.error("[doReceptionner]", error.message);
-      setRecepErr(error.message);
+      console.error("[doReceptionner] INSERT error:", error.code, error.message, error.details);
+      setRecepErr(`Erreur DB: ${error.message}`);
       setRecepBusy(false);
       return;
     }
+    console.log("[doReceptionner] INSERT OK");
 
-    await sb.from("vehicules").update({ etat: "atelier" }).eq("id", vId);
-    await sb.from("alertes").update({ read: true, read_at: new Date().toISOString() }).eq("id", recepAlerte.id);
-    await sb.from("alertes").insert({
+    const { error: vErr } = await sb.from("vehicules").update({ etat: "atelier" }).eq("id", vId);
+    if (vErr) console.error("[doReceptionner] vehicule update:", vErr.message);
+
+    const { error: aErr } = await sb.from("alertes")
+      .update({ read: true, read_at: new Date().toISOString() }).eq("id", recepAlerte.id);
+    if (aErr) console.error("[doReceptionner] alerte read:", aErr.message);
+
+    const { error: a2Err } = await sb.from("alertes").insert({
       type: "vehicule", severity: "normale", read: false, vehicle_id: vId,
       message: `🔧 Véhicule ${plaque} réceptionné à l'atelier — ${recepF.description.slice(0, 80)}`,
     });
+    if (a2Err) console.error("[doReceptionner] alerte insert:", a2Err.message);
 
     setRecepAlerte(null);
     setRecepF({ description: "", etat_visuel: "", km: "", notes: "" });
@@ -280,6 +298,7 @@ export default function MecanicienPage() {
     setDirectRecepErr("");
     const vId = directRecepVehId;
     const plaque = plaqueOf(vId);
+    console.log("[doReceptionnerDirect] vId:", vId, "plaque:", plaque);
 
     const notesArr = [
       directRecepF.etat_visuel ? `État: ${directRecepF.etat_visuel}` : "",
@@ -293,20 +312,25 @@ export default function MecanicienPage() {
       km_reception: directRecepF.km ? +directRecepF.km : null,
       date_reception: isoToday(),
       commentaire_mecanicien: notesArr.join(" | ") || null,
+      alerte_envoyee: false,
     });
 
     if (error) {
-      console.error("[doReceptionnerDirect]", error.message);
-      setDirectRecepErr(error.message);
+      console.error("[doReceptionnerDirect] INSERT error:", error.code, error.message, error.details);
+      setDirectRecepErr(`Erreur DB: ${error.message}`);
       setDirectRecepBusy(false);
       return;
     }
+    console.log("[doReceptionnerDirect] INSERT OK");
 
-    await sb.from("vehicules").update({ etat: "atelier" }).eq("id", vId);
-    await sb.from("alertes").insert({
+    const { error: vErr } = await sb.from("vehicules").update({ etat: "atelier" }).eq("id", vId);
+    if (vErr) console.error("[doReceptionnerDirect] vehicule update:", vErr.message);
+
+    const { error: aErr } = await sb.from("alertes").insert({
       type: "vehicule", severity: "normale", read: false, vehicle_id: vId,
       message: `🔧 Véhicule ${plaque} réceptionné directement à l'atelier — ${directRecepF.description.slice(0, 80)}`,
     });
+    if (aErr) console.error("[doReceptionnerDirect] alerte insert:", aErr.message);
 
     setDirectRecep(false);
     setDirectRecepVehId("");
