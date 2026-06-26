@@ -1,9 +1,10 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, isoToday, fmtHHMM, nowTimeStr } from "@/lib/constants";
 import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant, CongesDemande } from "@/lib/types";
-import { Bus, Home, FileText, Activity, AlertCircle, Mail, History, CalendarDays } from "lucide-react";
+import { Bus, Home, FileText, Activity, AlertCircle, Mail, History, CalendarDays, LogOut, Menu } from "lucide-react";
 import { BSheet, BigBtn, Inp, TA, Chip, StatusBadge, SIGN_LABELS, schoolYearStart } from "./tabs/shared";
 import { TabDashboard } from "./tabs/Dashboard";
 import { TabFiche } from "./tabs/Fiche";
@@ -17,6 +18,7 @@ type Tab = "dashboard" | "fiche" | "service" | "signalements" | "messages" | "hi
 
 export default function ConducteurPage(){
   const sb=createClient();
+  const router=useRouter();
 
   const [driver,    setDriver]    = useState<Conducteur|null>(null);
   const [todayLog,  setTodayLog]  = useState<ServiceLog|null>(null);
@@ -28,6 +30,7 @@ export default function ConducteurPage(){
   const [conges,    setConges]    = useState<CongesDemande[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState<Tab>("dashboard");
+  const [drawerOpen,setDrawerOpen]= useState(false);
 
   // Modals service
   const [showConfirm,  setShowConfirm]  = useState(false);
@@ -259,6 +262,11 @@ export default function ConducteurPage(){
     setEditTel(false);setTelSaving(false);
   }
 
+  async function handleSignOut(){
+    await sb.auth.signOut();
+    router.push("/login");
+  }
+
   // ── Valeurs calculées ─────────────────────────────────────────────────────────
   const circ   = driver?.circuit as{nom?:string;emoji?:string;enfants_count?:number;id?:string;cercle?:{nom?:string}}|undefined;
   const veh    = driver?.vehicule as{plaque?:string;marque?:string;modele?:string}|undefined;
@@ -311,8 +319,92 @@ export default function ConducteurPage(){
   );
 
   // ── Render ────────────────────────────────────────────────────────────────────
+  const initials=((driver.prenom[0]??"").toUpperCase()+(driver.nom[0]??"").toUpperCase());
+  const totalBadge=unreadMsg+pendingInc;
   return(
-    <div style={{maxWidth:860,margin:"0 auto",paddingBottom:80}}>
+    <div style={{minHeight:"100vh",background:C.gray50}}>
+
+      {/* ── Header sticky ── */}
+      <header style={{position:"sticky",top:0,zIndex:100,background:C.navy,
+        height:56,display:"flex",alignItems:"center",justifyContent:"space-between",
+        padding:"0 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.2)"}}>
+        <img src="/logo.png" alt="Taxi Romontois" style={{height:32,width:"auto",display:"block"}} />
+        <button onClick={()=>setDrawerOpen(true)}
+          style={{position:"relative",background:"transparent",border:"none",
+            color:C.white,cursor:"pointer",padding:8,borderRadius:8,
+            display:"flex",alignItems:"center"}}>
+          <Menu size={24} color={C.white} />
+          {totalBadge>0&&(
+            <span style={{position:"absolute",top:4,right:4,background:C.red,
+              color:C.white,borderRadius:99,fontSize:9,fontWeight:900,
+              minWidth:14,height:14,display:"flex",alignItems:"center",
+              justifyContent:"center",padding:"0 3px",lineHeight:1}}>
+              {Math.min(totalBadge,99)}
+            </span>
+          )}
+        </button>
+      </header>
+
+      {/* ── Drawer depuis la droite ── */}
+      {drawerOpen&&(
+        <div style={{position:"fixed",inset:0,zIndex:200}}>
+          <div onClick={()=>setDrawerOpen(false)}
+            style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.45)"}} />
+          <div style={{position:"absolute",right:0,top:0,bottom:0,width:260,
+            background:C.navy,display:"flex",flexDirection:"column",
+            boxShadow:"-4px 0 20px rgba(0,0,0,0.3)",zIndex:1}}>
+            <div style={{padding:"20px 16px 14px",borderBottom:"1px solid rgba(255,255,255,0.1)",
+              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <img src="/logo.png" alt="Taxi Romontois" style={{height:28,width:"auto"}} />
+              <button onClick={()=>setDrawerOpen(false)}
+                style={{background:"none",border:"none",color:"rgba(255,255,255,0.7)",
+                  fontSize:22,cursor:"pointer",lineHeight:1,padding:4}}>✕</button>
+            </div>
+            <div style={{padding:"16px 18px",borderBottom:"1px solid rgba(255,255,255,0.1)",
+              display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:42,height:42,borderRadius:"50%",background:C.white,
+                color:C.navy,display:"flex",alignItems:"center",justifyContent:"center",
+                fontWeight:900,fontSize:16,flexShrink:0}}>
+                {initials||"??"}
+              </div>
+              <div>
+                <div style={{color:C.white,fontWeight:700,fontSize:14}}>{driver.prenom} {driver.nom}</div>
+                <div style={{color:C.sky,fontWeight:600,fontSize:12}}>Conducteur</div>
+              </div>
+            </div>
+            <nav style={{flex:1,padding:10,overflowY:"auto"}}>
+              {TABS.map(t=>(
+                <button key={t.id} onClick={()=>{setTab(t.id);setDrawerOpen(false);}}
+                  style={{width:"100%",display:"flex",alignItems:"center",gap:10,
+                    padding:"10px 12px",borderRadius:8,border:"none",cursor:"pointer",
+                    background:tab===t.id?C.white:"transparent",
+                    color:tab===t.id?C.navy:C.white,
+                    fontWeight:tab===t.id?800:600,fontSize:13,textAlign:"left",marginBottom:2}}>
+                  <span style={{display:"flex",alignItems:"center"}}>{TAB_ICONS[t.id]}</span>
+                  <span style={{flex:1}}>{t.label}</span>
+                  {t.badge!=null&&t.badge>0&&(
+                    <span style={{background:tab===t.id?"rgba(13,59,122,0.15)":C.red,
+                      color:tab===t.id?C.navy:C.white,borderRadius:20,
+                      fontSize:10,fontWeight:800,padding:"1px 7px"}}>{t.badge}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
+            <div style={{padding:"12px 14px",borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+              <button onClick={handleSignOut}
+                style={{width:"100%",padding:"12px 16px",borderRadius:10,border:"none",
+                  background:"transparent",color:C.white,cursor:"pointer",
+                  fontSize:14,fontWeight:700,textAlign:"left",
+                  display:"flex",alignItems:"center",gap:8}}>
+                <LogOut size={16} color={C.white} /> Déconnexion
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Contenu ── */}
+      <div style={{maxWidth:860,margin:"0 auto",padding:"16px 16px 80px"}}>
 
       {/* Bannière d'accueil */}
       <div style={{background:`linear-gradient(135deg,${C.navy},${C.navyL})`,
@@ -336,26 +428,6 @@ export default function ConducteurPage(){
           {circ&&<span style={{fontSize:13,opacity:0.85,fontWeight:600}}>{circ.emoji} Circuit {circ.nom}</span>}
           {veh&&<span style={{fontSize:13,opacity:0.75,display:"flex",alignItems:"center",gap:4}}><Bus size={13} /> {veh.plaque}</span>}
         </div>
-      </div>
-
-      {/* Barre d'onglets */}
-      <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:20,paddingBottom:4,
-        scrollbarWidth:"none",msOverflowStyle:"none"} as React.CSSProperties}>
-        {TABS.map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{padding:"10px 14px",borderRadius:12,border:"none",cursor:"pointer",
-              fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:5,
-              whiteSpace:"nowrap",flexShrink:0,
-              background:tab===t.id?C.navy:"#E2E8F0",color:tab===t.id?"#fff":C.gray}}>
-            {TAB_ICONS[t.id]} {t.label}
-            {t.badge!=null&&t.badge>0&&(
-              <span style={{background:tab===t.id?"rgba(255,255,255,0.3)":C.red,
-                color:"#fff",borderRadius:20,padding:"1px 6px",fontSize:11,fontWeight:800}}>
-                {t.badge}
-              </span>
-            )}
-          </button>
-        ))}
       </div>
 
       {/* Contenu des onglets */}
@@ -508,6 +580,7 @@ export default function ConducteurPage(){
         </BSheet>
       )}
 
+      </div>
     </div>
   );
 }

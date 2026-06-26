@@ -1,12 +1,13 @@
 "use client";
-import { Bell, Wrench, CheckCircle2, Archive, MessageSquare, Save, Bus, Package, AlertTriangle, Inbox, BarChart2, FileText, XCircle } from "lucide-react";
+import { Bell, Wrench, CheckCircle2, Archive, MessageSquare, Save, Bus, Package, AlertTriangle, Inbox, BarChart2, FileText, XCircle, LogOut, Menu, Home } from "lucide-react";
 import MessagerieBox from "@/components/MessagerieBox";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDate, fmtDateTime, isoToday } from "@/lib/constants";
 import type { Vehicule, Reparation, Alerte } from "@/lib/types";
 
-type MTab = "alertes" | "atelier" | "prets" | "historique" | "messages";
+type MTab = "accueil" | "flotte" | "alertes" | "atelier" | "prets" | "historique" | "messages";
 
 const BUDGET_SEUIL = 1000;
 
@@ -152,8 +153,10 @@ function BigBtn({ icon, label, onClick, color = C.navy, outline = false, disable
 export default function MecanicienPage() {
   // useMemo : référence stable → useCallback([sb]) ne change pas chaque render → Realtime stable
   const sb = useMemo(() => createClient(), []);
+  const router = useRouter();
 
-  const [tab,         setTab]         = useState<MTab>("alertes");
+  const [tab,         setTab]         = useState<MTab>("accueil");
+  const [drawerOpen,  setDrawerOpen]  = useState(false);
   const [loading,     setLoading]     = useState(true);
 
   // Data
@@ -561,6 +564,11 @@ export default function MecanicienPage() {
     setVeSheet(null);
   }
 
+  async function handleSignOut() {
+    await sb.auth.signOut();
+    router.push("/login");
+  }
+
   // ── Computed ─────────────────────────────────────────────────────────────────
   const ATELIER_ST = ["receptionne", "en_reparation", "en_attente_piece", "en_attente_validation"];
   const atelierReps = reparations.filter(r => ATELIER_ST.includes(r.statut));
@@ -575,6 +583,8 @@ export default function MecanicienPage() {
   const totalGlob = histReps.reduce((s, r) => s + (r.cout || 0), 0);
 
   const MTAB_ICONS: Record<MTab, React.ReactNode> = {
+    accueil:    <Home size={14} />,
+    flotte:     <Bus size={14} />,
     alertes:    <Bell size={14} />,
     atelier:    <Wrench size={14} />,
     prets:      <CheckCircle2 size={14} />,
@@ -582,12 +592,15 @@ export default function MecanicienPage() {
     messages:   <MessageSquare size={14} />,
   };
   const tabs: { id: MTab; label: string; badge?: number }[] = [
+    { id: "accueil",    label: "Accueil" },
+    { id: "flotte",     label: "Flotte" },
     { id: "alertes",    label: "Alertes",    badge: alertesMeca.length || undefined },
     { id: "atelier",    label: "Atelier",    badge: atelierReps.length || undefined },
     { id: "prets",      label: "Prêts",      badge: pretsReps.length || undefined },
     { id: "historique", label: "Historique" },
     { id: "messages",   label: "Messages",   badge: msgDecisions.length || undefined },
   ];
+  const mecaTotalBadge = alertesMeca.length + msgDecisions.length;
 
   if (loading) return (
     <div style={{ textAlign: "center", padding: 60, color: C.gray400, fontSize: 14 }}>Chargement…</div>
@@ -595,7 +608,87 @@ export default function MecanicienPage() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div style={{ maxWidth: 800, margin: "0 auto", padding: "0 4px" }}>
+    <div style={{ minHeight: "100vh", background: C.gray50 }}>
+
+      {/* ── Header sticky ── */}
+      <header style={{ position: "sticky", top: 0, zIndex: 100, background: C.navy,
+        height: 56, display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }}>
+        <img src="/logo.png" alt="Taxi Romontois" style={{ height: 32, width: "auto", display: "block" }} />
+        <button onClick={() => setDrawerOpen(true)}
+          style={{ position: "relative", background: "transparent", border: "none",
+            color: C.white, cursor: "pointer", padding: 8, borderRadius: 8,
+            display: "flex", alignItems: "center" }}>
+          <Menu size={24} color={C.white} />
+          {mecaTotalBadge > 0 && (
+            <span style={{ position: "absolute", top: 4, right: 4, background: C.red,
+              color: C.white, borderRadius: 99, fontSize: 9, fontWeight: 900,
+              minWidth: 14, height: 14, display: "flex", alignItems: "center",
+              justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
+              {Math.min(mecaTotalBadge, 99)}
+            </span>
+          )}
+        </button>
+      </header>
+
+      {/* ── Drawer depuis la droite ── */}
+      {drawerOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200 }}>
+          <div onClick={() => setDrawerOpen(false)}
+            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
+          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 260,
+            background: C.navy, display: "flex", flexDirection: "column",
+            boxShadow: "-4px 0 20px rgba(0,0,0,0.3)", zIndex: 1 }}>
+            <div style={{ padding: "20px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.1)",
+              display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <img src="/logo.png" alt="Taxi Romontois" style={{ height: 28, width: "auto" }} />
+              <button onClick={() => setDrawerOpen(false)}
+                style={{ background: "none", border: "none", color: "rgba(255,255,255,0.7)",
+                  fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 4 }}>✕</button>
+            </div>
+            <div style={{ padding: "16px 18px", borderBottom: "1px solid rgba(255,255,255,0.1)",
+              display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 42, height: 42, borderRadius: "50%", background: C.white,
+                color: C.navy, display: "flex", alignItems: "center", justifyContent: "center",
+                fontWeight: 900, fontSize: 16, flexShrink: 0 }}>RM</div>
+              <div>
+                <div style={{ color: C.white, fontWeight: 700, fontSize: 14 }}>Rachid Mehni</div>
+                <div style={{ color: C.sky, fontWeight: 600, fontSize: 12 }}>Mécanicien</div>
+              </div>
+            </div>
+            <nav style={{ flex: 1, padding: 10, overflowY: "auto" }}>
+              {tabs.map(t => (
+                <button key={t.id} onClick={() => { setTab(t.id); setDrawerOpen(false); }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
+                    padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+                    background: tab === t.id ? C.white : "transparent",
+                    color: tab === t.id ? C.navy : C.white,
+                    fontWeight: tab === t.id ? 800 : 600, fontSize: 13, textAlign: "left", marginBottom: 2 }}>
+                  <span style={{ display: "flex", alignItems: "center" }}>{MTAB_ICONS[t.id]}</span>
+                  <span style={{ flex: 1 }}>{t.label}</span>
+                  {t.badge != null && t.badge > 0 && (
+                    <span style={{ background: tab === t.id ? "rgba(13,59,122,0.15)" : C.red,
+                      color: tab === t.id ? C.navy : C.white, borderRadius: 20,
+                      fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{t.badge}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
+            <div style={{ padding: "12px 14px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+              <button onClick={handleSignOut}
+                style={{ width: "100%", padding: "12px 16px", borderRadius: 10, border: "none",
+                  background: "transparent", color: C.white, cursor: "pointer",
+                  fontSize: 14, fontWeight: 700, textAlign: "left",
+                  display: "flex", alignItems: "center", gap: 8 }}>
+                <LogOut size={16} color={C.white} /> Déconnexion
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Contenu ── */}
+      <div style={{ maxWidth: 800, margin: "0 auto", padding: "16px 4px 80px" }}>
 
       {/* Profil mécanicien */}
       <div style={{ background: `linear-gradient(135deg,${C.navy},${C.navyL})`, borderRadius: 16,
@@ -626,24 +719,72 @@ export default function MecanicienPage() {
         </div>
       </div>
 
-      {/* Tab nav */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 20, overflowX: "auto", paddingBottom: 4,
-        scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 16px",
-              borderRadius: 12, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer",
-              whiteSpace: "nowrap", flexShrink: 0,
-              background: tab === t.id ? C.navy : C.gray100,
-              color: tab === t.id ? C.white : C.gray600 }}>
-            {MTAB_ICONS[t.id]}{" "}{t.label}
-            {t.badge != null && t.badge > 0 && (
-              <span style={{ background: C.red, color: C.white, borderRadius: 99,
-                padding: "1px 7px", fontSize: 11, fontWeight: 800 }}>{t.badge}</span>
-            )}
-          </button>
-        ))}
-      </div>
+      {/* ── TAB ACCUEIL ───────────────────────────────────────────────────────── */}
+      {tab === "accueil" && (
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+            {[
+              { v: atelierReps.length, l: "En atelier", c: C.navy,  ic: <Wrench size={22} /> },
+              { v: pretsReps.length,   l: "Prêts",      c: C.green, ic: <CheckCircle2 size={22} /> },
+              { v: alertesMeca.length, l: "Alertes",    c: C.red,   ic: <Bell size={22} /> },
+              { v: vehicules.filter(v => (v.etat as string) === "bon").length, l: "En service", c: "#0284C7", ic: <Bus size={22} /> },
+            ].map(({ v, l, c, ic }) => (
+              <div key={l} style={{ background: C.white, borderRadius: 14, padding: 16,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.07)", textAlign: "center" }}>
+                <div style={{ color: c, display: "flex", justifyContent: "center", marginBottom: 6 }}>{ic}</div>
+                <div style={{ fontSize: 26, fontWeight: 900, color: c }}>{v}</div>
+                <div style={{ fontSize: 12, color: C.gray600, fontWeight: 600, marginTop: 2 }}>{l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ background: C.white, borderRadius: 14, padding: 20,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 14 }}>Budget réparations</div>
+            <DL l="Ce mois" v={`${totalMois.toLocaleString("fr-CH")} CHF`} />
+            <DL l="Cette année" v={`${totalAn.toLocaleString("fr-CH")} CHF`} />
+            <DL l="Total historique" v={`${totalGlob.toLocaleString("fr-CH")} CHF`} />
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB FLOTTE ────────────────────────────────────────────────────────── */}
+      {tab === "flotte" && (
+        <div>
+          {vehicules.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><Bus size={48} color={C.gray400} /></div>
+              <p style={{ fontWeight: 700 }}>Aucun véhicule</p>
+            </div>
+          ) : vehicules.map(v => {
+            const etat = v.etat as string;
+            const etatColor = etat === "bon" ? C.green : etat === "atelier" ? C.amber : C.gray400;
+            const etatLabel = etat === "bon" ? "En service" : etat === "atelier" ? "En atelier" : etat;
+            const cond = v.conducteur as { prenom?: string; nom?: string } | undefined;
+            const circ = v.circuit as { nom?: string; emoji?: string } | undefined;
+            return (
+              <div key={v.id} onClick={() => openVe(v)}
+                style={{ background: C.white, borderRadius: 14, padding: 16, marginBottom: 10,
+                  cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.07)",
+                  borderLeft: `4px solid ${etatColor}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.navy }}>{v.plaque}</div>
+                    <div style={{ fontSize: 12, color: C.gray400 }}>{v.marque} {v.modele}</div>
+                  </div>
+                  <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                    background: etat === "bon" ? C.greenL : etat === "atelier" ? C.amberL : C.gray100,
+                    color: etatColor }}>
+                    {etatLabel}
+                  </span>
+                </div>
+                {cond && <div style={{ fontSize: 12, color: C.gray600, marginBottom: 3 }}>👤 {cond.prenom} {cond.nom}</div>}
+                {circ && <div style={{ fontSize: 12, color: C.gray600 }}>{circ.emoji} Circuit {circ.nom}</div>}
+                {v.km != null && <div style={{ fontSize: 11, color: C.gray400, marginTop: 4 }}>{v.km.toLocaleString()} km</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── TAB ALERTES ───────────────────────────────────────────────────────── */}
       {tab === "alertes" && (
@@ -1292,6 +1433,7 @@ export default function MecanicienPage() {
         </Sheet>
       )}
 
+      </div>
     </div>
   );
 }

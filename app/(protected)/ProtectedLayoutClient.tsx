@@ -77,33 +77,20 @@ export default function ProtectedLayoutClient({
     );
   }
 
-  // Conducteur : layout sans sidebar, header toujours visible
+  // Conducteur : la page gère son propre header et drawer mobile
   if (profile.role === "conducteur") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: C.gray50, color: C.gray800 }}>
-        <header style={{
-          position: "sticky", top: 0, zIndex: 100,
-          background: C.navy, padding: "0 16px",
-          height: 56, display: "flex", alignItems: "center", justifyContent: "space-between",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.2)", flexShrink: 0,
-        }}>
-          <img src="/logo.png" alt="Taxi Romontois"
-            style={{ height: 32, width: "auto", display: "block" }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ color: "rgba(255,255,255,0.85)", fontWeight: 700, fontSize: 14 }}>
-              {profile.prenom} {profile.nom}
-            </span>
-            <button onClick={handleSignOut}
-              style={{ background: "transparent", border: "none", color: C.white, cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10,
-                fontWeight: 700, fontSize: 14 }}>
-              <LogOut size={16} color={C.white} /> Déconnexion
-            </button>
-          </div>
-        </header>
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
-          {children}
-        </div>
+      <div style={{ minHeight: "100vh", background: C.gray50, color: C.gray800 }}>
+        {children}
+      </div>
+    );
+  }
+
+  // Mécanicien : la page gère son propre header et drawer mobile
+  if (profile.role === "mecanicien") {
+    return (
+      <div style={{ minHeight: "100vh", background: C.gray50, color: C.gray800 }}>
+        {children}
       </div>
     );
   }
@@ -141,7 +128,7 @@ export default function ProtectedLayoutClient({
         <div style={{ position: "fixed", inset: 0, zIndex: 200 }}>
           <div onClick={() => setMobileNavOpen(false)}
             style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
-          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 260, zIndex: 1 }}>
+          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 260, zIndex: 1, boxShadow: "-4px 0 20px rgba(0,0,0,0.3)" }}>
             <Sidebar
               role={profile.role}
               nom={profile.nom}
