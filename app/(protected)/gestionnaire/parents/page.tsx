@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C, fmtDateTime } from "@/lib/constants";
+import { C, fmtDateTime, fmtEnfant } from "@/lib/constants";
 import { Badge, Btn, Modal, InfoBox } from "@/components/ui";
 import { Pen, Trash2, Bell, Zap, Send, Inbox, Users, CheckCircle2, Clock } from "lucide-react";
 
@@ -90,7 +90,7 @@ function ParentForm({ init, enfants, onSave, onCancel, saving }: {
         <select value={f.enfant_id ?? ""} onChange={e => set("enfant_id", e.target.value ? Number(e.target.value) : undefined)}
           style={{ ...inp }}>
           <option value="">— À compléter —</option>
-          {enfants.map(e => <option key={e.id} value={e.id}>{e.prenom} {e.nom}{e.circuit ? ` · ${e.circuit.emoji} ${e.circuit.nom}` : ""}</option>)}
+          {enfants.map(e => <option key={e.id} value={e.id}>{fmtEnfant(e.prenom, e.nom)}{e.circuit ? ` · ${e.circuit.emoji} ${e.circuit.nom}` : ""}</option>)}
         </select>
       </div>
       <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
@@ -274,7 +274,7 @@ export default function ParentsPage() {
                   textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
                   Enfant
                 </div>
-                <InfoBox label="Nom" value={`${enfant.prenom} ${enfant.nom}`} />
+                <InfoBox label="Nom" value={fmtEnfant(enfant.prenom, enfant.nom)} />
                 {enfant.circuit && <InfoBox label="Circuit" value={`${enfant.circuit.emoji} ${enfant.circuit.nom}`} />}
                 {enfant.adresse_mere && <InfoBox label="Adresse mère" value={enfant.adresse_mere} full />}
                 {enfant.adresse_pere && <InfoBox label="Adresse père" value={enfant.adresse_pere} full />}
@@ -428,7 +428,7 @@ export default function ParentsPage() {
                 {enfant ? (
                   <div style={{ background: C.skyL, borderRadius: 8, padding: "8px 10px" }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.navy }}>
-                      {enfant.prenom} {enfant.nom}
+                      {fmtEnfant(enfant.prenom, enfant.nom)}
                     </div>
                     {enfant.circuit && (
                       <div style={{ fontSize: 11, color: C.gray400, marginTop: 1 }}>

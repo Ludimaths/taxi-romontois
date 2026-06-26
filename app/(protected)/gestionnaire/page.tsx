@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { C, statusColor, statusLabel, todayStr, isoToday, fmtTime, fmtDateTime } from "@/lib/constants";
+import { C, statusColor, statusLabel, todayStr, isoToday, fmtTime, fmtDateTime, fmtEnfant } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal } from "@/components/ui";
 import {
   Bus, Users, UserX, AlertCircle, Bell, Route, Loader2, Menu,
@@ -151,7 +151,7 @@ function ChildAbsModal({ absence, enfants, drivers, circuits, onClose, onTransmi
     <Modal title="Absence enfant" onClose={onClose}>
       <div style={{ background: C.amberL, borderRadius: 12, padding: 16, marginBottom: 16, border: `1px solid #FDE68A` }}>
         <div style={{ fontSize: 15, fontWeight: 800, color: C.amber, marginBottom: 4, display: "flex", alignItems: "center", gap: 7 }}>
-          <AlertTriangle size={15} /> {child?.prenom} {child?.nom}
+          <AlertTriangle size={15} /> {fmtEnfant(child?.prenom, child?.nom)}
         </div>
         <div style={{ fontSize: 13, color: C.gray800 }}>Motif : <strong>{absence.reason}</strong></div>
         <div style={{ fontSize: 12, color: C.gray600, marginTop: 4 }}>
@@ -804,7 +804,7 @@ export default function GestionnaireDashboard() {
                 <div key={a.id} onClick={() => setChildAbsM(a)}
                   style={{ ...row, cursor: "pointer", background: a.read_by_gestionnaire ? C.white : C.amberL }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>{child?.prenom} {child?.nom}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>{fmtEnfant(child?.prenom, child?.nom)}</div>
                     <div style={{ fontSize: 11, color: C.gray400 }}>
                       {a.reason} · {circ?.emoji} {circ?.nom} · {fmtTime(a.reported_at)}
                     </div>

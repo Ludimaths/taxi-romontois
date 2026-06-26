@@ -165,6 +165,15 @@ export const fmtHHMM = (d?: string | null): string => {
 // Heure courante pour insertion DB : "14:30:00"
 export const nowTimeStr = (): string => new Date().toTimeString().slice(0, 8);
 
+// Affichage anonymisé enfant : "Martin A."
+export const fmtEnfant = (prenom?: string | null, nom?: string | null): string => {
+  const n = nom?.trim() ?? "";
+  const p = prenom?.trim() ?? "";
+  if (!n && !p) return "—";
+  if (!p) return n;
+  return `${n} ${p[0].toUpperCase()}.`;
+};
+
 // Email conducteur depuis prenom + nom
 export const conducteurEmail = (prenom: string, nom: string): string => {
   const clean = (s: string) =>

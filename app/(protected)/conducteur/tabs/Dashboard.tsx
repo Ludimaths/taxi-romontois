@@ -1,6 +1,6 @@
 "use client";
 import { CheckCircle2, XCircle, Circle, MapPin, Bus, Baby, RefreshCw } from "lucide-react";
-import { C, fmtHHMM, fmtDateTime, isoToday } from "@/lib/constants";
+import { C, fmtHHMM, fmtDateTime, isoToday, fmtEnfant } from "@/lib/constants";
 import type { Conducteur, ServiceLog, AbsenceEnfant, Enfant, Alerte } from "@/lib/types";
 import { StatusBadge, BigBtn, calcDuration } from "./shared";
 
@@ -83,7 +83,7 @@ export function TabDashboard({
                 marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <div style={{fontWeight:700,fontSize:13,color:"#1E293B"}}>
-                    {enf?.prenom} {enf?.nom} — {a.reason}
+                    {fmtEnfant(enf?.prenom, enf?.nom)} — {a.reason}
                   </div>
                   <div style={{fontSize:11,color:C.gray,marginTop:2}}>
                     Signalé à {new Date(a.reported_at).toLocaleTimeString("fr-CH",{hour:"2-digit",minute:"2-digit"})}

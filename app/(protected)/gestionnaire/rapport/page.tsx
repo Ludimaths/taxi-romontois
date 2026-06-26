@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C, statusLabel, todayStr, fmtDate, fmtDateTime } from "@/lib/constants";
+import { C, statusLabel, todayStr, fmtDate, fmtDateTime, fmtEnfant } from "@/lib/constants";
 import { Badge, Card, Avatar } from "@/components/ui";
 import type { Conducteur, Circuit, Incident, Alerte, AbsenceEnfant, Reparation } from "@/lib/types";
 import { AlertTriangle, MapPin, AlertCircle, Bell, Wrench, Baby, UserX, RefreshCw } from "lucide-react";
@@ -268,7 +268,7 @@ export default function RapportPage() {
             ? <div style={{ padding: 20, textAlign: "center", color: C.gray400, fontSize: 13 }}>Aucune absence signalée</div>
             : absences.map(a => (
               <div key={a.id} style={{ padding: "12px 18px", borderBottom: `1px solid ${C.gray100}` }}>
-                <div style={{ fontWeight: 700, fontSize: 13 }}>{(a as any).enfant?.prenom} {(a as any).enfant?.nom}</div>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{fmtEnfant((a as any).enfant?.prenom, (a as any).enfant?.nom)}</div>
                 <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>
                   {(a as any).circuit?.emoji} {(a as any).circuit?.nom} · {a.reason} · {fmtDate(a.date_absence)}
                 </div>

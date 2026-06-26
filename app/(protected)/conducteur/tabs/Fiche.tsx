@@ -1,5 +1,5 @@
 "use client";
-import { C, fmtDate } from "@/lib/constants";
+import { C, fmtDate, fmtEnfant } from "@/lib/constants";
 import type { Conducteur, Enfant } from "@/lib/types";
 import { StatusBadge, DL, baseInp } from "./shared";
 
@@ -98,7 +98,7 @@ export function TabFiche({driver,circ,veh,enfantsCircuit,editTel,telValue,telSav
             <div key={e.id} style={{padding:"8px 0",borderBottom:"1px solid #F1F5F9",
               display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
-                <div style={{fontWeight:700,fontSize:14,color:"#1E293B"}}>{e.prenom} {e.nom}</div>
+                <div style={{fontWeight:700,fontSize:14,color:"#1E293B"}}>{fmtEnfant(e.prenom, e.nom)}</div>
                 {e.parent_nom&&<div style={{fontSize:12,color:C.gray}}>Parent : {e.parent_nom}</div>}
               </div>
               {e.parent_tel&&<span style={{fontSize:12,color:C.blue,fontWeight:600}}>{e.parent_tel}</span>}

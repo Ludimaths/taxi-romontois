@@ -6,6 +6,7 @@ import {
   Thermometer, Home, Edit3, CheckCircle2, Calendar, Printer, Send,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fmtEnfant } from "@/lib/constants";
 import type { Enfant, AbsenceEnfant, Circuit, Profile, Conducteur } from "@/lib/types";
 
 /* ─── palette ─── */
@@ -289,7 +290,7 @@ export default function ParentPage() {
           </div>
           <div>
             <div style={{ fontSize:22, fontWeight:900, color:G.navy }}>
-              {child.prenom} {child.nom}
+              {fmtEnfant(child.prenom, child.nom)}
             </div>
             <div style={{ fontSize:15, color:G.gray, marginTop:2 }}>
               {circuit?.cercle?.nom ?? "—"}

@@ -1,6 +1,6 @@
 "use client";
 import { RefreshCw, Zap, Inbox } from "lucide-react";
-import { C, fmtDateTime, isoToday } from "@/lib/constants";
+import { C, fmtDateTime, isoToday, fmtEnfant } from "@/lib/constants";
 import type { Alerte, Incident, AbsenceEnfant, Enfant } from "@/lib/types";
 import { SIGN_TYPES } from "./shared";
 import MessagerieBox from "@/components/MessagerieBox";
@@ -210,7 +210,7 @@ export function TabMessages({
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                   <div>
                     <div style={{fontWeight:700,fontSize:14,color:"#1E293B"}}>
-                      {enf?.prenom} {enf?.nom}
+                      {fmtEnfant(enf?.prenom, enf?.nom)}
                       {isToday&&<span style={{marginLeft:8,fontSize:11,fontWeight:700,
                         color:C.amber,background:C.amberL,borderRadius:99,padding:"2px 7px"}}>
                         Aujourd'hui
