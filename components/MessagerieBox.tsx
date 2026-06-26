@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
-import { Send, Inbox, ChevronLeft } from "lucide-react";
+import { Send, MessageSquare, Search } from "lucide-react";
 
 interface MsgInterne {
   id: number;
@@ -19,6 +19,7 @@ interface MsgInterne {
 interface Person {
   id: string;
   nom: string;
+  role: string;
 }
 
 interface Props {
@@ -39,15 +40,15 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
   const sb = createClient();
   const [myId,           setMyId]           = useState<string | null>(null);
   const [myNom,          setMyNom]          = useState(myNomProp ?? "");
+  const [allPersons,     setAllPersons]     = useState<Person[]>([]);
   const [messages,       setMessages]       = useState<MsgInterne[]>([]);
-  const [selectedTarget, setSelectedTarget] = useState(allowedTargets[0]?.role ?? "");
-  const [persons,        setPersons]        = useState<Record<string, Person[]>>({});
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+  const [searchQuery,    setSearchQuery]    = useState("");
   const [text,           setText]           = useState("");
   const [sending,        setSending]        = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Identité utilisateur
+  // Identité
   useEffect(() => {
     sb.auth.getUser().then(async ({ data }) => {
       if (!data.user) return;
@@ -60,107 +61,106 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Chargement des personnes pour chaque rôle cible
+  // Chargement de tous les contacts
   useEffect(() => {
     const roles = allowedTargets.map(t => t.role);
-    sb.from("profiles")
-      .select("id, prenom, nom, role")
-      .in("role", roles)
+    sb.from("profiles").select("id,prenom,nom,role").in("role", roles)
       .then(({ data }) => {
         if (!data) return;
-        const grouped: Record<string, Person[]> = {};
-        for (const p of data) {
-          const r = p.role as string;
-          if (!grouped[r]) grouped[r] = [];
-          grouped[r].push({ id: p.id as string, nom: `${p.prenom} ${p.nom}` });
-        }
-        Object.values(grouped).forEach(arr => arr.sort((a, b) => a.nom.localeCompare(b.nom, "fr")));
-        setPersons(grouped);
+        const persons = data.map(p => ({
+          id:   p.id as string,
+          nom:  `${p.prenom} ${p.nom}`,
+          role: p.role as string,
+        }));
+        persons.sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+        setAllPersons(persons);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-sélection si une seule personne dans le rôle
-  useEffect(() => {
-    const rolePersons = persons[selectedTarget] ?? [];
-    if (rolePersons.length === 1) {
-      setSelectedPerson(rolePersons[0]);
-    } else {
-      setSelectedPerson(null);
-    }
-  }, [selectedTarget, persons]);
-
+  // Chargement des messages
   const fetchMessages = useCallback(async () => {
     if (!myId) return;
-    const { data } = await sb
-      .from("messages_internes")
-      .select("*")
-      .or(`expediteur_id.eq.${myId},destinataire_role.eq.${myRole}`)
+    const { data } = await sb.from("messages_internes").select("*")
+      .or(`expediteur_id.eq.${myId},destinataire_id.eq.${myId},destinataire_role.eq.${myRole}`)
       .order("created_at", { ascending: true });
-    const msgs = (data ?? []) as MsgInterne[];
-    setMessages(msgs);
-    // Marquer comme lus les messages qui me sont adressés
-    const unread = msgs.filter(m =>
-      !m.lu &&
-      m.destinataire_role === myRole &&
-      m.expediteur_id !== myId &&
-      (m.destinataire_id === myId || !m.destinataire_id)
-    );
-    if (unread.length > 0) {
-      await sb.from("messages_internes").update({ lu: true }).in("id", unread.map(m => m.id));
-    }
+    setMessages((data ?? []) as MsgInterne[]);
   }, [sb, myId, myRole]);
 
   useEffect(() => {
     if (!myId) return;
     fetchMessages();
-    const ch = sb.channel(`msg-${myRole}-${myId}`)
+    const ch = sb.channel(`msg-box-${myRole}-${myId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages_internes" }, fetchMessages)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [fetchMessages, sb, myRole, myId]);
 
+  // Sélectionner une conversation + marquer comme lu
+  const selectPerson = useCallback(async (person: Person) => {
+    setSelectedPerson(person);
+    const unread = messages.filter(m =>
+      !m.lu &&
+      m.expediteur_id === person.id &&
+      (m.destinataire_id === myId || (m.destinataire_role === myRole && !m.destinataire_id))
+    );
+    if (unread.length > 0) {
+      await sb.from("messages_internes").update({ lu: true }).in("id", unread.map(m => m.id));
+      fetchMessages();
+    }
+  }, [messages, myId, myRole, sb, fetchMessages]);
+
+  // Scroll vers le bas
   useEffect(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
-  }, [messages, selectedTarget, selectedPerson]);
+  }, [messages, selectedPerson]);
 
+  // Envoi
   async function send() {
-    if (!text.trim() || !selectedTarget || !myId) return;
-    const rolePersons = persons[selectedTarget] ?? [];
-    if (rolePersons.length > 1 && !selectedPerson) return;
+    if (!text.trim() || !selectedPerson || !myId) return;
     setSending(true);
     await sb.from("messages_internes").insert({
-      expediteur_id:    myId,
-      expediteur_nom:   myNom,
-      expediteur_role:  myRole,
-      destinataire_role: selectedTarget,
-      destinataire_id:  selectedPerson?.id ?? null,
-      message:          text.trim(),
+      expediteur_id:     myId,
+      expediteur_nom:    myNom,
+      expediteur_role:   myRole,
+      destinataire_role: selectedPerson.role,
+      destinataire_id:   selectedPerson.id,
+      message:           text.trim(),
     });
     setText("");
     setSending(false);
   }
 
-  // Filtre de conversation selon la personne sélectionnée
-  const convoMessages = messages.filter(m => {
-    if (selectedPerson) {
-      return (
-        (m.expediteur_id === myId && (m.destinataire_id === selectedPerson.id || (m.destinataire_role === selectedTarget && !m.destinataire_id))) ||
-        (m.expediteur_id === selectedPerson.id && m.destinataire_role === myRole && (m.destinataire_id === myId || !m.destinataire_id))
-      );
-    }
-    return (
-      (m.expediteur_id === myId && m.destinataire_role === selectedTarget && !m.destinataire_id) ||
-      (m.destinataire_role === myRole && m.expediteur_role === selectedTarget && !m.destinataire_id)
+  // Helpers conversation
+  function getConvoMessages(person: Person): MsgInterne[] {
+    return messages.filter(m =>
+      (m.expediteur_id === myId && m.destinataire_id === person.id) ||
+      (m.expediteur_id === person.id && (
+        m.destinataire_id === myId ||
+        (m.destinataire_role === myRole && !m.destinataire_id)
+      ))
     );
-  });
+  }
+
+  function getLastMsg(person: Person): MsgInterne | null {
+    const msgs = getConvoMessages(person);
+    return msgs[msgs.length - 1] ?? null;
+  }
+
+  function getUnread(person: Person): number {
+    return messages.filter(m =>
+      !m.lu &&
+      m.expediteur_id === person.id &&
+      (m.destinataire_id === myId || (m.destinataire_role === myRole && !m.destinataire_id))
+    ).length;
+  }
 
   function groupByDay(msgs: MsgInterne[]) {
     const groups: Record<string, MsgInterne[]> = {};
     msgs.forEach(m => {
-      const day = m.created_at.slice(0, 10);
-      if (!groups[day]) groups[day] = [];
-      groups[day].push(m);
+      const d = m.created_at.slice(0, 10);
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(m);
     });
     return Object.entries(groups);
   }
@@ -174,183 +174,219 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
     return d.toLocaleDateString("fr-CH", { weekday: "long", day: "numeric", month: "long" });
   }
 
-  function fmtTime(iso: string) {
-    return new Date(iso).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
+  function fmtShort(iso: string) {
+    const d = new Date(iso);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (d >= today) return d.toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleDateString("fr-CH", { day: "2-digit", month: "2-digit" });
   }
 
-  const unreadCount = messages.filter(m =>
-    !m.lu && m.destinataire_role === myRole && m.expediteur_id !== myId &&
-    (m.destinataire_id === myId || !m.destinataire_id)
+  function initials(nom: string) {
+    return nom.split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+  }
+
+  // Tri : non lus en premier, puis par dernier message
+  const sortedPersons = [...allPersons].sort((a, b) => {
+    const au = getUnread(a), bu = getUnread(b);
+    if (au > 0 && bu === 0) return -1;
+    if (au === 0 && bu > 0) return 1;
+    const al = getLastMsg(a)?.created_at ?? "";
+    const bl = getLastMsg(b)?.created_at ?? "";
+    return bl.localeCompare(al);
+  });
+
+  const filteredPersons = searchQuery.trim()
+    ? sortedPersons.filter(p => p.nom.toLowerCase().includes(searchQuery.toLowerCase()))
+    : sortedPersons;
+
+  const convoMessages = selectedPerson ? getConvoMessages(selectedPerson) : [];
+
+  const totalUnread = messages.filter(m =>
+    !m.lu &&
+    m.expediteur_id !== myId &&
+    (m.destinataire_id === myId || (m.destinataire_role === myRole && !m.destinataire_id))
   ).length;
 
-  const rolePersons    = persons[selectedTarget] ?? [];
-  const needsPersonPick = rolePersons.length > 1 && !selectedPerson;
-  const canSend        = !!text.trim() && !!myId && (rolePersons.length === 0 || !!selectedPerson);
-
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", border: `1px solid ${C.gray200}`, borderRadius: 16,
+      overflow: "hidden", height: 520, background: C.white }}>
 
-      {/* Onglets rôles */}
-      {allowedTargets.length > 1 && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-          {allowedTargets.map(t => {
-            const tUnread = messages.filter(m =>
-              !m.lu && m.destinataire_role === myRole && m.expediteur_role === t.role && m.expediteur_id !== myId
-            ).length;
+      {/* ── Colonne gauche : liste contacts ─────────────────────────────── */}
+      <div style={{ width: 256, borderRight: `1px solid ${C.gray200}`,
+        display: "flex", flexDirection: "column", background: C.gray50, flexShrink: 0 }}>
+
+        {/* Barre de recherche */}
+        <div style={{ padding: "12px 12px 10px", borderBottom: `1px solid ${C.gray200}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7,
+            background: C.white, borderRadius: 10, border: `1px solid ${C.gray200}`,
+            padding: "7px 12px" }}>
+            <Search size={13} color={C.gray400} />
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Rechercher un contact…"
+              style={{ border: "none", outline: "none", fontSize: 12, color: C.gray800,
+                background: "transparent", flex: 1 }} />
+          </div>
+          {totalUnread > 0 && (
+            <div style={{ marginTop: 8, fontSize: 11, color: C.red, fontWeight: 700 }}>
+              {totalUnread} message{totalUnread > 1 ? "s" : ""} non lu{totalUnread > 1 ? "s" : ""}
+            </div>
+          )}
+        </div>
+
+        {/* Liste des contacts */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {filteredPersons.length === 0 ? (
+            <div style={{ padding: "32px 16px", textAlign: "center", color: C.gray400, fontSize: 12 }}>
+              Aucun contact
+            </div>
+          ) : filteredPersons.map(person => {
+            const lastMsg = getLastMsg(person);
+            const unread  = getUnread(person);
+            const isSel   = selectedPerson?.id === person.id;
             return (
-              <button key={t.role}
-                onClick={() => { setSelectedTarget(t.role); setSelectedPerson(null); }}
-                style={{ padding: "8px 16px", borderRadius: 20, border: "none", cursor: "pointer",
-                  fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 6,
-                  background: selectedTarget === t.role ? C.navy : C.gray100,
-                  color: selectedTarget === t.role ? C.white : C.gray600 }}>
-                {t.label}
-                {tUnread > 0 && (
-                  <span style={{ background: C.red, color: C.white, borderRadius: 99,
-                    padding: "1px 6px", fontSize: 10, fontWeight: 900 }}>{tUnread}</span>
-                )}
-              </button>
+              <div key={person.id} onClick={() => selectPerson(person)}
+                style={{ padding: "11px 12px", cursor: "pointer",
+                  display: "flex", gap: 10, alignItems: "center",
+                  background: isSel ? C.skyL : "transparent",
+                  borderBottom: `1px solid ${C.gray100}`,
+                  borderLeft: `3px solid ${isSel ? C.navy : "transparent"}`,
+                  transition: "background .1s" }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%",
+                  background: isSel ? C.navy : C.navyL,
+                  color: C.white, display: "flex", alignItems: "center", justifyContent: "center",
+                  fontWeight: 800, fontSize: 11, flexShrink: 0 }}>
+                  {initials(person.nom)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontWeight: unread > 0 ? 800 : 600, fontSize: 12,
+                      color: C.gray800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {person.nom}
+                    </span>
+                    {lastMsg && (
+                      <span style={{ fontSize: 10, color: C.gray400, flexShrink: 0 }}>
+                        {fmtShort(lastMsg.created_at)}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
+                    <span style={{ fontSize: 11, color: unread > 0 ? C.gray600 : C.gray400,
+                      fontWeight: unread > 0 ? 600 : 400,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                      {lastMsg
+                        ? (lastMsg.expediteur_id === myId ? "Vous : " : "") +
+                          lastMsg.message.slice(0, 30) + (lastMsg.message.length > 30 ? "…" : "")
+                        : ROLE_LABELS[person.role] ?? person.role}
+                    </span>
+                    {unread > 0 && (
+                      <span style={{ background: C.red, color: C.white, borderRadius: 99,
+                        fontSize: 10, fontWeight: 900, padding: "1px 5px",
+                        flexShrink: 0, marginLeft: 6 }}>
+                        {unread}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
-      )}
-      {allowedTargets.length === 1 && unreadCount > 0 && (
-        <div style={{ marginBottom: 10, fontSize: 13, color: C.red, fontWeight: 700 }}>
-          {unreadCount} nouveau(x) message(s)
-        </div>
-      )}
+      </div>
 
-      {/* Fil de retour vers la liste (si personne sélectionnée parmi plusieurs) */}
-      {selectedPerson && rolePersons.length > 1 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <button onClick={() => setSelectedPerson(null)}
-            style={{ background: "none", border: "none", cursor: "pointer", color: C.navyL,
-              display: "flex", alignItems: "center", gap: 4, fontWeight: 700, fontSize: 13, padding: 0 }}>
-            <ChevronLeft size={16} />{ROLE_LABELS[selectedTarget] ?? selectedTarget}
-          </button>
-          <span style={{ fontSize: 13, color: C.gray400 }}>›</span>
-          <span style={{ fontWeight: 800, fontSize: 13, color: C.navy }}>{selectedPerson.nom}</span>
-        </div>
-      )}
-
-      {needsPersonPick ? (
-        /* Liste de sélection de personne */
-        <div style={{ background: C.gray50, borderRadius: 16, border: `1px solid ${C.gray200}`,
-          overflow: "hidden", marginBottom: 12 }}>
-          <div style={{ padding: "10px 14px", fontSize: 11, fontWeight: 700, color: C.gray400,
-            textTransform: "uppercase", letterSpacing: 0.5, borderBottom: `1px solid ${C.gray200}` }}>
-            Sélectionner un {(ROLE_LABELS[selectedTarget] ?? selectedTarget).toLowerCase()}
-          </div>
-          {rolePersons.length === 0 ? (
-            <div style={{ padding: "24px 16px", textAlign: "center", color: C.gray400, fontSize: 13 }}>
-              Aucun {(ROLE_LABELS[selectedTarget] ?? selectedTarget).toLowerCase()} enregistré pour le moment
-            </div>
-          ) : rolePersons.map(p => (
-            <button key={p.id} onClick={() => setSelectedPerson(p)}
-              style={{ width: "100%", padding: "12px 16px", border: "none",
-                borderBottom: `1px solid ${C.gray100}`, background: C.white,
-                cursor: "pointer", textAlign: "left",
-                display: "flex", alignItems: "center", gap: 12, transition: "background .12s" }}
-              onMouseEnter={e => { e.currentTarget.style.background = C.skyL; }}
-              onMouseLeave={e => { e.currentTarget.style.background = C.white; }}>
-              <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.navy,
-                color: C.white, display: "flex", alignItems: "center", justifyContent: "center",
-                fontWeight: 800, fontSize: 12, flexShrink: 0 }}>
-                {p.nom.split(" ").map((w: string) => w[0]).slice(0, 2).join("")}
-              </div>
-              <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>{p.nom}</span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <>
-          {/* Nom de la personne auto-sélectionnée (rôle avec 1 seul utilisateur) */}
-          {selectedPerson && rolePersons.length === 1 && (
-            <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 700, color: C.gray600,
-              display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.navy,
+      {/* ── Colonne droite : conversation ───────────────────────────────── */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {selectedPerson ? (
+          <>
+            {/* En-tête */}
+            <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.gray200}`,
+              display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+              <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.navy,
                 color: C.white, display: "flex", alignItems: "center", justifyContent: "center",
                 fontWeight: 800, fontSize: 11 }}>
-                {selectedPerson.nom.split(" ").map((w: string) => w[0]).slice(0, 2).join("")}
+                {initials(selectedPerson.nom)}
               </div>
-              {selectedPerson.nom}
-            </div>
-          )}
-
-          {/* Fil de messages */}
-          <div style={{ background: C.gray50, borderRadius: 16, padding: "16px 14px",
-            minHeight: 180, maxHeight: 380, overflowY: "auto", marginBottom: 12,
-            display: "flex", flexDirection: "column", gap: 4,
-            border: `1px solid ${C.gray200}` }}>
-            {convoMessages.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "32px 0", color: C.gray400 }}>
-                <Inbox size={32} strokeWidth={1} style={{ margin: "0 auto 8px", display: "block" }} />
-                <p style={{ fontSize: 13, fontWeight: 600 }}>Démarrez la conversation</p>
-              </div>
-            ) : groupByDay(convoMessages).map(([day, msgs]) => (
-              <div key={day}>
-                <div style={{ textAlign: "center", margin: "8px 0" }}>
-                  <span style={{ fontSize: 11, color: C.gray400, fontWeight: 700,
-                    background: C.gray200, borderRadius: 99, padding: "2px 10px" }}>
-                    {fmtDay(day)}
-                  </span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>{selectedPerson.nom}</div>
+                <div style={{ fontSize: 11, color: C.gray400 }}>
+                  {ROLE_LABELS[selectedPerson.role] ?? selectedPerson.role}
                 </div>
-                {msgs.map(m => {
-                  const isMine = m.expediteur_id === myId;
-                  return (
-                    <div key={m.id} style={{ display: "flex",
-                      justifyContent: isMine ? "flex-end" : "flex-start",
-                      marginBottom: 6 }}>
-                      <div style={{ maxWidth: "78%",
-                        background: isMine ? C.navy : C.white,
-                        color: isMine ? C.white : C.gray800,
-                        borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
-                        padding: "10px 14px",
-                        boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
-                        {!isMine && (
-                          <div style={{ fontSize: 11, fontWeight: 700, color: C.navyL, marginBottom: 4 }}>
-                            {m.expediteur_nom || ROLE_LABELS[m.expediteur_role] || m.expediteur_role}
+              </div>
+            </div>
+
+            {/* Fil de messages */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px",
+              display: "flex", flexDirection: "column", gap: 2 }}>
+              {convoMessages.length === 0 ? (
+                <div style={{ flex: 1, display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center", color: C.gray400, textAlign: "center" }}>
+                  <MessageSquare size={28} strokeWidth={1.5} style={{ marginBottom: 8 }} />
+                  <p style={{ fontSize: 13, fontWeight: 600 }}>Démarrez la conversation</p>
+                </div>
+              ) : groupByDay(convoMessages).map(([day, msgs]) => (
+                <div key={day}>
+                  <div style={{ textAlign: "center", margin: "10px 0 8px" }}>
+                    <span style={{ fontSize: 10, color: C.gray400, fontWeight: 700,
+                      background: C.gray100, borderRadius: 99, padding: "2px 10px" }}>
+                      {fmtDay(day)}
+                    </span>
+                  </div>
+                  {msgs.map(m => {
+                    const isMine = m.expediteur_id === myId;
+                    return (
+                      <div key={m.id} style={{ display: "flex",
+                        justifyContent: isMine ? "flex-end" : "flex-start",
+                        marginBottom: 5 }}>
+                        <div style={{ maxWidth: "72%",
+                          background: isMine ? C.navy : C.gray100,
+                          color: isMine ? C.white : C.gray800,
+                          borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+                          padding: "9px 13px",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                          <div style={{ fontSize: 14, lineHeight: 1.5 }}>{m.message}</div>
+                          <div style={{ fontSize: 10, marginTop: 3, textAlign: "right",
+                            color: isMine ? "rgba(255,255,255,0.5)" : C.gray400 }}>
+                            {new Date(m.created_at).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" })}
+                            {isMine && <span style={{ marginLeft: 4 }}>{m.lu ? "✓✓" : "✓"}</span>}
                           </div>
-                        )}
-                        <div style={{ fontSize: 14, lineHeight: 1.5 }}>{m.message}</div>
-                        <div style={{ fontSize: 10, marginTop: 4, textAlign: "right",
-                          color: isMine ? "rgba(255,255,255,0.55)" : C.gray400 }}>
-                          {fmtTime(m.created_at)}
-                          {isMine && <span style={{ marginLeft: 5 }}>{m.lu ? "✓✓" : "✓"}</span>}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-            <div ref={bottomRef} />
-          </div>
+                    );
+                  })}
+                </div>
+              ))}
+              <div ref={bottomRef} />
+            </div>
 
-          {/* Zone de saisie */}
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder={selectedPerson
-                ? `Message à ${selectedPerson.nom}…`
-                : `Message à ${allowedTargets.find(t => t.role === selectedTarget)?.label ?? selectedTarget}…`}
-              style={{ flex: 1, padding: "12px 16px", borderRadius: 12,
-                border: `2px solid ${C.gray200}`, fontSize: 14,
-                background: C.white, outline: "none", color: C.gray800 }}
-            />
-            <button onClick={send} disabled={sending || !canSend}
-              style={{ padding: "12px 16px", borderRadius: 12, border: "none", cursor: "pointer",
-                background: canSend ? C.navy : C.gray200,
-                color: canSend ? C.white : C.gray400,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "background 0.15s" }}>
-              <Send size={18} />
-            </button>
+            {/* Zone de saisie */}
+            <div style={{ padding: "10px 14px", borderTop: `1px solid ${C.gray200}`,
+              display: "flex", gap: 8, flexShrink: 0 }}>
+              <input value={text} onChange={e => setText(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                placeholder={`Message à ${selectedPerson.nom}…`}
+                style={{ flex: 1, padding: "9px 14px", borderRadius: 10,
+                  border: `1.5px solid ${C.gray200}`, fontSize: 13,
+                  background: C.white, outline: "none", color: C.gray800 }} />
+              <button onClick={send} disabled={sending || !text.trim()}
+                style={{ padding: "9px 14px", borderRadius: 10, border: "none",
+                  background: text.trim() ? C.navy : C.gray200,
+                  color: text.trim() ? C.white : C.gray400,
+                  cursor: text.trim() ? "pointer" : "default",
+                  display: "flex", alignItems: "center", transition: "background 0.15s" }}>
+                <Send size={16} />
+              </button>
+            </div>
+          </>
+        ) : (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", color: C.gray400 }}>
+            <MessageSquare size={36} strokeWidth={1} style={{ marginBottom: 12 }} />
+            <p style={{ fontSize: 14, fontWeight: 600 }}>Sélectionnez une conversation</p>
+            <p style={{ fontSize: 12, marginTop: 6, color: C.gray400 }}>
+              {allPersons.length} contact{allPersons.length > 1 ? "s" : ""} disponible{allPersons.length > 1 ? "s" : ""}
+            </p>
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }

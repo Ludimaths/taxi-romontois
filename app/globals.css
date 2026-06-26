@@ -53,9 +53,20 @@
 .tx-mobile-header  { display: none; }
 .tx-main-padding   { padding: 26px; }
 
-/* Masquer scrollbar sidebar (nav interne) sans bloquer le scroll */
+/* Masquer scrollbar sidebar sans bloquer le scroll */
+.tx-sidebar { scrollbar-width: none; -ms-overflow-style: none; }
+.tx-sidebar::-webkit-scrollbar { display: none; }
 .tx-sidebar nav { scrollbar-width: none; -ms-overflow-style: none; }
 .tx-sidebar nav::-webkit-scrollbar { display: none; }
+
+/* Print QR codes — 4 colonnes, tous véhicules */
+@media print {
+  body { margin: 0; }
+  .no-print { display: none !important; }
+  @page { size: A4 portrait; margin: 8mm; }
+  .qr-print-grid { display: grid !important; grid-template-columns: repeat(4,1fr) !important; gap: 6mm !important; }
+  .qr-print-card { page-break-inside: avoid; break-inside: avoid; border: 1px solid #ccc !important; border-radius: 6px; padding: 8px; text-align: center; }
+}
 
 @media (max-width: 767px) {
   .tx-sidebar        { display: none !important; }

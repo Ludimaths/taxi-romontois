@@ -20,17 +20,22 @@ export default function ProtectedLayoutClient({
   const [incidentsCount,  setIncidentsCount]  = useState(0);
   const [alertesCount,    setAlertesCount]    = useState(0);
   const [reparationsCount,setReparationsCount]= useState(0);
+  const [messagesCount,   setMessagesCount]   = useState(0);
 
   const fetchCounts = useCallback(async () => {
-    const [{ count: ic }, { count: ac }, { count: rc }] = await Promise.all([
+    const [{ count: ic }, { count: ac }, { count: rc }, { count: mc }] = await Promise.all([
       sb.from("incidents").select("id", { count: "exact", head: true }).neq("status", "resolu"),
       sb.from("alertes").select("id", { count: "exact", head: true }).eq("read", false),
       sb.from("reparations").select("id", { count: "exact", head: true }).eq("statut", "en_attente_validation"),
+      sb.from("messages_internes").select("id", { count: "exact", head: true })
+        .eq("lu", false).neq("expediteur_id", profile.id)
+        .or(`destinataire_id.eq.${profile.id},destinataire_role.eq.${profile.role}`),
     ]);
     setIncidentsCount(ic ?? 0);
     setAlertesCount(ac ?? 0);
     setReparationsCount(rc ?? 0);
-  }, [sb]);
+    setMessagesCount(mc ?? 0);
+  }, [sb, profile.id, profile.role]);
 
   useEffect(() => {
     if (!["gestionnaire", "admin"].includes(profile.role)) return;
@@ -39,6 +44,7 @@ export default function ProtectedLayoutClient({
       .on("postgres_changes", { event: "*", schema: "public", table: "incidents" }, fetchCounts)
       .on("postgres_changes", { event: "*", schema: "public", table: "alertes" }, fetchCounts)
       .on("postgres_changes", { event: "*", schema: "public", table: "reparations" }, fetchCounts)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages_internes" }, fetchCounts)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [fetchCounts, sb, profile.role]);
@@ -133,6 +139,7 @@ export default function ProtectedLayoutClient({
             incidentsCount={incidentsCount}
             alertesCount={alertesCount}
             reparationsCount={reparationsCount}
+            messagesCount={messagesCount}
           />
         </div>
 

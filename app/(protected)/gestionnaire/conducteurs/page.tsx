@@ -361,7 +361,7 @@ export default function ConducteursPage() {
     if (res.ok) {
       setCreateError("");
       setLinkDone(true);
-      fetchHistory(drv.id);
+      await fetchHistory(drv.id);
     } else {
       setLinkError(json.error || "Erreur liaison inconnue");
     }
