@@ -71,7 +71,7 @@ export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount =
 
   return (
     <div style={{ width: 228, background: C.navy, display: "flex", flexDirection: "column",
-      flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.2)", height: "100vh" }}>
+      flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.2)", height: "100%", overflow: "hidden" }}>
 
       {/* Logo + titre */}
       <div style={{ padding: "20px 18px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>

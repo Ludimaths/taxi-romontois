@@ -49,7 +49,7 @@
 }
 
 /* Responsive layout */
-.tx-sidebar        { display: flex; }
+.tx-sidebar        { display: flex; height: 100%; align-self: stretch; }
 .tx-mobile-header  { display: none; }
 .tx-main-padding   { padding: 26px; }
 

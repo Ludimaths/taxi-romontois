@@ -85,7 +85,8 @@ export default function AdminPage() {
   const [refusMotif, setRefusMotif] = useState("");
   const [valBusy,    setValBusy]    = useState(false);
   const [adminMsgs,  setAdminMsgs]  = useState<Alerte[]>([]);
-  const [msgExpandedDays, setMsgExpandedDays] = useState<Record<string, boolean>>({});
+  const [msgExpandedDays,  setMsgExpandedDays]  = useState<Record<string, boolean>>({});
+  const [histValExpanded, setHistValExpanded] = useState<Record<string, boolean>>({});
 
   // Congés
   const [congesAdmin,        setCongesAdmin]        = useState<CongesDemande[]>([]);
@@ -352,14 +353,14 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
 
   // ── Grille 4×2 accès rapide ─────────────────────────────────────────────────────
   const QUICK_ACCESS = [
-    { icon: <Users size={26} />,         label: "Conducteurs",  path: "/gestionnaire/conducteurs", color: C.navy   },
-    { icon: <Bus size={26} />,           label: "Véhicules",    path: "/gestionnaire/vehicules",   color: "#2563EB" },
-    { icon: <Map size={26} />,           label: "Circuits",     path: "/gestionnaire/circuits",    color: C.navyL  },
+    { icon: <Users size={26} />,         label: "Conducteurs",  path: "/gestionnaire/conducteurs", color: "#1565C0" },
+    { icon: <Bus size={26} />,           label: "Véhicules",    path: "/gestionnaire/vehicules",   color: C.navy   },
+    { icon: <Map size={26} />,           label: "Circuits",     path: "/gestionnaire/circuits",    color: C.green  },
     { icon: <AlertTriangle size={26} />, label: "Incidents",    path: "/gestionnaire/incidents",   color: C.red    },
     { icon: <Wrench size={26} />,        label: "Réparations",  path: "/gestionnaire/reparations", color: C.amber  },
-    { icon: <Bell size={26} />,          label: "Alertes",      path: "/gestionnaire/alertes",     color: "#7C3AED" },
+    { icon: <Bell size={26} />,          label: "Alertes",      path: "/gestionnaire/alertes",     color: "#EA580C" },
     { icon: <Download size={26} />,      label: "Exports",      path: "/gestionnaire/export",      color: C.green  },
-    { icon: <Heart size={26} />,         label: "Parents",      path: "/gestionnaire/parents",     color: "#DB2777" },
+    { icon: <Heart size={26} />,         label: "Parents",      path: "/gestionnaire/parents",     color: "#7C3AED" },
   ];
 
   const TABS: { id: AdminTab; icon: React.ReactNode; label: string; badge?: number }[] = [
@@ -472,7 +473,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                   <div key={c.path} onClick={() => router.push(c.path)}
                     style={{ background: C.white, borderRadius: 14, padding: "18px 12px",
                       cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
-                      borderTop: `3px solid ${c.color}`, display: "flex", flexDirection: "column",
+                      border: `1px solid ${C.gray200}`, display: "flex", flexDirection: "column",
                       alignItems: "center", gap: 8, textAlign: "center" }}>
                     <span style={{ color: c.color }}>{c.icon}</span>
                     <div style={{ fontSize: 12, fontWeight: 800, color: C.navy }}>{c.label}</div>
@@ -846,53 +847,90 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
               );
             })}
 
-            {/* Historique validations */}
-            {reparations.filter(r =>
-              ["en_reparation","remis_en_circulation"].includes(r.statut) ||
-              (r.statut === "receptionne" && (r.commentaire_mecanicien || "").startsWith("[Refusé"))
-            ).length > 0 && (
-              <div style={{ marginTop: 32 }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.gray600, marginBottom: 14 }}>
-                  Historique des validations
-                </div>
-                {reparations.filter(r =>
-                  ["en_reparation","remis_en_circulation"].includes(r.statut) ||
-                  (r.statut === "receptionne" && (r.commentaire_mecanicien || "").startsWith("[Refusé"))
-                ).map(r => {
-                  const vv = r.vehicule as { plaque?: string } | undefined;
-                  const wasRefused = (r.commentaire_mecanicien || "").startsWith("[Refusé");
-                  const refusMotifText = wasRefused
-                    ? (r.commentaire_mecanicien || "").replace("[Refusé par admin: ", "").replace("]", "")
-                    : null;
-                  return (
-                    <div key={r.id} style={{ background: C.gray50, borderRadius: 12, padding: 14,
-                      marginBottom: 10, borderLeft: `3px solid ${wasRefused ? C.red : C.green}` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between",
-                        alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 14 }}>{vv?.plaque || r.vehicule_id}</div>
-                          <div style={{ fontSize: 12, color: C.gray400 }}>{fmtDate(r.date_reception)}</div>
-                          {refusMotifText && (
-                            <div style={{ fontSize: 12, color: C.red, marginTop: 3, fontStyle: "italic" }}>
-                              Motif : {refusMotifText}
-                            </div>
-                          )}
-                        </div>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                          {(r.cout_estime ?? 0) > 0 && (
-                            <span style={{ fontWeight: 800, fontSize: 14 }}>{(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF</span>
-                          )}
-                          <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                            background: wasRefused ? C.redL : C.greenL, color: wasRefused ? C.red : C.green }}>
-                            {wasRefused ? "Refusé" : "Validé"}
+            {/* Historique validations — groupé par date */}
+            {(() => {
+              const histItems = reparations.filter(r =>
+                ["en_reparation","remis_en_circulation"].includes(r.statut) ||
+                (r.statut === "receptionne" && (r.commentaire_mecanicien || "").startsWith("[Refusé"))
+              );
+              if (histItems.length === 0) return null;
+              const grouped: Record<string, typeof histItems> = {};
+              histItems.forEach(r => {
+                const d = r.date_reception || r.created_at.slice(0, 10);
+                if (!grouped[d]) grouped[d] = [];
+                grouped[d].push(r);
+              });
+              const days = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+              return (
+                <div style={{ marginTop: 32 }}>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: C.gray600, marginBottom: 14 }}>
+                    Historique des validations
+                  </div>
+                  {days.map((day, di) => {
+                    const isOpen = di === 0 || !!histValExpanded[day];
+                    const tod = isoToday();
+                    const dayLabel = day === tod ? "Aujourd'hui"
+                      : day === addDays(tod, -1) ? "Hier"
+                      : new Date(day + "T00:00:00").toLocaleDateString("fr-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+                    return (
+                      <div key={day} style={{ marginBottom: 6 }}>
+                        <div
+                          onClick={() => { if (di !== 0) setHistValExpanded(s => ({ ...s, [day]: !s[day] })); }}
+                          style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 10px",
+                            cursor: di === 0 ? "default" : "pointer" }}>
+                          <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+                          <span style={{ fontSize: 11, fontWeight: 800, color: C.gray400,
+                            textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
+                            {dayLabel}
                           </span>
+                          {di !== 0 && !isOpen && (
+                            <span style={{ fontSize: 11, color: C.navy, fontWeight: 700, whiteSpace: "nowrap" }}>
+                              Voir les {grouped[day].length} élément{grouped[day].length > 1 ? "s" : ""}
+                            </span>
+                          )}
+                          <div style={{ flex: 1, height: 1, background: C.gray200 }} />
                         </div>
+                        {isOpen && grouped[day].map(r => {
+                          const vv = r.vehicule as { plaque?: string } | undefined;
+                          const wasRefused = (r.commentaire_mecanicien || "").startsWith("[Refusé");
+                          const refusMotifText = wasRefused
+                            ? (r.commentaire_mecanicien || "").replace("[Refusé par admin: ", "").replace("]", "")
+                            : null;
+                          return (
+                            <div key={r.id} style={{ background: C.gray50, borderRadius: 12, padding: 14,
+                              marginBottom: 10, borderLeft: `3px solid ${wasRefused ? C.red : C.green}` }}>
+                              <div style={{ display: "flex", justifyContent: "space-between",
+                                alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                                <div>
+                                  <div style={{ fontWeight: 700, fontSize: 14 }}>{vv?.plaque || r.vehicule_id}</div>
+                                  <div style={{ fontSize: 12, color: C.gray400 }}>{fmtDate(r.date_reception)}</div>
+                                  {refusMotifText && (
+                                    <div style={{ fontSize: 12, color: C.red, marginTop: 3, fontStyle: "italic" }}>
+                                      Motif : {refusMotifText}
+                                    </div>
+                                  )}
+                                </div>
+                                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                                  {(r.cout_estime ?? 0) > 0 && (
+                                    <span style={{ fontWeight: 800, fontSize: 14 }}>
+                                      {(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF
+                                    </span>
+                                  )}
+                                  <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                    background: wasRefused ? C.redL : C.greenL, color: wasRefused ? C.red : C.green }}>
+                                    {wasRefused ? "Refusé" : "Validé"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
