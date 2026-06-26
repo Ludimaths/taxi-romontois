@@ -37,7 +37,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const headersList = await headers();
   const pathname = headersList.get("x-pathname") ?? "";
 
-  if (pathname) {
+  // Admin a accès à toutes les routes (vision globale)
+  if (pathname && profile.role !== "admin") {
     const requiredPrefix = ROLE_PREFIX[profile.role];
     if (requiredPrefix && !pathname.startsWith(requiredPrefix)) {
       redirect(ROLE_HOME[profile.role] ?? "/login");

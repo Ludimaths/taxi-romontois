@@ -7,7 +7,7 @@ import {
 import {
   Bus, Users, Wrench, AlertTriangle, LayoutDashboard,
   Download, LogOut, BarChart2, CheckCircle2, CalendarDays, MessageSquare,
-  History, QrCode, Settings,
+  History, QrCode, Settings, Menu, X,
 } from "lucide-react";
 import MessagerieBox from "@/components/MessagerieBox";
 import { createClient } from "@/lib/supabase/client";
@@ -55,6 +55,16 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [logoErr, setLogoErr] = useState(false);
 
+  // Mobile responsive
+  const [isMobile,   setIsMobile]   = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Seuil budget configurable
+  const [seuil,       setSeuil]       = useState(1000);
+  const [seuilEdit,   setSeuilEdit]   = useState(false);
+  const [seuilInput,  setSeuilInput]  = useState("1000");
+  const [seuilSaving, setSeuilSaving] = useState(false);
+
   const [conducteurs,  setConducteurs]  = useState<Conducteur[]>([]);
   const [vehicules,    setVehicules]    = useState<Vehicule[]>([]);
   const [incidents,    setIncidents]    = useState<Incident[]>([]);
@@ -76,6 +86,25 @@ export default function AdminPage() {
   const [histYear,  setHistYear]  = useState(currentSchoolYear());
   const [histMonth, setHistMonth] = useState<number | null>(null);
   const [histDay,   setHistDay]   = useState<string | null>(null);
+
+  // Détection mobile
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // Chargement seuil budget depuis parametres
+  useEffect(() => {
+    sb.from("parametres").select("valeur").eq("cle", "seuil_validation").maybeSingle()
+      .then(({ data }) => {
+        if (data?.valeur) {
+          const v = parseInt(data.valeur as string, 10);
+          if (!isNaN(v)) { setSeuil(v); setSeuilInput(String(v)); }
+        }
+      });
+  }, [sb]);
 
   const load = useCallback(async () => {
     const yearAgo = addDays(isoToday(), -365);
@@ -124,6 +153,17 @@ export default function AdminPage() {
     router.refresh();
   }
 
+  async function saveSeuil() {
+    setSeuilSaving(true);
+    const v = parseInt(seuilInput, 10);
+    if (!isNaN(v) && v > 0) {
+      await sb.from("parametres").upsert({ cle: "seuil_validation", valeur: String(v) }, { onConflict: "cle" });
+      setSeuil(v);
+    }
+    setSeuilEdit(false);
+    setSeuilSaving(false);
+  }
+
   async function doAccepterConge(conge: CongesDemande) {
     setCongeAdminBusy(true);
     const cond = conge.conducteur as { prenom?: string; nom?: string } | undefined;
@@ -169,7 +209,6 @@ export default function AdminPage() {
   const unreadMsgCount = adminMsgs.filter(m => !m.read).length;
 
   // ── Données graphiques ──────────────────────────────────────────────────────
-  // Absences par semaine (12 dernières semaines)
   const absencesByWeek = (() => {
     const result: { week: string; count: number }[] = [];
     for (let i = 11; i >= 0; i--) {
@@ -181,7 +220,6 @@ export default function AdminPage() {
     return result;
   })();
 
-  // Coûts réparations par mois
   const repCostByMonth = (() => {
     const map: Record<string, number> = {};
     filteredReparations.forEach(r => {
@@ -192,7 +230,6 @@ export default function AdminPage() {
       .map(([month, total]) => ({ month: month.slice(5), total: Math.round(total) }));
   })();
 
-  // Top 4 véhicules coûteux
   const vehRank = (() => {
     const map: Record<string, { plaque: string; total: number }> = {};
     reparations.forEach(r => {
@@ -206,7 +243,6 @@ export default function AdminPage() {
   const maxVehCost = vehRank[0]?.total || 1;
   const vehBarColors = ["#DC2626", "#D97706", "#2563EB", "#94A3B8"];
 
-  // Incidents par type
   const incByType = (() => {
     const map: Record<string, number> = {};
     filteredIncidents.forEach(i => { map[i.type] = (map[i.type] ?? 0) + 1; });
@@ -215,7 +251,6 @@ export default function AdminPage() {
   const maxIncType = incByType[0]?.[1] || 1;
   const totalIncType = incByType.reduce((s, [, v]) => s + v, 0);
 
-  // Stats sous graphiques
   const totalAbsences    = filteredAbsences.length;
   const totalRemplace    = filteredAbsences.filter(a => a.status === "couvert").length;
   const totalNonCouvert  = filteredAbsences.filter(a => a.status === "non_couvert").length;
@@ -314,7 +349,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
     </div>
   );
 
-  // ── Navigation sidebar items ────────────────────────────────────────────────
+  // ── Navigation items ────────────────────────────────────────────────────────
   const NAV_ITEMS: { id: AdminTab; icon: React.ReactNode; label: string; badge?: number }[] = [
     { id: "dashboard",  icon: <LayoutDashboard size={16} />, label: "Tableau de bord" },
     { id: "stats",      icon: <BarChart2 size={16} />,       label: "Statistiques" },
@@ -327,26 +362,30 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
 
   // ── Accès rapide ────────────────────────────────────────────────────────────
   const QUICK_ACCESS = [
-    { icon: Bus,           color: "#1565C0", label: "Flotte",       sub: "24 véhicules",  path: "/gestionnaire/vehicules"  },
-    { icon: Users,         color: "#16A34A", label: "Conducteurs",  sub: "53 actifs",     path: "/gestionnaire/conducteurs"},
-    { icon: Wrench,        color: "#D97706", label: "Réparations",  sub: "Atelier",       path: "/gestionnaire/reparations"},
-    { icon: AlertTriangle, color: "#DC2626", label: "Incidents",    sub: "Signalements",  path: "/gestionnaire/incidents"  },
-    { icon: QrCode,        color: "#7C3AED", label: "QR Codes",     sub: "Véhicules",     path: "/admin/qrcodes"           },
-    { icon: LayoutDashboard, color: "#0D3B7A", label: "Gestionnaire", sub: "Dashboard",   path: "/gestionnaire"            },
-    { icon: Settings,      color: "#EA580C", label: "Mécanicien",   sub: "Atelier",       path: "/mecanicien"              },
-    { icon: Download,      color: "#16A34A", label: "Exports",      sub: "CSV / PDF",     path: "/gestionnaire/export"     },
+    { icon: Bus,             color: "#1565C0", label: "Flotte",       sub: "24 véhicules",  path: "/gestionnaire/vehicules"  },
+    { icon: Users,           color: "#16A34A", label: "Conducteurs",  sub: "53 actifs",     path: "/gestionnaire/conducteurs"},
+    { icon: Wrench,          color: "#D97706", label: "Réparations",  sub: "Atelier",       path: "/gestionnaire/reparations"},
+    { icon: AlertTriangle,   color: "#DC2626", label: "Incidents",    sub: "Signalements",  path: "/gestionnaire/incidents"  },
+    { icon: QrCode,          color: "#7C3AED", label: "QR Codes",     sub: "Véhicules",     path: "/admin/qrcodes"           },
+    { icon: LayoutDashboard, color: "#0D3B7A", label: "Gestionnaire", sub: "Dashboard",     path: "/gestionnaire"            },
+    { icon: Settings,        color: "#EA580C", label: "Mécanicien",   sub: "Atelier",       path: "/mecanicien"              },
+    { icon: Download,        color: "#16A34A", label: "Exports",      sub: "CSV / PDF",     path: "/gestionnaire/export"     },
   ];
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-  return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#F7F8FC" }}>
-
-      {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
-      <aside style={{ width: 200, background: C.navy, display: "flex", flexDirection: "column",
-        flexShrink: 0, position: "sticky", top: 0, height: "100vh", overflow: "hidden" }}>
-
-        {/* Logo + Administration */}
-        <div style={{ padding: "20px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+  // ── Sidebar content (shared desktop + mobile drawer) ───────────────────────
+  function renderNav() {
+    return (
+      <>
+        {/* Logo + titre */}
+        <div style={{ padding: "20px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.1)",
+          position: "relative" }}>
+          {isMobile && (
+            <button onClick={() => setMobileOpen(false)}
+              style={{ position: "absolute", top: 12, right: 12, background: "transparent",
+                border: "none", color: C.white, cursor: "pointer", padding: 4 }}>
+              <X size={18} />
+            </button>
+          )}
           {logoErr
             ? <div style={{ color: C.white, fontWeight: 900, fontSize: 15 }}>Taxi Romontois</div>
             : <img src="/logo.png" alt="Taxi Romontois"
@@ -380,7 +419,8 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
           {NAV_ITEMS.map(item => {
             const active = tab === item.id;
             return (
-              <button key={item.id} onClick={() => setTab(item.id)}
+              <button key={item.id}
+                onClick={() => { setTab(item.id); if (isMobile) setMobileOpen(false); }}
                 onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
                 onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
                 style={{ width: "100%", display: "flex", alignItems: "center", gap: 9,
@@ -399,7 +439,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
           })}
         </div>
 
-        {/* Footer déconnexion */}
+        {/* Footer */}
         <div style={{ padding: "10px 10px 14px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
           <button onClick={handleSignOut}
             onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
@@ -411,811 +451,932 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
             <LogOut size={15} /> Déconnexion
           </button>
         </div>
+      </>
+    );
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", background: "#F7F8FC" }}>
+
+      {/* ── Overlay mobile ─────────────────────────────────────────────────── */}
+      {isMobile && mobileOpen && (
+        <div onClick={() => setMobileOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.45)" }} />
+      )}
+
+      {/* ── Sidebar desktop / Drawer mobile ──────────────────────────────── */}
+      <aside style={{
+        width: 200, background: C.navy, display: "flex", flexDirection: "column",
+        overflow: "hidden",
+        ...(isMobile ? {
+          position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 500,
+          transform: mobileOpen ? "translateX(0)" : "translateX(-200px)",
+          transition: "transform .25s ease",
+        } : {
+          position: "sticky", top: 0, height: "100vh", flexShrink: 0,
+        }),
+      }}>
+        {renderNav()}
       </aside>
 
-      {/* ── Contenu principal ─────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflowY: "auto", maxHeight: "100vh" }}>
-      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "24px 20px" }}>
+      {/* ── Contenu principal ──────────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflowY: "auto",
+        ...(isMobile ? { width: "100%" } : { maxHeight: "100vh" }) }}>
 
-        {/* ══ TABLEAU DE BORD ═════════════════════════════════════════════════ */}
-        {tab === "dashboard" && (
-          <div>
-            {/* 4 KPI */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 20 }}>
-              {[
-                { label: "Véhicules en service", value: vEnService,        color: "#1565C0" },
-                { label: "Conducteurs présents", value: cPresents,         color: "#16A34A" },
-                { label: "Incidents ouverts",    value: incOuverts,        color: "#DC2626" },
-                { label: "Réparations à valider",value: repAValider.length,color: "#D97706" },
-              ].map(k => (
-                <div key={k.label} style={{ background: C.white, borderRadius: 8,
-                  border: "0.5px solid rgba(0,0,0,0.05)", padding: "12px 14px" }}>
-                  <div style={{ fontSize: 22, fontWeight: 500, color: k.color, lineHeight: 1.2 }}>{k.value}</div>
-                  <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 4, lineHeight: 1.4 }}>{k.label}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Accès rapide */}
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8",
-              textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
-              Accès rapide
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 20 }}>
-              {QUICK_ACCESS.map(c => {
-                const Icon = c.icon;
-                return (
-                  <div key={c.path} onClick={() => router.push(c.path)}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)";
-                      e.currentTarget.style.background = "#F8FAFC";
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.borderColor = "rgba(0,0,0,0.05)";
-                      e.currentTarget.style.background = C.white;
-                    }}
-                    style={{ background: C.white, borderRadius: 8,
-                      border: "0.5px solid rgba(0,0,0,0.05)", padding: "14px 10px",
-                      cursor: "pointer", display: "flex", flexDirection: "column",
-                      alignItems: "center", gap: 6, textAlign: "center",
-                      transition: "background .12s, border-color .12s" }}>
-                    <Icon size={22} color={c.color} />
-                    <div style={{ fontSize: 11, fontWeight: 500, color: "#0F172A" }}>{c.label}</div>
-                    <div style={{ fontSize: 9, color: "#94A3B8" }}>{c.sub}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Validation urgente */}
-            {repAValider.length > 0 ? (
-              <div style={{ background: C.white, borderRadius: 8, border: "0.5px solid rgba(0,0,0,0.05)", padding: "14px 16px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <Wrench size={15} color="#D97706" />
-                  <span style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>Validation en attente</span>
-                  <span style={{ background: C.amberL, color: C.amber, borderRadius: 20,
-                    fontSize: 11, fontWeight: 700, padding: "1px 8px" }}>{repAValider.length}</span>
-                </div>
-                {repAValider.map(r => {
-                  const vv = r.vehicule as { plaque?: string } | undefined;
-                  return (
-                    <div key={r.id} style={{ display: "flex", justifyContent: "space-between",
-                      alignItems: "center", padding: "8px 0",
-                      borderBottom: `1px solid ${C.gray100}` }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>
-                          {vv?.plaque || r.vehicule_id}
-                        </div>
-                        <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>
-                          {r.description?.slice(0, 60)}{(r.description?.length ?? 0) > 60 ? "…" : ""}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontWeight: 800, color: C.red, fontSize: 14 }}>
-                          {(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF
-                        </span>
-                        <button onClick={() => doValider(r)} disabled={valBusy}
-                          style={{ padding: "6px 12px", borderRadius: 7, border: "none",
-                            background: C.green, color: C.white, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                          Valider
-                        </button>
-                        <button onClick={() => { setRefusOpen(r.id); setRefusMotif(""); setTab("validation"); }}
-                          style={{ padding: "6px 12px", borderRadius: 7,
-                            border: `1px solid ${C.red}`, background: C.white,
-                            color: C.red, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                          Refuser
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div style={{ background: C.greenL, borderRadius: 8, padding: "12px 16px",
-                border: "0.5px solid rgba(0,0,0,0.05)",
-                display: "flex", alignItems: "center", gap: 8 }}>
-                <CheckCircle2 size={15} color={C.green} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: C.green }}>
-                  Aucune validation en attente
-                </span>
-              </div>
-            )}
+        {/* Header mobile fixe */}
+        {isMobile && (
+          <div style={{ position: "sticky", top: 0, zIndex: 300, background: C.navy,
+            height: 56, display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "0 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.2)", flexShrink: 0 }}>
+            {logoErr
+              ? <div style={{ color: C.white, fontWeight: 900, fontSize: 15 }}>Taxi Romontois</div>
+              : <img src="/logo.png" alt="Taxi Romontois"
+                  style={{ height: 28, width: "auto", objectFit: "contain" }}
+                  onError={() => setLogoErr(true)} />}
+            <button onClick={() => setMobileOpen(true)}
+              style={{ background: "transparent", border: "none", color: C.white,
+                cursor: "pointer", padding: 6, display: "flex", alignItems: "center" }}>
+              <Menu size={24} />
+            </button>
           </div>
         )}
 
-        {/* ══ STATISTIQUES ═══════════════════════════════════════════════════ */}
-        {tab === "stats" && (
-          <div>
-            {/* Filtres période */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-              {([ ["week","Cette semaine"], ["month","Ce mois"], ["annee","Année scolaire"] ] as [Period,string][]).map(([p, l]) => (
-                <button key={p} onClick={() => setPeriod(p)}
-                  style={{ padding: "7px 14px", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer",
-                    background:  period === p ? "#EFF6FF" : C.white,
-                    border:      period === p ? "1px solid #BFDBFE" : `1px solid ${C.gray200}`,
-                    color:       period === p ? "#1D4ED8" : C.gray600 }}>
-                  {l}
-                </button>
-              ))}
-            </div>
+        <div style={{ maxWidth: 1080, margin: "0 auto",
+          padding: isMobile ? "16px 12px" : "24px 20px" }}>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-
-              {/* Panel 1 — Absences conducteurs */}
-              <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
-                  <Users size={15} color="#1565C0" />
-                  <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Absences conducteurs</span>
-                </div>
-                <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={absencesByWeek} margin={{ left: -20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.gray100} vertical={false} />
-                    <XAxis dataKey="week" tick={{ fontSize: 9, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "#94A3B8" }} tickLine={false} axisLine={false} allowDecimals={false} />
-                    <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 12 }} />
-                    <Bar dataKey="count" name="Absences" radius={[3,3,0,0]}>
-                      {absencesByWeek.map((_, i) => (
-                        <Cell key={i} fill={i === absencesByWeek.length - 1 ? "#1565C0" : "#BFDBFE"} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 12 }}>
-                  {[
-                    { label: "Total absences",  value: totalAbsences, color: "#1565C0" },
-                    { label: "Remplacements",   value: totalRemplace,  color: C.green   },
-                    { label: "Non couverts",    value: totalNonCouvert,color: C.red     },
-                  ].map(s => (
-                    <div key={s.label} style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</div>
-                      <div style={{ fontSize: 10, color: "#94A3B8" }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Panel 2 — Coûts réparations */}
-              <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
-                  <Wrench size={15} color="#D97706" />
-                  <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Coûts réparations CHF</span>
-                </div>
-                {repCostByMonth.length === 0 ? (
-                  <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center",
-                    color: "#94A3B8", fontSize: 13 }}>Aucune donnée</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={160}>
-                    <BarChart data={repCostByMonth} margin={{ left: -10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.gray100} vertical={false} />
-                      <XAxis dataKey="month" tick={{ fontSize: 9, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
-                      <Tooltip formatter={(v) => `${(v as number).toLocaleString("fr-CH")} CHF`}
-                        contentStyle={{ borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 12 }} />
-                      <Bar dataKey="total" name="CHF" radius={[3,3,0,0]}>
-                        {repCostByMonth.map((_, i) => (
-                          <Cell key={i} fill={i === repCostByMonth.length - 1 ? "#D97706" : "#FEF3C7"} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 12 }}>
-                  {[
-                    { label: "Ce mois", value: `${Math.round(coutCeMois).toLocaleString("fr-CH")} CHF`, color: "#D97706" },
-                    { label: "Total période", value: `${Math.round(coutAnnee).toLocaleString("fr-CH")} CHF`, color: C.gray800 },
-                    { label: "À valider", value: repAValider.length, color: C.red },
-                  ].map(s => (
-                    <div key={s.label} style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: typeof s.value === "number" ? 18 : 12, fontWeight: 700, color: s.color }}>{s.value}</div>
-                      <div style={{ fontSize: 10, color: "#94A3B8" }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Panel 3 — Véhicules coûteux */}
-              <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
-                  <Bus size={15} color="#DC2626" />
-                  <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Véhicules coûteux</span>
-                </div>
-                {vehRank.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
-                    Aucune réparation
-                  </div>
-                ) : vehRank.map((v, i) => (
-                  <div key={v.id} style={{ marginBottom: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: C.gray800 }}>{v.plaque}</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: vehBarColors[i] }}>
-                        {Math.round(v.total).toLocaleString("fr-CH")} CHF
-                      </span>
-                    </div>
-                    <div style={{ height: 6, borderRadius: 3, background: C.gray100 }}>
-                      <div style={{ height: 6, borderRadius: 3, background: vehBarColors[i],
-                        width: `${Math.round(v.total / maxVehCost * 100)}%`, transition: "width .4s" }} />
-                    </div>
+          {/* ══ TABLEAU DE BORD ═════════════════════════════════════════════ */}
+          {tab === "dashboard" && (
+            <div>
+              {/* 4 KPI — 2×2 sur mobile */}
+              <div style={{ display: "grid",
+                gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",
+                gap: 8, marginBottom: 20 }}>
+                {[
+                  { label: "Véhicules en service", value: vEnService,         color: "#1565C0" },
+                  { label: "Conducteurs présents", value: cPresents,          color: "#16A34A" },
+                  { label: "Incidents ouverts",    value: incOuverts,         color: "#DC2626" },
+                  { label: "Réparations à valider",value: repAValider.length, color: "#D97706" },
+                ].map(k => (
+                  <div key={k.label} style={{ background: C.white, borderRadius: 8,
+                    border: "0.5px solid rgba(0,0,0,0.05)", padding: "12px 14px" }}>
+                    <div style={{ fontSize: 22, fontWeight: 500, color: k.color, lineHeight: 1.2 }}>{k.value}</div>
+                    <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 4, lineHeight: 1.4 }}>{k.label}</div>
                   </div>
                 ))}
               </div>
 
-              {/* Panel 4 — Incidents par type */}
-              <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
-                  <AlertTriangle size={15} color="#DC2626" />
-                  <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Incidents par type</span>
-                </div>
-                {incByType.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
-                    Aucun incident
-                  </div>
-                ) : (
-                  <>
-                    {incByType.map(([type, count]) => (
-                      <div key={type} style={{ marginBottom: 10 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: C.gray800, textTransform: "capitalize" }}>{type}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: C.red }}>{count}</span>
-                        </div>
-                        <div style={{ height: 5, borderRadius: 3, background: C.gray100 }}>
-                          <div style={{ height: 5, borderRadius: 3, background: "#FCA5A5",
-                            width: `${Math.round(count / maxIncType * 100)}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                    <div style={{ paddingTop: 10, borderTop: `1px solid ${C.gray100}`,
-                      fontSize: 12, fontWeight: 700, color: C.gray600, display: "flex", justifyContent: "space-between" }}>
-                      <span>Total</span><span>{totalIncType}</span>
-                    </div>
-                  </>
-                )}
+              {/* Accès rapide — 2×4 sur mobile, 4×2 sur desktop */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8",
+                textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
+                Accès rapide
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* ══ VALIDATIONS ════════════════════════════════════════════════════ */}
-        {tab === "validation" && (
-          <div>
-            {/* Congés */}
-            {congesAdmin.length > 0 && (
-              <div style={{ marginBottom: 28 }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 14,
-                  display: "flex", alignItems: "center", gap: 8 }}>
-                  <CalendarDays size={18} /> Congés à valider ({congesAdmin.length})
-                </div>
-                {congesAdmin.map(conge => {
-                  const cond = conge.conducteur as { prenom?: string; nom?: string } | undefined;
-                  const isRefusing = congeAdminRefusId === conge.id;
+              <div style={{ display: "grid",
+                gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",
+                gap: 8, marginBottom: 20 }}>
+                {QUICK_ACCESS.map(c => {
+                  const Icon = c.icon;
                   return (
-                    <div key={conge.id} style={{ background: C.white, borderRadius: 14, padding: 20,
-                      marginBottom: 14, boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
-                      borderLeft: `4px solid #2563EB` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between",
-                        alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-                        <div>
-                          <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>
-                            {cond?.prenom} {cond?.nom}
-                          </div>
-                          <div style={{ fontSize: 13, color: C.gray600, marginTop: 2 }}>
-                            {conge.motif} · {fmtDate(conge.date_debut)} → {fmtDate(conge.date_fin)}
-                          </div>
-                        </div>
-                        <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
-                          background: "#EFF6FF", color: "#2563EB" }}>Transmis gestionnaire</span>
-                      </div>
-                      <p style={{ fontSize: 14, color: C.gray800, lineHeight: 1.6, margin: "0 0 10px",
-                        borderLeft: `3px solid ${C.gray200}`, paddingLeft: 10 }}>{conge.justification}</p>
-                      {conge.note_gestionnaire && (
-                        <div style={{ background: C.skyL, borderRadius: 10, padding: "8px 12px",
-                          fontSize: 13, color: C.navyL, marginBottom: 12, fontStyle: "italic" }}>
-                          Note gestionnaire : {conge.note_gestionnaire}
-                        </div>
-                      )}
-                      {isRefusing && (
-                        <div style={{ marginBottom: 12 }}>
-                          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 6 }}>
-                            Motif du refus *
-                          </label>
-                          <textarea value={congeAdminRefusMotif} onChange={e => setCongeAdminRefusMotif(e.target.value)}
-                            rows={2} placeholder="Ex: Période de pointe scolaire…"
-                            style={{ ...inp, resize: "vertical" }} />
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                        {!isRefusing ? (
-                          <>
-                            <button onClick={() => doAccepterConge(conge)} disabled={congeAdminBusy}
-                              style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
-                                border: "none", background: C.green, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                                <CheckCircle2 size={15} /> Approuver
-                              </span>
-                            </button>
-                            <button onClick={() => { setCongeAdminRefusId(conge.id); setCongeAdminRefusMotif(""); }}
-                              style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
-                                border: `2px solid ${C.red}`, background: C.white, color: C.red, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                              Refuser
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => doRefuserConge(conge)}
-                              disabled={congeAdminBusy || !congeAdminRefusMotif.trim()}
-                              style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none",
-                                background: congeAdminRefusMotif.trim() ? C.red : C.gray200,
-                                color: C.white, fontWeight: 800, fontSize: 14,
-                                cursor: congeAdminRefusMotif.trim() ? "pointer" : "not-allowed" }}>
-                              Confirmer le refus
-                            </button>
-                            <button onClick={() => setCongeAdminRefusId(null)}
-                              style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
-                                background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                              Annuler
-                            </button>
-                          </>
-                        )}
-                      </div>
+                    <div key={c.path} onClick={() => router.push(c.path)}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)";
+                        e.currentTarget.style.background = "#F8FAFC";
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.borderColor = "rgba(0,0,0,0.05)";
+                        e.currentTarget.style.background = C.white;
+                      }}
+                      style={{ background: C.white, borderRadius: 8,
+                        border: "0.5px solid rgba(0,0,0,0.05)", padding: "14px 10px",
+                        cursor: "pointer", display: "flex", flexDirection: "column",
+                        alignItems: "center", gap: 6, textAlign: "center",
+                        transition: "background .12s, border-color .12s" }}>
+                      <Icon size={22} color={c.color} />
+                      <div style={{ fontSize: 11, fontWeight: 500, color: "#0F172A" }}>{c.label}</div>
+                      <div style={{ fontSize: 9, color: "#94A3B8" }}>{c.sub}</div>
                     </div>
                   );
                 })}
               </div>
-            )}
 
-            {/* Réparations */}
-            {repAValider.length === 0 && congesAdmin.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
-                <CheckCircle2 size={48} strokeWidth={1} style={{ display: "block", margin: "0 auto 12px" }} />
-                <p style={{ fontWeight: 700, fontSize: 15 }}>Aucun élément en attente de validation</p>
-              </div>
-            ) : (
-              <>
-                {repAValider.length > 0 && congesAdmin.length > 0 && (
-                  <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 14,
-                    display: "flex", alignItems: "center", gap: 8 }}>
-                    <Wrench size={18} /> Réparations à valider ({repAValider.length})
+              {/* Validation urgente */}
+              {repAValider.length > 0 ? (
+                <div style={{ background: C.white, borderRadius: 8, border: "0.5px solid rgba(0,0,0,0.05)", padding: "14px 16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <Wrench size={15} color="#D97706" />
+                    <span style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>Validation en attente</span>
+                    <span style={{ background: C.amberL, color: C.amber, borderRadius: 20,
+                      fontSize: 11, fontWeight: 700, padding: "1px 8px" }}>{repAValider.length}</span>
                   </div>
-                )}
-                {repAValider.map(r => {
-                  const vv = r.vehicule as { plaque?: string; marque?: string; modele?: string } | undefined;
-                  const isRefusing = refusOpen === r.id;
-                  return (
-                    <div key={r.id} style={{ background: C.white, borderRadius: 14, padding: 20,
-                      marginBottom: 16, boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
-                      borderLeft: `4px solid ${C.red}` }}>
-                      <div style={{ display: "flex", justifyContent: "space-between",
-                        alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
-                        <div>
-                          <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>{vv?.plaque || r.vehicule_id}</div>
-                          <div style={{ fontSize: 12, color: C.gray400 }}>{vv?.marque} {vv?.modele}</div>
-                          {r.date_reception && <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>Réceptionné {fmtDate(r.date_reception)}</div>}
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: 24, fontWeight: 900, color: C.red }}>{(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF</div>
-                          <div style={{ fontSize: 11, color: C.gray400 }}>Coût estimé</div>
-                        </div>
-                      </div>
-                      <p style={{ fontSize: 14, color: C.gray800, lineHeight: 1.6, margin: "0 0 12px",
-                        borderLeft: `3px solid ${C.gray200}`, paddingLeft: 10 }}>{r.description}</p>
-                      {r.commentaire_mecanicien && !r.commentaire_mecanicien.startsWith("[Refusé") && (
-                        <div style={{ background: C.gray50, borderRadius: 10, padding: "8px 12px",
-                          fontSize: 13, color: C.gray600, marginBottom: 14, fontStyle: "italic" }}>
-                          {r.commentaire_mecanicien.split(" | ").filter((s: string) => !s.startsWith("Photos:")).join(" | ")}
-                        </div>
-                      )}
-                      {isRefusing && (
-                        <div style={{ marginBottom: 14 }}>
-                          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 6 }}>
-                            Motif du refus *
-                          </label>
-                          <textarea value={refusMotif} onChange={e => setRefusMotif(e.target.value)}
-                            rows={2} placeholder="Ex: Obtenir deuxième devis…"
-                            style={{ ...inp, resize: "vertical" }} />
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                        {!isRefusing ? (
-                          <>
-                            <button onClick={() => doValider(r)} disabled={valBusy}
-                              style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
-                                border: "none", background: C.green, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                                <CheckCircle2 size={15} /> Valider
-                              </span>
-                            </button>
-                            <button onClick={() => { setRefusOpen(r.id); setRefusMotif(""); }}
-                              style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
-                                border: `2px solid ${C.red}`, background: C.white, color: C.red, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                              Refuser
-                            </button>
-                            <button onClick={() => printFiche(r)}
-                              style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
-                                background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                              Imprimer
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => doRefuser(r)} disabled={valBusy || !refusMotif.trim()}
-                              style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none",
-                                background: refusMotif.trim() ? C.red : C.gray200, color: C.white,
-                                fontWeight: 800, fontSize: 14, cursor: refusMotif.trim() ? "pointer" : "not-allowed" }}>
-                              Confirmer le refus
-                            </button>
-                            <button onClick={() => setRefusOpen(null)}
-                              style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
-                                background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                              Annuler
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </>
-            )}
-
-            {/* Historique validations */}
-            {(() => {
-              const histItems = reparations.filter(r =>
-                ["en_reparation","remis_en_circulation"].includes(r.statut) ||
-                (r.statut === "receptionne" && (r.commentaire_mecanicien || "").startsWith("[Refusé"))
-              );
-              if (histItems.length === 0) return null;
-              const grouped: Record<string, typeof histItems> = {};
-              histItems.forEach(r => {
-                const d = r.date_reception || r.created_at.slice(0, 10);
-                if (!grouped[d]) grouped[d] = [];
-                grouped[d].push(r);
-              });
-              const days = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
-              const tod = isoToday();
-              return (
-                <div style={{ marginTop: 32 }}>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: C.gray600, marginBottom: 14 }}>
-                    Historique des validations
-                  </div>
-                  {days.map((day, di) => {
-                    const isOpen = di === 0 || !!histValExpanded[day];
-                    const dayLabel = day === tod ? "Aujourd'hui"
-                      : day === addDays(tod, -1) ? "Hier"
-                      : new Date(day + "T00:00:00").toLocaleDateString("fr-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+                  {repAValider.map(r => {
+                    const vv = r.vehicule as { plaque?: string } | undefined;
                     return (
-                      <div key={day} style={{ marginBottom: 6 }}>
-                        <div onClick={() => { if (di !== 0) setHistValExpanded(s => ({ ...s, [day]: !s[day] })); }}
-                          style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 10px",
-                            cursor: di === 0 ? "default" : "pointer" }}>
-                          <div style={{ flex: 1, height: 1, background: C.gray200 }} />
-                          <span style={{ fontSize: 11, fontWeight: 800, color: C.gray400,
-                            textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
-                            {dayLabel}
-                          </span>
-                          {di !== 0 && !isOpen && (
-                            <span style={{ fontSize: 11, color: C.navy, fontWeight: 700 }}>
-                              Voir les {grouped[day].length} élément{grouped[day].length > 1 ? "s" : ""}
-                            </span>
-                          )}
-                          <div style={{ flex: 1, height: 1, background: C.gray200 }} />
-                        </div>
-                        {isOpen && grouped[day].map(r => {
-                          const vv = r.vehicule as { plaque?: string } | undefined;
-                          const wasRefused = (r.commentaire_mecanicien || "").startsWith("[Refusé");
-                          const refusMotifText = wasRefused
-                            ? (r.commentaire_mecanicien || "").replace("[Refusé par admin: ", "").replace("]", "")
-                            : null;
-                          return (
-                            <div key={r.id} style={{ background: C.gray50, borderRadius: 12, padding: 14,
-                              marginBottom: 10, borderLeft: `3px solid ${wasRefused ? C.red : C.green}` }}>
-                              <div style={{ display: "flex", justifyContent: "space-between",
-                                alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                                <div>
-                                  <div style={{ fontWeight: 700, fontSize: 14 }}>{vv?.plaque || r.vehicule_id}</div>
-                                  <div style={{ fontSize: 12, color: C.gray400 }}>{fmtDate(r.date_reception)}</div>
-                                  {refusMotifText && (
-                                    <div style={{ fontSize: 12, color: C.red, marginTop: 3, fontStyle: "italic" }}>
-                                      Motif : {refusMotifText}
-                                    </div>
-                                  )}
-                                </div>
-                                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                                  {(r.cout_estime ?? 0) > 0 && (
-                                    <span style={{ fontWeight: 800, fontSize: 14 }}>
-                                      {(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF
-                                    </span>
-                                  )}
-                                  <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                                    background: wasRefused ? C.redL : C.greenL,
-                                    color: wasRefused ? C.red : C.green }}>
-                                    {wasRefused ? "Refusé" : "Validé"}
-                                  </span>
-                                </div>
-                              </div>
+                      <div key={r.id} style={{ borderBottom: `1px solid ${C.gray100}`, paddingBottom: 10, marginBottom: 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between",
+                          alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>
+                              {vv?.plaque || r.vehicule_id}
                             </div>
-                          );
-                        })}
+                            <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>
+                              {r.description?.slice(0, 60)}{(r.description?.length ?? 0) > 60 ? "…" : ""}
+                            </div>
+                          </div>
+                          <span style={{ fontWeight: 800, color: C.red, fontSize: 14 }}>
+                            {(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 8,
+                          flexDirection: isMobile ? "column" : "row" }}>
+                          <button onClick={() => doValider(r)} disabled={valBusy}
+                            style={{ flex: 1, padding: "8px 0", borderRadius: 7, border: "none",
+                              background: C.green, color: C.white, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                            Valider
+                          </button>
+                          <button onClick={() => { setRefusOpen(r.id); setRefusMotif(""); setTab("validation"); }}
+                            style={{ flex: 1, padding: "8px 0", borderRadius: 7,
+                              border: `1px solid ${C.red}`, background: C.white,
+                              color: C.red, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                            Refuser
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
                 </div>
-              );
-            })()}
-          </div>
-        )}
-
-        {/* ══ HISTORIQUE ═════════════════════════════════════════════════════ */}
-        {tab === "historique" && (
-          <div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
-              {[SY_START, SY_START - 1].map(y => (
-                <button key={y} onClick={() => { setHistYear(y); setHistMonth(null); setHistDay(null); }}
-                  style={{ padding: "9px 18px", borderRadius: 10, border: "none", fontWeight: 700,
-                    fontSize: 13, cursor: "pointer",
-                    background: histYear === y ? C.navy : C.gray100,
-                    color: histYear === y ? C.white : C.gray600 }}>
-                  {y}–{y + 1}
-                </button>
-              ))}
-              {histMonth !== null && (
-                <button onClick={() => { setHistMonth(null); setHistDay(null); }}
-                  style={{ padding: "9px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
-                    background: C.white, color: C.gray600, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                  ← Mois
-                </button>
-              )}
-              {histDay !== null && (
-                <button onClick={() => setHistDay(null)}
-                  style={{ padding: "9px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
-                    background: C.white, color: C.gray600, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                  ← Jours
-                </button>
+              ) : (
+                <div style={{ background: C.greenL, borderRadius: 8, padding: "12px 16px",
+                  border: "0.5px solid rgba(0,0,0,0.05)",
+                  display: "flex", alignItems: "center", gap: 8 }}>
+                  <CheckCircle2 size={15} color={C.green} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: C.green }}>
+                    Aucune validation en attente
+                  </span>
+                </div>
               )}
             </div>
+          )}
 
-            {histMonth === null && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12 }}>
-                {[9,10,11,12,1,2,3,4,5,6,7,8].map(m => {
-                  const yr = m >= 9 ? histYear : histYear + 1;
-                  const data = histMonthData(yr, m);
-                  const hasData = data.incidents > 0 || data.absences > 0 || data.reparations > 0;
-                  return (
-                    <div key={m} onClick={() => setHistMonth(m)}
-                      style={{ background: C.white, borderRadius: 12, padding: 16, cursor: "pointer",
-                        boxShadow: "0 1px 6px rgba(0,0,0,0.06)", opacity: hasData ? 1 : 0.5,
-                        borderTop: `3px solid ${hasData ? C.navy : C.gray200}` }}>
-                      <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 8 }}>
-                        {MONTHS_FR[m - 1]}
-                      </div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {data.incidents > 0 && <span style={{ fontSize: 11, color: C.red }}>{data.incidents} inc.</span>}
-                        {data.absences > 0 && <span style={{ fontSize: 11, color: C.amber }}>{data.absences} abs.</span>}
-                        {data.reparations > 0 && <span style={{ fontSize: 11, color: C.navyL }}>{data.reparations} rép.</span>}
-                        {!hasData && <span style={{ fontSize: 11, color: C.gray400 }}>—</span>}
-                      </div>
-                      {data.cout > 0 && (
-                        <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, marginTop: 6 }}>
-                          {Math.round(data.cout).toLocaleString("fr-CH")} CHF
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+          {/* ══ STATISTIQUES ═══════════════════════════════════════════════ */}
+          {tab === "stats" && (
+            <div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+                {([ ["week","Cette semaine"], ["month","Ce mois"], ["annee","Année scolaire"] ] as [Period,string][]).map(([p, l]) => (
+                  <button key={p} onClick={() => setPeriod(p)}
+                    style={{ padding: "7px 14px", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer",
+                      background:  period === p ? "#EFF6FF" : C.white,
+                      border:      period === p ? "1px solid #BFDBFE" : `1px solid ${C.gray200}`,
+                      color:       period === p ? "#1D4ED8" : C.gray600 }}>
+                    {l}
+                  </button>
+                ))}
               </div>
-            )}
 
-            {histMonth !== null && histDay === null && (() => {
-              const yr = histMonth >= 9 ? histYear : histYear + 1;
-              const pad = String(histMonth).padStart(2, "0");
-              const data = histMonthData(yr, histMonth);
-              const totalDays = new Date(yr, histMonth, 0).getDate();
-              return (
-                <>
-                  <div style={{ background: C.white, borderRadius: 14, padding: 18, marginBottom: 20,
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between",
-                      alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
-                      <div style={{ fontWeight: 800, fontSize: 16, color: C.navy }}>
-                        {MONTHS_FR[histMonth - 1]} {yr}
+              <div style={{ display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+
+                {/* Panel 1 — Absences */}
+                <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+                    <Users size={15} color="#1565C0" />
+                    <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Absences conducteurs</span>
+                  </div>
+                  <div style={{ overflowX: "auto" }}>
+                    <div style={{ minWidth: 280 }}>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <BarChart data={absencesByWeek} margin={{ left: -20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={C.gray100} vertical={false} />
+                          <XAxis dataKey="week" tick={{ fontSize: 9, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                          <YAxis tick={{ fontSize: 10, fill: "#94A3B8" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                          <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 12 }} />
+                          <Bar dataKey="count" name="Absences" radius={[3,3,0,0]}>
+                            {absencesByWeek.map((_, i) => (
+                              <Cell key={i} fill={i === absencesByWeek.length - 1 ? "#1565C0" : "#BFDBFE"} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 12 }}>
+                    {[
+                      { label: "Total absences",  value: totalAbsences,   color: "#1565C0" },
+                      { label: "Remplacements",   value: totalRemplace,   color: C.green   },
+                      { label: "Non couverts",    value: totalNonCouvert, color: C.red     },
+                    ].map(s => (
+                      <div key={s.label} style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</div>
+                        <div style={{ fontSize: 10, color: "#94A3B8" }}>{s.label}</div>
                       </div>
-                      <button onClick={() => exportCSV(yr, histMonth)}
-                        style={{ display: "flex", alignItems: "center", gap: 6,
-                          padding: "8px 14px", borderRadius: 8, border: `1px solid ${C.gray200}`,
-                          background: C.white, color: C.gray600, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                        <Download size={13} /> Export CSV
-                      </button>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
-                      {[
-                        { val: data.incidents, label: "Incidents", color: C.red },
-                        { val: data.absences, label: "Absences", color: C.amber },
-                        { val: data.reparations, label: "Réparations", color: C.navyL },
-                      ].map(s => (
-                        <div key={s.label} style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: 24, fontWeight: 900, color: s.color }}>{s.val}</div>
-                          <div style={{ fontSize: 11, color: C.gray400 }}>{s.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
-                    {["Lu","Ma","Me","Je","Ve","Sa","Di"].map(d => (
-                      <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700,
-                        color: C.gray400, paddingBottom: 6 }}>{d}</div>
                     ))}
-                    {(() => {
-                      const firstDay = new Date(`${yr}-${pad}-01`).getDay();
-                      const offset = firstDay === 0 ? 6 : firstDay - 1;
-                      const cells = [];
-                      for (let i = 0; i < offset; i++) cells.push(<div key={`e${i}`} />);
-                      for (let d = 1; d <= totalDays; d++) {
-                        const dayStr = `${yr}-${pad}-${String(d).padStart(2, "0")}`;
-                        const { incidents: di, absences: da, reparations: dr } = histDayData(dayStr);
-                        const hasData = di.length > 0 || da.length > 0 || dr.length > 0;
-                        const isToday = dayStr === isoToday();
-                        cells.push(
-                          <div key={d} onClick={() => hasData && setHistDay(dayStr)}
-                            style={{ aspectRatio: "1", display: "flex", flexDirection: "column",
-                              alignItems: "center", justifyContent: "center", borderRadius: 10,
-                              cursor: hasData ? "pointer" : "default",
-                              background: isToday ? C.navy : hasData ? C.skyL : C.gray50,
-                              color: isToday ? C.white : C.gray800,
-                              border: isToday ? "none" : `1px solid ${C.gray200}` }}>
-                            <span style={{ fontWeight: 700, fontSize: 13 }}>{d}</span>
-                            {hasData && !isToday && (
-                              <div style={{ display: "flex", gap: 2, marginTop: 2 }}>
-                                {di.length > 0 && <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.red }} />}
-                                {da.length > 0 && <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.amber }} />}
-                                {dr.length > 0 && <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.navy }} />}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-                      return cells;
-                    })()}
                   </div>
-                </>
-              );
-            })()}
+                </div>
 
-            {histDay !== null && (() => {
-              const { incidents: di, absences: da, reparations: dr } = histDayData(histDay);
-              return (
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: 16, color: C.navy, marginBottom: 16 }}>
-                    {new Date(histDay).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                {/* Panel 2 — Coûts */}
+                <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+                    <Wrench size={15} color="#D97706" />
+                    <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Coûts réparations CHF</span>
                   </div>
-                  {di.length === 0 && da.length === 0 && dr.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: 40, color: C.gray400 }}>Aucun événement ce jour</div>
+                  {repCostByMonth.length === 0 ? (
+                    <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "#94A3B8", fontSize: 13 }}>Aucune donnée</div>
+                  ) : (
+                    <div style={{ overflowX: "auto" }}>
+                      <div style={{ minWidth: 280 }}>
+                        <ResponsiveContainer width="100%" height={160}>
+                          <BarChart data={repCostByMonth} margin={{ left: -10 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={C.gray100} vertical={false} />
+                            <XAxis dataKey="month" tick={{ fontSize: 9, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                            <YAxis tick={{ fontSize: 10, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                            <Tooltip formatter={(v) => `${(v as number).toLocaleString("fr-CH")} CHF`}
+                              contentStyle={{ borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 12 }} />
+                            <Bar dataKey="total" name="CHF" radius={[3,3,0,0]}>
+                              {repCostByMonth.map((_, i) => (
+                                <Cell key={i} fill={i === repCostByMonth.length - 1 ? "#D97706" : "#FEF3C7"} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 12 }}>
+                    {[
+                      { label: "Ce mois", value: `${Math.round(coutCeMois).toLocaleString("fr-CH")} CHF`, color: "#D97706" },
+                      { label: "Total période", value: `${Math.round(coutAnnee).toLocaleString("fr-CH")} CHF`, color: C.gray800 },
+                      { label: "À valider", value: repAValider.length, color: C.red },
+                    ].map(s => (
+                      <div key={s.label} style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: typeof s.value === "number" ? 18 : 11, fontWeight: 700, color: s.color }}>{s.value}</div>
+                        <div style={{ fontSize: 10, color: "#94A3B8" }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Panel 3 — Véhicules coûteux */}
+                <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+                    <Bus size={15} color="#DC2626" />
+                    <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Véhicules coûteux</span>
+                  </div>
+                  {vehRank.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
+                      Aucune réparation
+                    </div>
+                  ) : vehRank.map((v, i) => (
+                    <div key={v.id} style={{ marginBottom: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: C.gray800 }}>{v.plaque}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: vehBarColors[i] }}>
+                          {Math.round(v.total).toLocaleString("fr-CH")} CHF
+                        </span>
+                      </div>
+                      <div style={{ height: 6, borderRadius: 3, background: C.gray100 }}>
+                        <div style={{ height: 6, borderRadius: 3, background: vehBarColors[i],
+                          width: `${Math.round(v.total / maxVehCost * 100)}%`, transition: "width .4s" }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Panel 4 — Incidents par type */}
+                <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+                    <AlertTriangle size={15} color="#DC2626" />
+                    <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Incidents par type</span>
+                  </div>
+                  {incByType.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
+                      Aucun incident
+                    </div>
                   ) : (
                     <>
-                      {di.map(i => (
-                        <div key={i.id} style={{ background: C.white, borderRadius: 12, padding: 14,
-                          marginBottom: 8, borderLeft: `3px solid ${C.red}` }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: C.red,
-                            display: "flex", alignItems: "center", gap: 6 }}>
-                            <AlertTriangle size={13} /> {i.type}
+                      {incByType.map(([type, count]) => (
+                        <div key={type} style={{ marginBottom: 10 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: C.gray800, textTransform: "capitalize" }}>{type}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: C.red }}>{count}</span>
                           </div>
-                          <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>{i.description}</div>
+                          <div style={{ height: 5, borderRadius: 3, background: C.gray100 }}>
+                            <div style={{ height: 5, borderRadius: 3, background: "#FCA5A5",
+                              width: `${Math.round(count / maxIncType * 100)}%` }} />
+                          </div>
                         </div>
                       ))}
-                      {da.map(a => {
-                        const cond = a.conducteur as { prenom?: string; nom?: string } | undefined;
-                        return (
-                          <div key={a.id} style={{ background: C.white, borderRadius: 12, padding: 14,
-                            marginBottom: 8, borderLeft: `3px solid ${C.amber}` }}>
-                            <div style={{ fontWeight: 700, fontSize: 14, color: C.amber,
-                              display: "flex", alignItems: "center", gap: 6 }}>
-                              <Users size={13} /> {cond?.prenom} {cond?.nom}
-                            </div>
-                            <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>
-                              {a.motif || "—"} · {a.status === "couvert" ? "Couvert" : "Non couvert"}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {dr.map(r => {
-                        const vv = r.vehicule as { plaque?: string } | undefined;
-                        return (
-                          <div key={r.id} style={{ background: C.white, borderRadius: 12, padding: 14,
-                            marginBottom: 8, borderLeft: `3px solid ${C.navy}` }}>
-                            <div style={{ fontWeight: 700, fontSize: 14, color: C.navy,
-                              display: "flex", alignItems: "center", gap: 6 }}>
-                              <Wrench size={13} /> {vv?.plaque || r.vehicule_id}
-                            </div>
-                            <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>{r.description}</div>
-                          </div>
-                        );
-                      })}
+                      <div style={{ paddingTop: 10, borderTop: `1px solid ${C.gray100}`,
+                        fontSize: 12, fontWeight: 700, color: C.gray600, display: "flex", justifyContent: "space-between" }}>
+                        <span>Total</span><span>{totalIncType}</span>
+                      </div>
                     </>
                   )}
                 </div>
-              );
-            })()}
-          </div>
-        )}
-
-        {/* ══ MESSAGES ═══════════════════════════════════════════════════════ */}
-        {tab === "messages" && (
-          <div>
-            <div style={{ marginBottom: 28 }}>
-              <div style={{ fontWeight: 800, fontSize: 13, color: C.navy, textTransform: "uppercase",
-                letterSpacing: 0.5, marginBottom: 12 }}>
-                Messagerie directe
               </div>
-              <MessagerieBox myRole="admin"
-                allowedTargets={[
-                  { label: "Gestionnaire", role: "gestionnaire" },
-                  { label: "Mécanicien",   role: "mecanicien"   },
-                  { label: "Conducteurs",  role: "conducteur"   },
-                ]} />
             </div>
+          )}
 
-            {adminMsgs.length > 0 && (
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 13, color: C.navy, textTransform: "uppercase",
-                  letterSpacing: 0.5, marginBottom: 12 }}>
-                  Messages mécanicien
+          {/* ══ VALIDATIONS ════════════════════════════════════════════════ */}
+          {tab === "validation" && (
+            <div>
+              {/* Seuil budget configurable */}
+              <div style={{ background: C.white, borderRadius: 12, padding: 18, marginBottom: 24,
+                border: `1px solid ${C.amber}`, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+                  flexWrap: "wrap", gap: 8, marginBottom: seuilEdit ? 14 : 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Settings size={15} color={C.amber} />
+                    <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>
+                      Seuil de validation budget
+                    </span>
+                  </div>
+                  {!seuilEdit && (
+                    <button onClick={() => { setSeuilEdit(true); setSeuilInput(String(seuil)); }}
+                      style={{ padding: "5px 12px", borderRadius: 8, border: `1px solid ${C.gray200}`,
+                        background: C.white, color: C.gray600, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
+                      Modifier
+                    </button>
+                  )}
                 </div>
-                {groupByDay(adminMsgs).map((grp, gi) => {
-                  const isFirst = gi === 0;
-                  const open = isFirst || msgExpandedDays[grp.day];
-                  return (
-                    <div key={grp.day}>
-                      <div onClick={() => !isFirst && setMsgExpandedDays(s => ({ ...s, [grp.day]: !s[grp.day] }))}
-                        style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 10px",
-                          cursor: isFirst ? "default" : "pointer" }}>
-                        <div style={{ flex: 1, height: 1, background: C.gray200 }} />
-                        <span style={{ fontSize: 11, fontWeight: 800, color: C.gray600,
-                          textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{grp.label}</span>
-                        {!isFirst && !open && (
-                          <span style={{ fontSize: 11, color: C.navyL, fontWeight: 700, whiteSpace: "nowrap" }}>
-                            Voir les {grp.items.length} message{grp.items.length > 1 ? "s" : ""}
-                          </span>
-                        )}
-                        <div style={{ flex: 1, height: 1, background: C.gray200 }} />
-                      </div>
-                      {open && grp.items.map(m => (
-                        <div key={m.id} style={{ background: m.read ? C.gray50 : C.white, borderRadius: 14, padding: 18,
-                          marginBottom: 12, border: `1px solid ${m.read ? C.gray200 : C.navyL}`,
-                          boxShadow: m.read ? "none" : "0 2px 10px rgba(0,0,0,0.08)",
-                          borderLeft: `4px solid ${m.read ? C.gray400 : C.navyL}` }}>
-                          <div style={{ display: "flex", justifyContent: "space-between",
-                            alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: C.navyL }}>
-                              Mécanicien
-                              {!m.read && (
-                                <span style={{ marginLeft: 8, background: C.navyL, color: C.white,
-                                  borderRadius: 99, padding: "1px 7px", fontSize: 10, fontWeight: 900 }}>
-                                  Nouveau
-                                </span>
-                              )}
+                {!seuilEdit ? (
+                  <p style={{ fontSize: 13, color: C.gray600, margin: "10px 0 0", lineHeight: 1.6 }}>
+                    Toute réparation dépassant{" "}
+                    <strong style={{ color: C.amber, fontSize: 15 }}>
+                      {seuil.toLocaleString("fr-CH")} CHF
+                    </strong>{" "}
+                    nécessite votre validation avant que le mécanicien puisse continuer.
+                  </p>
+                ) : (
+                  <div>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 600,
+                      color: C.gray600, marginBottom: 8 }}>
+                      Nouveau seuil (CHF)
+                    </label>
+                    <div style={{ display: "flex", gap: 8,
+                      flexDirection: isMobile ? "column" : "row" }}>
+                      <input type="number" min="0" step="100" value={seuilInput}
+                        onChange={e => setSeuilInput(e.target.value)}
+                        style={{ ...inp, flex: 1 }} />
+                      <button onClick={saveSeuil} disabled={seuilSaving}
+                        style={{ padding: "10px 18px", borderRadius: 10, border: "none",
+                          background: C.amber, color: C.white, fontWeight: 700,
+                          fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
+                        {seuilSaving ? "…" : "Sauvegarder"}
+                      </button>
+                      <button onClick={() => setSeuilEdit(false)}
+                        style={{ padding: "10px 14px", borderRadius: 10, border: `1px solid ${C.gray200}`,
+                          background: C.white, color: C.gray600, fontWeight: 600,
+                          fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Congés */}
+              {congesAdmin.length > 0 && (
+                <div style={{ marginBottom: 28 }}>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 14,
+                    display: "flex", alignItems: "center", gap: 8 }}>
+                    <CalendarDays size={18} /> Congés à valider ({congesAdmin.length})
+                  </div>
+                  {congesAdmin.map(conge => {
+                    const cond = conge.conducteur as { prenom?: string; nom?: string } | undefined;
+                    const isRefusing = congeAdminRefusId === conge.id;
+                    return (
+                      <div key={conge.id} style={{ background: C.white, borderRadius: 14, padding: 20,
+                        marginBottom: 14, boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+                        borderLeft: `4px solid #2563EB` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between",
+                          alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                          <div>
+                            <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>
+                              {cond?.prenom} {cond?.nom}
                             </div>
-                            <div style={{ fontSize: 12, color: C.gray400 }}>{fmtDateTime(m.created_at)}</div>
+                            <div style={{ fontSize: 13, color: C.gray600, marginTop: 2 }}>
+                              {conge.motif} · {fmtDate(conge.date_debut)} → {fmtDate(conge.date_fin)}
+                            </div>
                           </div>
-                          <p style={{ fontSize: 14, color: C.gray800, lineHeight: 1.5, margin: "0 0 12px" }}>
-                            {(m.message || "").replace("Message du mécanicien : ", "")}
-                          </p>
-                          {!m.read && (
-                            <button onClick={async () => {
-                              await sb.from("alertes").update({ read: true, read_at: new Date().toISOString() }).eq("id", m.id);
-                              load();
-                            }} style={{ padding: "9px 20px", borderRadius: 10, border: `2px solid ${C.navyL}`,
-                              background: C.white, color: C.navyL, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
-                              Lu
-                            </button>
+                          <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                            background: "#EFF6FF", color: "#2563EB" }}>Transmis gestionnaire</span>
+                        </div>
+                        <p style={{ fontSize: 14, color: C.gray800, lineHeight: 1.6, margin: "0 0 10px",
+                          borderLeft: `3px solid ${C.gray200}`, paddingLeft: 10 }}>{conge.justification}</p>
+                        {conge.note_gestionnaire && (
+                          <div style={{ background: C.skyL, borderRadius: 10, padding: "8px 12px",
+                            fontSize: 13, color: C.navyL, marginBottom: 12, fontStyle: "italic" }}>
+                            Note gestionnaire : {conge.note_gestionnaire}
+                          </div>
+                        )}
+                        {isRefusing && (
+                          <div style={{ marginBottom: 12 }}>
+                            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 6 }}>
+                              Motif du refus *
+                            </label>
+                            <textarea value={congeAdminRefusMotif} onChange={e => setCongeAdminRefusMotif(e.target.value)}
+                              rows={2} placeholder="Ex: Période de pointe scolaire…"
+                              style={{ ...inp, resize: "vertical" }} />
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap",
+                          flexDirection: isMobile ? "column" : "row" }}>
+                          {!isRefusing ? (
+                            <>
+                              <button onClick={() => doAccepterConge(conge)} disabled={congeAdminBusy}
+                                style={{ flex: 1, padding: "12px 0", borderRadius: 10,
+                                  border: "none", background: C.green, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                                  <CheckCircle2 size={15} /> Approuver
+                                </span>
+                              </button>
+                              <button onClick={() => { setCongeAdminRefusId(conge.id); setCongeAdminRefusMotif(""); }}
+                                style={{ flex: 1, padding: "12px 0", borderRadius: 10,
+                                  border: `2px solid ${C.red}`, background: C.white, color: C.red, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                                Refuser
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => doRefuserConge(conge)}
+                                disabled={congeAdminBusy || !congeAdminRefusMotif.trim()}
+                                style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none",
+                                  background: congeAdminRefusMotif.trim() ? C.red : C.gray200,
+                                  color: C.white, fontWeight: 800, fontSize: 14,
+                                  cursor: congeAdminRefusMotif.trim() ? "pointer" : "not-allowed" }}>
+                                Confirmer le refus
+                              </button>
+                              <button onClick={() => setCongeAdminRefusId(null)}
+                                style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
+                                  background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                                Annuler
+                              </button>
+                            </>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-      </div>
+              {/* Réparations */}
+              {repAValider.length === 0 && congesAdmin.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
+                  <CheckCircle2 size={48} strokeWidth={1} style={{ display: "block", margin: "0 auto 12px" }} />
+                  <p style={{ fontWeight: 700, fontSize: 15 }}>Aucun élément en attente de validation</p>
+                </div>
+              ) : (
+                <>
+                  {repAValider.length > 0 && congesAdmin.length > 0 && (
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 14,
+                      display: "flex", alignItems: "center", gap: 8 }}>
+                      <Wrench size={18} /> Réparations à valider ({repAValider.length})
+                    </div>
+                  )}
+                  {repAValider.map(r => {
+                    const vv = r.vehicule as { plaque?: string; marque?: string; modele?: string } | undefined;
+                    const isRefusing = refusOpen === r.id;
+                    return (
+                      <div key={r.id} style={{ background: C.white, borderRadius: 14, padding: 20,
+                        marginBottom: 16, boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+                        borderLeft: `4px solid ${C.red}` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between",
+                          alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+                          <div>
+                            <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>{vv?.plaque || r.vehicule_id}</div>
+                            <div style={{ fontSize: 12, color: C.gray400 }}>{vv?.marque} {vv?.modele}</div>
+                            {r.date_reception && <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>Réceptionné {fmtDate(r.date_reception)}</div>}
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 900, color: C.red }}>
+                              {(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF
+                            </div>
+                            <div style={{ fontSize: 11, color: C.gray400 }}>Coût estimé</div>
+                          </div>
+                        </div>
+                        <p style={{ fontSize: 14, color: C.gray800, lineHeight: 1.6, margin: "0 0 12px",
+                          borderLeft: `3px solid ${C.gray200}`, paddingLeft: 10 }}>{r.description}</p>
+                        {r.commentaire_mecanicien && !r.commentaire_mecanicien.startsWith("[Refusé") && (
+                          <div style={{ background: C.gray50, borderRadius: 10, padding: "8px 12px",
+                            fontSize: 13, color: C.gray600, marginBottom: 14, fontStyle: "italic" }}>
+                            {r.commentaire_mecanicien.split(" | ").filter((s: string) => !s.startsWith("Photos:")).join(" | ")}
+                          </div>
+                        )}
+                        {isRefusing && (
+                          <div style={{ marginBottom: 14 }}>
+                            <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 6 }}>
+                              Motif du refus *
+                            </label>
+                            <textarea value={refusMotif} onChange={e => setRefusMotif(e.target.value)}
+                              rows={2} placeholder="Ex: Obtenir deuxième devis…"
+                              style={{ ...inp, resize: "vertical" }} />
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap",
+                          flexDirection: isMobile ? "column" : "row" }}>
+                          {!isRefusing ? (
+                            <>
+                              <button onClick={() => doValider(r)} disabled={valBusy}
+                                style={{ flex: 1, padding: "12px 0", borderRadius: 10,
+                                  border: "none", background: C.green, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                                  <CheckCircle2 size={15} /> Valider
+                                </span>
+                              </button>
+                              <button onClick={() => { setRefusOpen(r.id); setRefusMotif(""); }}
+                                style={{ flex: 1, padding: "12px 0", borderRadius: 10,
+                                  border: `2px solid ${C.red}`, background: C.white, color: C.red, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                                Refuser
+                              </button>
+                              <button onClick={() => printFiche(r)}
+                                style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
+                                  background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                                Imprimer
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => doRefuser(r)} disabled={valBusy || !refusMotif.trim()}
+                                style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none",
+                                  background: refusMotif.trim() ? C.red : C.gray200, color: C.white,
+                                  fontWeight: 800, fontSize: 14, cursor: refusMotif.trim() ? "pointer" : "not-allowed" }}>
+                                Confirmer le refus
+                              </button>
+                              <button onClick={() => setRefusOpen(null)}
+                                style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
+                                  background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                                Annuler
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* Historique validations */}
+              {(() => {
+                const histItems = reparations.filter(r =>
+                  ["en_reparation","remis_en_circulation"].includes(r.statut) ||
+                  (r.statut === "receptionne" && (r.commentaire_mecanicien || "").startsWith("[Refusé"))
+                );
+                if (histItems.length === 0) return null;
+                const grouped: Record<string, typeof histItems> = {};
+                histItems.forEach(r => {
+                  const d = r.date_reception || r.created_at.slice(0, 10);
+                  if (!grouped[d]) grouped[d] = [];
+                  grouped[d].push(r);
+                });
+                const days = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+                const tod = isoToday();
+                return (
+                  <div style={{ marginTop: 32 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.gray600, marginBottom: 14 }}>
+                      Historique des validations
+                    </div>
+                    {days.map((day, di) => {
+                      const isOpen = di === 0 || !!histValExpanded[day];
+                      const dayLabel = day === tod ? "Aujourd'hui"
+                        : day === addDays(tod, -1) ? "Hier"
+                        : new Date(day + "T00:00:00").toLocaleDateString("fr-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+                      return (
+                        <div key={day} style={{ marginBottom: 6 }}>
+                          <div onClick={() => { if (di !== 0) setHistValExpanded(s => ({ ...s, [day]: !s[day] })); }}
+                            style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 10px",
+                              cursor: di === 0 ? "default" : "pointer" }}>
+                            <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+                            <span style={{ fontSize: 11, fontWeight: 800, color: C.gray400,
+                              textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
+                              {dayLabel}
+                            </span>
+                            {di !== 0 && !isOpen && (
+                              <span style={{ fontSize: 11, color: C.navy, fontWeight: 700 }}>
+                                Voir les {grouped[day].length} élément{grouped[day].length > 1 ? "s" : ""}
+                              </span>
+                            )}
+                            <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+                          </div>
+                          {isOpen && grouped[day].map(r => {
+                            const vv = r.vehicule as { plaque?: string } | undefined;
+                            const wasRefused = (r.commentaire_mecanicien || "").startsWith("[Refusé");
+                            const refusMotifText = wasRefused
+                              ? (r.commentaire_mecanicien || "").replace("[Refusé par admin: ", "").replace("]", "")
+                              : null;
+                            return (
+                              <div key={r.id} style={{ background: C.gray50, borderRadius: 12, padding: 14,
+                                marginBottom: 10, borderLeft: `3px solid ${wasRefused ? C.red : C.green}` }}>
+                                <div style={{ display: "flex", justifyContent: "space-between",
+                                  alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                                  <div>
+                                    <div style={{ fontWeight: 700, fontSize: 14 }}>{vv?.plaque || r.vehicule_id}</div>
+                                    <div style={{ fontSize: 12, color: C.gray400 }}>{fmtDate(r.date_reception)}</div>
+                                    {refusMotifText && (
+                                      <div style={{ fontSize: 12, color: C.red, marginTop: 3, fontStyle: "italic" }}>
+                                        Motif : {refusMotifText}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                                    {(r.cout_estime ?? 0) > 0 && (
+                                      <span style={{ fontWeight: 800, fontSize: 14 }}>
+                                        {(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF
+                                      </span>
+                                    )}
+                                    <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                      background: wasRefused ? C.redL : C.greenL,
+                                      color: wasRefused ? C.red : C.green }}>
+                                      {wasRefused ? "Refusé" : "Validé"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ══ HISTORIQUE ═════════════════════════════════════════════════ */}
+          {tab === "historique" && (
+            <div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+                {[SY_START, SY_START - 1].map(y => (
+                  <button key={y} onClick={() => { setHistYear(y); setHistMonth(null); setHistDay(null); }}
+                    style={{ padding: "9px 18px", borderRadius: 10, border: "none", fontWeight: 700,
+                      fontSize: 13, cursor: "pointer",
+                      background: histYear === y ? C.navy : C.gray100,
+                      color: histYear === y ? C.white : C.gray600 }}>
+                    {y}–{y + 1}
+                  </button>
+                ))}
+                {histMonth !== null && (
+                  <button onClick={() => { setHistMonth(null); setHistDay(null); }}
+                    style={{ padding: "9px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
+                      background: C.white, color: C.gray600, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                    ← Mois
+                  </button>
+                )}
+                {histDay !== null && (
+                  <button onClick={() => setHistDay(null)}
+                    style={{ padding: "9px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
+                      background: C.white, color: C.gray600, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                    ← Jours
+                  </button>
+                )}
+              </div>
+
+              {histMonth === null && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 12 }}>
+                  {[9,10,11,12,1,2,3,4,5,6,7,8].map(m => {
+                    const yr = m >= 9 ? histYear : histYear + 1;
+                    const data = histMonthData(yr, m);
+                    const hasData = data.incidents > 0 || data.absences > 0 || data.reparations > 0;
+                    return (
+                      <div key={m} onClick={() => setHistMonth(m)}
+                        style={{ background: C.white, borderRadius: 12, padding: 16, cursor: "pointer",
+                          boxShadow: "0 1px 6px rgba(0,0,0,0.06)", opacity: hasData ? 1 : 0.5,
+                          borderTop: `3px solid ${hasData ? C.navy : C.gray200}` }}>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 8 }}>
+                          {MONTHS_FR[m - 1]}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {data.incidents > 0 && <span style={{ fontSize: 11, color: C.red }}>{data.incidents} inc.</span>}
+                          {data.absences > 0 && <span style={{ fontSize: 11, color: C.amber }}>{data.absences} abs.</span>}
+                          {data.reparations > 0 && <span style={{ fontSize: 11, color: C.navyL }}>{data.reparations} rép.</span>}
+                          {!hasData && <span style={{ fontSize: 11, color: C.gray400 }}>—</span>}
+                        </div>
+                        {data.cout > 0 && (
+                          <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, marginTop: 6 }}>
+                            {Math.round(data.cout).toLocaleString("fr-CH")} CHF
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {histMonth !== null && histDay === null && (() => {
+                const yr = histMonth >= 9 ? histYear : histYear + 1;
+                const pad = String(histMonth).padStart(2, "0");
+                const data = histMonthData(yr, histMonth);
+                const totalDays = new Date(yr, histMonth, 0).getDate();
+                return (
+                  <>
+                    <div style={{ background: C.white, borderRadius: 14, padding: 18, marginBottom: 20,
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between",
+                        alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+                        <div style={{ fontWeight: 800, fontSize: 16, color: C.navy }}>
+                          {MONTHS_FR[histMonth - 1]} {yr}
+                        </div>
+                        <button onClick={() => exportCSV(yr, histMonth)}
+                          style={{ display: "flex", alignItems: "center", gap: 6,
+                            padding: "8px 14px", borderRadius: 8, border: `1px solid ${C.gray200}`,
+                            background: C.white, color: C.gray600, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                          <Download size={13} /> Export CSV
+                        </button>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+                        {[
+                          { val: data.incidents, label: "Incidents", color: C.red },
+                          { val: data.absences, label: "Absences", color: C.amber },
+                          { val: data.reparations, label: "Réparations", color: C.navyL },
+                        ].map(s => (
+                          <div key={s.label} style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 24, fontWeight: 900, color: s.color }}>{s.val}</div>
+                            <div style={{ fontSize: 11, color: C.gray400 }}>{s.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: isMobile ? 4 : 6 }}>
+                      {["Lu","Ma","Me","Je","Ve","Sa","Di"].map(d => (
+                        <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700,
+                          color: C.gray400, paddingBottom: 6 }}>{d}</div>
+                      ))}
+                      {(() => {
+                        const firstDay = new Date(`${yr}-${pad}-01`).getDay();
+                        const offset = firstDay === 0 ? 6 : firstDay - 1;
+                        const cells = [];
+                        for (let i = 0; i < offset; i++) cells.push(<div key={`e${i}`} />);
+                        for (let d = 1; d <= totalDays; d++) {
+                          const dayStr = `${yr}-${pad}-${String(d).padStart(2, "0")}`;
+                          const { incidents: di, absences: da, reparations: dr } = histDayData(dayStr);
+                          const hasData = di.length > 0 || da.length > 0 || dr.length > 0;
+                          const isToday = dayStr === isoToday();
+                          cells.push(
+                            <div key={d} onClick={() => hasData && setHistDay(dayStr)}
+                              style={{ aspectRatio: "1", display: "flex", flexDirection: "column",
+                                alignItems: "center", justifyContent: "center", borderRadius: 10,
+                                cursor: hasData ? "pointer" : "default",
+                                background: isToday ? C.navy : hasData ? C.skyL : C.gray50,
+                                color: isToday ? C.white : C.gray800,
+                                border: isToday ? "none" : `1px solid ${C.gray200}` }}>
+                              <span style={{ fontWeight: 700, fontSize: isMobile ? 11 : 13 }}>{d}</span>
+                              {hasData && !isToday && (
+                                <div style={{ display: "flex", gap: 2, marginTop: 2 }}>
+                                  {di.length > 0 && <span style={{ width: 4, height: 4, borderRadius: "50%", background: C.red }} />}
+                                  {da.length > 0 && <span style={{ width: 4, height: 4, borderRadius: "50%", background: C.amber }} />}
+                                  {dr.length > 0 && <span style={{ width: 4, height: 4, borderRadius: "50%", background: C.navy }} />}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        return cells;
+                      })()}
+                    </div>
+                  </>
+                );
+              })()}
+
+              {histDay !== null && (() => {
+                const { incidents: di, absences: da, reparations: dr } = histDayData(histDay);
+                return (
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: C.navy, marginBottom: 16 }}>
+                      {new Date(histDay).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                    </div>
+                    {di.length === 0 && da.length === 0 && dr.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: 40, color: C.gray400 }}>Aucun événement ce jour</div>
+                    ) : (
+                      <>
+                        {di.map(i => (
+                          <div key={i.id} style={{ background: C.white, borderRadius: 12, padding: 14,
+                            marginBottom: 8, borderLeft: `3px solid ${C.red}` }}>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: C.red,
+                              display: "flex", alignItems: "center", gap: 6 }}>
+                              <AlertTriangle size={13} /> {i.type}
+                            </div>
+                            <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>{i.description}</div>
+                          </div>
+                        ))}
+                        {da.map(a => {
+                          const cond = a.conducteur as { prenom?: string; nom?: string } | undefined;
+                          return (
+                            <div key={a.id} style={{ background: C.white, borderRadius: 12, padding: 14,
+                              marginBottom: 8, borderLeft: `3px solid ${C.amber}` }}>
+                              <div style={{ fontWeight: 700, fontSize: 14, color: C.amber,
+                                display: "flex", alignItems: "center", gap: 6 }}>
+                                <Users size={13} /> {cond?.prenom} {cond?.nom}
+                              </div>
+                              <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>
+                                {a.motif || "—"} · {a.status === "couvert" ? "Couvert" : "Non couvert"}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {dr.map(r => {
+                          const vv = r.vehicule as { plaque?: string } | undefined;
+                          return (
+                            <div key={r.id} style={{ background: C.white, borderRadius: 12, padding: 14,
+                              marginBottom: 8, borderLeft: `3px solid ${C.navy}` }}>
+                              <div style={{ fontWeight: 700, fontSize: 14, color: C.navy,
+                                display: "flex", alignItems: "center", gap: 6 }}>
+                                <Wrench size={13} /> {vv?.plaque || r.vehicule_id}
+                              </div>
+                              <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>{r.description}</div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ══ MESSAGES ═══════════════════════════════════════════════════ */}
+          {tab === "messages" && (
+            <div>
+              <div style={{ marginBottom: 28 }}>
+                <div style={{ fontWeight: 800, fontSize: 13, color: C.navy, textTransform: "uppercase",
+                  letterSpacing: 0.5, marginBottom: 12 }}>
+                  Messagerie directe
+                </div>
+                <MessagerieBox myRole="admin"
+                  allowedTargets={[
+                    { label: "Gestionnaire", role: "gestionnaire" },
+                    { label: "Mécanicien",   role: "mecanicien"   },
+                    { label: "Conducteurs",  role: "conducteur"   },
+                  ]} />
+              </div>
+
+              {adminMsgs.length > 0 && (
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: C.navy, textTransform: "uppercase",
+                    letterSpacing: 0.5, marginBottom: 12 }}>
+                    Messages mécanicien
+                  </div>
+                  {groupByDay(adminMsgs).map((grp, gi) => {
+                    const isFirst = gi === 0;
+                    const open = isFirst || msgExpandedDays[grp.day];
+                    return (
+                      <div key={grp.day}>
+                        <div onClick={() => !isFirst && setMsgExpandedDays(s => ({ ...s, [grp.day]: !s[grp.day] }))}
+                          style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 10px",
+                            cursor: isFirst ? "default" : "pointer" }}>
+                          <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+                          <span style={{ fontSize: 11, fontWeight: 800, color: C.gray600,
+                            textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{grp.label}</span>
+                          {!isFirst && !open && (
+                            <span style={{ fontSize: 11, color: C.navyL, fontWeight: 700, whiteSpace: "nowrap" }}>
+                              Voir les {grp.items.length} message{grp.items.length > 1 ? "s" : ""}
+                            </span>
+                          )}
+                          <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+                        </div>
+                        {open && grp.items.map(m => (
+                          <div key={m.id} style={{ background: m.read ? C.gray50 : C.white, borderRadius: 14, padding: 18,
+                            marginBottom: 12, border: `1px solid ${m.read ? C.gray200 : C.navyL}`,
+                            boxShadow: m.read ? "none" : "0 2px 10px rgba(0,0,0,0.08)",
+                            borderLeft: `4px solid ${m.read ? C.gray400 : C.navyL}` }}>
+                            <div style={{ display: "flex", justifyContent: "space-between",
+                              alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+                              <div style={{ fontWeight: 700, fontSize: 13, color: C.navyL }}>
+                                Mécanicien
+                                {!m.read && (
+                                  <span style={{ marginLeft: 8, background: C.navyL, color: C.white,
+                                    borderRadius: 99, padding: "1px 7px", fontSize: 10, fontWeight: 900 }}>
+                                    Nouveau
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: 12, color: C.gray400 }}>{fmtDateTime(m.created_at)}</div>
+                            </div>
+                            <p style={{ fontSize: 14, color: C.gray800, lineHeight: 1.5, margin: "0 0 12px" }}>
+                              {(m.message || "").replace("Message du mécanicien : ", "")}
+                            </p>
+                            {!m.read && (
+                              <button onClick={async () => {
+                                await sb.from("alertes").update({ read: true, read_at: new Date().toISOString() }).eq("id", m.id);
+                                load();
+                              }} style={{ padding: "9px 20px", borderRadius: 10, border: `2px solid ${C.navyL}`,
+                                background: C.white, color: C.navyL, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                                Lu
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );
