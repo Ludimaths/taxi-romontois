@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import Sidebar from "@/components/Sidebar";
 import { C } from "@/lib/constants";
@@ -86,10 +87,10 @@ export default function ProtectedLayoutClient({
               {profile.prenom} {profile.nom}
             </span>
             <button onClick={handleSignOut}
-              style={{ padding: "7px 13px", borderRadius: 8, border: "none",
-                background: "rgba(220,38,38,0.2)", color: "#FCA5A5",
-                fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-              Déconnexion
+              style={{ background: "transparent", border: "none", color: C.white, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10,
+                fontWeight: 700, fontSize: 14 }}>
+              <LogOut size={16} color={C.white} /> Déconnexion
             </button>
           </div>
         </header>
@@ -113,10 +114,10 @@ export default function ProtectedLayoutClient({
         <img src="/logo.png" alt="Taxi Romontois"
           style={{ height: 32, width: "auto", display: "block" }} />
         <button onClick={handleSignOut}
-          style={{ padding: "8px 14px", borderRadius: 8, border: "none",
-            background: "rgba(220,38,38,0.2)", color: "#FCA5A5",
-            fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-          Déconnexion
+          style={{ background: "transparent", border: "none", color: C.white, cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10,
+            fontWeight: 700, fontSize: 14 }}>
+          <LogOut size={16} color={C.white} /> Déconnexion
         </button>
       </header>
 

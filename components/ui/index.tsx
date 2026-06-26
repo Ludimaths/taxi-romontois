@@ -24,7 +24,16 @@ export function Badge({ color = "gray", children }: { color?: BadgeColor; childr
 }
 
 // ── Avatar ─────────────────────────────────────────────────────────────────────
-export function Avatar({ initials, size = 36, color }: { initials: string; size?: number; color?: string }) {
+export function Avatar({ initials, size = 36, color, photoUrl }:
+  { initials: string; size?: number; color?: string; photoUrl?: string | null }) {
+  if (photoUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return (
+      <img src={photoUrl} alt={initials}
+        style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover",
+          flexShrink: 0, display: "block" }} />
+    );
+  }
   return (
     <div style={{ width: size, height: size, borderRadius: "50%",
       background: color || `linear-gradient(135deg,${C.navyL},${C.sky})`,

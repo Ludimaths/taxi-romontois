@@ -116,6 +116,7 @@ export default function ParentPage() {
   const [child,      setChild]      = useState<Enfant | null>(null);
   const [circuit,    setCircuit]    = useState<Circuit | null>(null);
   const [conducteur, setConducteur] = useState<Conducteur | null>(null);
+  const [conducteurPhoto, setConducteurPhoto] = useState<string | null>(null);
   const [remplacant, setRemplacant] = useState<Conducteur | null>(null);
   const [absences,   setAbsences]   = useState<AbsenceEnfant[]>([]);
 
@@ -171,6 +172,10 @@ export default function ParentPage() {
             .eq("circuit_id", circ.id).eq("date_absence", today)
             .limit(1).maybeSingle();
           setConducteur(drivers[0]);
+          const { data: condProf } = await supabase
+            .from("profiles").select("photo_url")
+            .eq("conducteur_id", drivers[0].id).maybeSingle();
+          if (condProf?.photo_url) setConducteurPhoto(condProf.photo_url as string);
           if (absCondu?.remplacant) setRemplacant(absCondu.remplacant as any);
         }
       }
@@ -304,6 +309,23 @@ export default function ParentPage() {
             value={circuit?.cercle?.nom ?? "—"} />
           <InfoRow icon={<Bus size={20} color={G.gray} />} label="Conducteur habituel"
             value={conducteur ? `${conducteur.prenom} ${conducteur.nom}` : "—"} />
+          {conducteur && conducteurPhoto && (
+            <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px",
+              background: G.grayL, borderRadius: 12, border: `1px solid ${G.border}` }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={conducteurPhoto} alt={`${conducteur.prenom} ${conducteur.nom}`}
+                style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover",
+                  flexShrink: 0, border: `2px solid ${G.green}` }} />
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: G.text }}>
+                  {conducteur.prenom} {conducteur.nom}
+                </div>
+                <div style={{ fontSize: 13, color: G.gray, marginTop: 2 }}>
+                  Votre conducteur — identification visuelle
+                </div>
+              </div>
+            </div>
+          )}
           {remplacant && (
             <InfoRow icon={<RefreshCw size={20} color={G.orange} />} label="Remplaçant aujourd'hui"
               value={`${remplacant.prenom} ${remplacant.nom}`} orange />

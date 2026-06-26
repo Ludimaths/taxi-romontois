@@ -195,6 +195,7 @@ export interface Profile {
   enfant_id?: number;
   civilite?: "mere" | "pere" | null;
   must_change_password?: boolean;
+  photo_url?: string | null;
 }
 
 export type CongesStatut = "en_attente" | "transmis_admin" | "accepte" | "refuse";

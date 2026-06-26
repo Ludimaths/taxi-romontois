@@ -6,8 +6,9 @@ import {
   PieChart, Pie, Cell,
 } from "recharts";
 import {
-  Bus, Users, Wrench, AlertTriangle, Smartphone, LayoutDashboard,
-  Cog, Download, LogOut, Home, BarChart2, CheckCircle2, CalendarDays, MessageSquare,
+  Bus, Users, Wrench, AlertTriangle, LayoutDashboard,
+  Download, LogOut, BarChart2, CheckCircle2, CalendarDays, MessageSquare,
+  CheckSquare, History, Map, Bell, Heart,
 } from "lucide-react";
 import MessagerieBox from "@/components/MessagerieBox";
 import { createClient } from "@/lib/supabase/client";
@@ -72,6 +73,7 @@ export default function AdminPage() {
   const [tab,    setTab]    = useState<AdminTab>("dashboard");
   const [period, setPeriod] = useState<Period>("month");
   const [loading, setLoading] = useState(true);
+  const [logoErr, setLogoErr] = useState(false);
 
   const [conducteurs,  setConducteurs]  = useState<Conducteur[]>([]);
   const [vehicules,    setVehicules]    = useState<Vehicule[]>([]);
@@ -200,11 +202,9 @@ export default function AdminPage() {
 
   // ── Computed ─────────────────────────────────────────────────────────────────
   const vEnService  = vehicules.filter(v => ["bon","en_service"].includes(v.etat as string)).length;
-  const vReparation = vehicules.filter(v => ["receptionne","en_reparation","en_attente_piece","repare","atelier"].includes(v.etat as string)).length;
-  const vAttention  = vehicules.filter(v => (v.etat as string) === "attention").length;
   const cPresents   = conducteurs.filter(d => ["en_service","disponible"].includes(d.status)).length;
-  const cAbsents    = conducteurs.filter(d => d.status === "absent").length;
   const incOuverts  = incidents.filter(i => i.status !== "resolu").length;
+  const repEnCours  = reparations.filter(r => ["en_reparation","en_attente_piece"].includes(r.statut)).length;
   const repAValider    = reparations.filter(r => r.statut === "en_attente_validation");
   const unreadMsgCount = adminMsgs.filter(m => !m.read).length;
 
@@ -217,18 +217,6 @@ export default function AdminPage() {
     incidents.filter(i => i.reported_at.slice(0, 10) >= cutoff)
       .forEach(i => { const d = i.reported_at.slice(0, 10); if (d in map) map[d]++; });
     return Object.entries(map).map(([day, count]) => ({ day: day.slice(5), count }));
-  })();
-
-  const abs7 = (() => {
-    const cutoff = addDays(today, -6);
-    const m7: Record<string, number> = {};
-    for (let i = 0; i < 7; i++) { const d = addDays(cutoff, i); m7[d] = 0; }
-    absencesCond.filter(a => a.date_absence >= cutoff)
-      .forEach(a => { if (a.date_absence in m7) m7[a.date_absence]++; });
-    return Object.entries(m7).map(([day, count]) => ({
-      day: new Date(day + "T12:00:00").toLocaleDateString("fr-CH", { weekday: "short", day: "numeric" }),
-      count,
-    }));
   })();
 
   const repCostByMonth = (() => {
@@ -362,67 +350,94 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
     <div style={{ textAlign: "center", padding: 80, color: C.gray400 }}>Chargement…</div>
   );
 
-  // ── Cards de navigation ────────────────────────────────────────────────────────
-  const NAV_CARDS = [
-    { icon: <Bus size={28} />,           label: "Flotte",        sub: "Véhicules & état",      path: "/gestionnaire/vehicules",   color: "#2563EB" },
-    { icon: <Users size={28} />,         label: "Conducteurs",   sub: "Fiches & statuts",       path: "/gestionnaire/conducteurs", color: C.navy   },
-    { icon: <Wrench size={28} />,        label: "Réparations",   sub: "Atelier & suivi",        path: "/gestionnaire/reparations", color: C.amber  },
-    { icon: <AlertTriangle size={28} />, label: "Incidents",     sub: "Signalements",           path: "/gestionnaire/incidents",   color: C.red    },
-    { icon: <Smartphone size={28} />,    label: "QR Codes",      sub: "Génération & scan",      path: "/admin/qrcodes",            color: "#7C3AED"},
-    { icon: <LayoutDashboard size={28}/>,label: "Gestionnaire",  sub: "Dashboard complet",      path: "/gestionnaire",            color: C.navyL  },
-    { icon: <Cog size={28} />,           label: "Mécanicien",    sub: "Atelier & réparations",  path: "/mecanicien",              color: "#D97706" },
-    { icon: <Download size={28} />,      label: "Exports",       sub: "Rapports & données",     path: "/gestionnaire/export",      color: C.green  },
+  // ── Grille 4×2 accès rapide ─────────────────────────────────────────────────────
+  const QUICK_ACCESS = [
+    { icon: <Users size={26} />,         label: "Conducteurs",  path: "/gestionnaire/conducteurs", color: C.navy   },
+    { icon: <Bus size={26} />,           label: "Véhicules",    path: "/gestionnaire/vehicules",   color: "#2563EB" },
+    { icon: <Map size={26} />,           label: "Circuits",     path: "/gestionnaire/circuits",    color: C.navyL  },
+    { icon: <AlertTriangle size={26} />, label: "Incidents",    path: "/gestionnaire/incidents",   color: C.red    },
+    { icon: <Wrench size={26} />,        label: "Réparations",  path: "/gestionnaire/reparations", color: C.amber  },
+    { icon: <Bell size={26} />,          label: "Alertes",      path: "/gestionnaire/alertes",     color: "#7C3AED" },
+    { icon: <Download size={26} />,      label: "Exports",      path: "/gestionnaire/export",      color: C.green  },
+    { icon: <Heart size={26} />,         label: "Parents",      path: "/gestionnaire/parents",     color: "#DB2777" },
   ];
 
   const TABS: { id: AdminTab; icon: React.ReactNode; label: string; badge?: number }[] = [
-    { id: "dashboard",   icon: <Home size={15} />,           label: "Tableau de bord"                                    },
-    { id: "stats",       icon: <BarChart2 size={15} />,      label: "Statistiques"                                       },
-    { id: "validation",  icon: <CheckCircle2 size={15} />,   label: "Validations",  badge: repAValider.length            },
-    { id: "historique",  icon: <CalendarDays size={15} />,   label: "Historique"                                         },
-    { id: "messages",    icon: <MessageSquare size={15} />,  label: "Messages",     badge: unreadMsgCount || undefined   },
+    { id: "dashboard",   icon: <LayoutDashboard size={17} />, label: "Tableau de bord"                                       },
+    { id: "stats",       icon: <BarChart2 size={17} />,       label: "Statistiques"                                          },
+    { id: "validation",  icon: <CheckSquare size={17} />,     label: "Validations",  badge: repAValider.length + congesAdmin.length },
+    { id: "historique",  icon: <History size={17} />,         label: "Historique"                                            },
+    { id: "messages",    icon: <MessageSquare size={17} />,   label: "Messages",     badge: unreadMsgCount || undefined      },
   ];
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: "100vh", background: C.gray50 }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: C.gray50 }}>
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header style={{ background: C.navy, padding: "0 24px", height: 60,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        boxShadow: "0 2px 12px rgba(0,0,0,0.25)", position: "sticky", top: 0, zIndex: 300 }}>
-        <img src="/logo.png" alt="Taxi Romontois" style={{ height: 34, width: "auto" }} />
-        <span style={{ color: C.white, fontWeight: 900, fontSize: 18, letterSpacing: 0.3 }}>
-          Administration
-        </span>
-        <button onClick={handleSignOut}
-          style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 14px",
-            borderRadius: 8, border: "none", background: "rgba(220,38,38,0.2)", color: "#FCA5A5",
-            fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-          <LogOut size={15} /> Déconnexion
-        </button>
-      </header>
-
-      {/* ── Barre de navigation horizontale ────────────────────────────────── */}
-      <nav style={{ background: C.white, borderBottom: `1px solid ${C.gray200}`,
-        display: "flex", gap: 0, overflowX: "auto", position: "sticky", top: 60, zIndex: 200 }}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ display: "flex", alignItems: "center", gap: 7, padding: "14px 20px",
-              border: "none", background: "none", cursor: "pointer", fontWeight: 700,
-              fontSize: 13, whiteSpace: "nowrap", flexShrink: 0, position: "relative",
-              color: tab === t.id ? C.navy : C.gray600,
-              borderBottom: tab === t.id ? `3px solid ${C.navy}` : "3px solid transparent" }}>
-            {t.icon}
-            {t.label}
-            {t.badge != null && t.badge > 0 && (
-              <span style={{ background: C.red, color: C.white, borderRadius: 99,
-                padding: "1px 6px", fontSize: 10, fontWeight: 900, marginLeft: 2 }}>{t.badge}</span>
-            )}
+      {/* ── Sidebar admin ──────────────────────────────────────────────────── */}
+      <aside style={{ width: 228, background: C.navy, display: "flex", flexDirection: "column",
+        flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.2)", position: "sticky", top: 0,
+        height: "100vh" }}>
+        {/* Logo + titre */}
+        <div style={{ padding: "20px 18px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          {logoErr
+            ? <div style={{ color: C.white, fontWeight: 900, fontSize: 16 }}>Taxi Romontois</div>
+            : <img src="/logo.png" alt="Taxi Romontois"
+                style={{ width: 140, height: "auto", objectFit: "contain", display: "block" }}
+                onError={() => setLogoErr(true)} />}
+          <div style={{ color: C.white, fontWeight: 800, fontSize: 14, marginTop: 10 }}>Taxi Romontois</div>
+        </div>
+        {/* Avatar */}
+        <div style={{ padding: "16px 18px", borderBottom: "1px solid rgba(255,255,255,0.1)",
+          display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 42, height: 42, borderRadius: "50%", background: C.white, color: C.navy,
+            display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 16 }}>
+            AA
+          </div>
+          <div>
+            <div style={{ fontSize: 14, color: C.white, fontWeight: 700 }}>Admin</div>
+            <div style={{ fontSize: 12, color: C.sky, fontWeight: 600 }}>Administrateur</div>
+          </div>
+        </div>
+        {/* Nav */}
+        <nav style={{ flex: 1, padding: "10px", overflowY: "auto" }}>
+          {TABS.map(t => {
+            const active = tab === t.id;
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
+                  padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+                  background: active ? C.white : "transparent", color: active ? C.navy : C.white,
+                  fontWeight: active ? 800 : 600, fontSize: 13, textAlign: "left", marginBottom: 2,
+                  transition: "background .15s" }}>
+                {t.icon}
+                <span style={{ flex: 1 }}>{t.label}</span>
+                {t.badge != null && t.badge > 0 && (
+                  <span style={{ background: C.red, color: C.white, borderRadius: 20,
+                    fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{t.badge}</span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+        {/* Footer */}
+        <div style={{ padding: "12px 14px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+          <button onClick={handleSignOut}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+            style={{ width: "100%", background: "transparent", border: "none", color: C.white,
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: "12px 16px",
+              borderRadius: 10, fontWeight: 700, fontSize: 14, transition: "background .15s" }}>
+            <LogOut size={16} color={C.white} /> Déconnexion
           </button>
-        ))}
-      </nav>
+        </div>
+      </aside>
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px" }}>
+      {/* ── Contenu principal ──────────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflowY: "auto", maxHeight: "100vh" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 20px" }}>
 
         {/* ══ TAB : TABLEAU DE BORD ════════════════════════════════════════════ */}
         {tab === "dashboard" && (
@@ -430,52 +445,37 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
 
             {/* ── Colonne gauche ── */}
             <div>
-              {/* 3 KPI cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 20 }}>
+              {/* 4 KPI compacts */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
                 {[
-                  { label: "Véhicules en service", value: vEnService, color: C.green  },
-                  { label: "Conducteurs présents", value: cPresents,  color: C.navyL  },
-                  { label: "Incidents ouverts",    value: incOuverts, color: incOuverts > 0 ? C.red : C.green },
+                  { label: "Véhicules en service",   value: vEnService,         color: C.green  },
+                  { label: "Conducteurs présents",   value: cPresents,          color: C.navyL  },
+                  { label: "Incidents ouverts",      value: incOuverts,         color: incOuverts > 0 ? C.red : C.green },
+                  { label: "Réparations en cours",   value: repEnCours,         color: repEnCours > 0 ? C.amber : C.green },
                 ].map(s => (
                   <div key={s.label} style={{ background: C.white, borderRadius: 14,
                     padding: "18px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
                     borderTop: `3px solid ${s.color}` }}>
-                    <div style={{ fontSize: 32, fontWeight: 900, color: s.color }}>{s.value}</div>
+                    <div style={{ fontSize: 30, fontWeight: 900, color: s.color }}>{s.value}</div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, marginTop: 4, lineHeight: 1.3 }}>{s.label}</div>
                   </div>
                 ))}
               </div>
 
-              {/* Graphique absences 7 jours */}
-              <div style={{ background: C.white, borderRadius: 16, padding: 20, marginBottom: 20,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 16 }}>
-                  Absences conducteurs — 7 derniers jours
-                </div>
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={abs7} margin={{ left: -20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.gray100} />
-                    <XAxis dataKey="day" tick={{ fontSize: 10, fill: C.gray400 }} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: C.gray400 }} tickLine={false} allowDecimals={false} />
-                    <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${C.gray200}`, fontSize: 13 }} />
-                    <Bar dataKey="count" name="Absences" fill={C.amber} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              {/* Grille 4×2 accès rapide */}
+              <div style={{ fontWeight: 800, fontSize: 11, color: C.gray400, textTransform: "uppercase",
+                letterSpacing: 0.5, marginBottom: 12 }}>
+                Accès rapide
               </div>
-
-              {/* 4 mini stats */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {[
-                  { label: "En réparation",          value: vReparation,        color: C.amber },
-                  { label: "Absents aujourd'hui",    value: cAbsents,           color: C.red   },
-                  { label: "Réparations à valider",  value: repAValider.length, color: C.red   },
-                  { label: "Attention véhicules",    value: vAttention,         color: C.amber },
-                ].map(s => (
-                  <div key={s.label} style={{ background: C.white, borderRadius: 12,
-                    padding: "14px 12px", boxShadow: "0 1px 6px rgba(0,0,0,0.05)",
-                    borderLeft: `3px solid ${s.color}` }}>
-                    <div style={{ fontSize: 22, fontWeight: 900, color: s.color }}>{s.value}</div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: C.gray600, marginTop: 3 }}>{s.label}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
+                {QUICK_ACCESS.map(c => (
+                  <div key={c.path} onClick={() => router.push(c.path)}
+                    style={{ background: C.white, borderRadius: 14, padding: "18px 12px",
+                      cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+                      borderTop: `3px solid ${c.color}`, display: "flex", flexDirection: "column",
+                      alignItems: "center", gap: 8, textAlign: "center" }}>
+                    <span style={{ color: c.color }}>{c.icon}</span>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: C.navy }}>{c.label}</div>
                   </div>
                 ))}
               </div>
@@ -532,26 +532,15 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                 </div>
               )}
 
-              {/* 2×4 accès rapide */}
-              <div style={{ fontWeight: 800, fontSize: 11, color: C.gray400, textTransform: "uppercase",
-                letterSpacing: 0.5, marginBottom: 10 }}>
-                Accès rapide
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {NAV_CARDS.map(c => (
-                  <div key={c.path} onClick={() => router.push(c.path)}
-                    style={{ background: C.white, borderRadius: 12, padding: "12px 10px",
-                      cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
-                      borderTop: `3px solid ${c.color}`, display: "flex",
-                      flexDirection: "column", gap: 5, minWidth: 0 }}>
-                    <span style={{ color: c.color }}>{c.icon}</span>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: C.navy,
-                      lineHeight: 1.3, wordBreak: "break-word" }}>{c.label}</div>
-                    <div style={{ fontSize: 10, color: C.gray400, lineHeight: 1.2,
-                      wordBreak: "break-word" }}>{c.sub}</div>
-                  </div>
-                ))}
-              </div>
+              {repAValider.length === 0 && congesAdmin.length === 0 && (
+                <div style={{ background: C.greenL, borderRadius: 14, padding: 16,
+                  borderLeft: `4px solid ${C.green}`, display: "flex", alignItems: "center", gap: 8 }}>
+                  <CheckCircle2 size={16} color={C.green} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>
+                    Aucune validation en attente
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1180,6 +1169,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
           </div>
         )}
 
+      </div>
       </div>
     </div>
   );

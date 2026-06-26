@@ -41,6 +41,13 @@ const inp: React.CSSProperties = {
   color: C.gray800, boxSizing: "border-box",
 };
 
+function genPassword(): string {
+  const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let p = "";
+  for (let i = 0; i < 12; i++) p += chars[Math.floor(Math.random() * chars.length)];
+  return p;
+}
+
 // ── DriverForm ────────────────────────────────────────────────────────────────
 function DriverForm({ init, circuits, vehicules, onSave, onCancel, saving }: {
   init: Partial<Conducteur>; circuits: Circuit[]; vehicules: Vehicule[];
@@ -134,9 +141,13 @@ export default function ConducteursPage() {
   const [histYear,setHistYear]= useState("");
 
   // Profile + mot de passe
-  const [profile,    setProfile]    = useState<{ id: string; role: string } | null>(null);
-  const [pwdBusy,    setPwdBusy]    = useState(false);
-  const [inviteSent, setInviteSent] = useState(false);
+  const [profile,      setProfile]      = useState<{ id: string; role: string; photo_url?: string | null } | null>(null);
+  const [photoBusy,    setPhotoBusy]    = useState(false);
+  const [photoErr,     setPhotoErr]     = useState("");
+  const [pwdBusy,      setPwdBusy]      = useState(false);
+  const [generatedPwd, setGeneratedPwd] = useState<string | null>(null);
+  const [pwdError,     setPwdError]     = useState("");
+  const [pwdCopied,    setPwdCopied]    = useState(false);
 
   // Congés
   const [congesCondu,    setCongesCondu]    = useState<CongesDemande[]>([]);
@@ -191,7 +202,7 @@ export default function ConducteursPage() {
         .select("*,remplacant:conducteurs!remplacant_id(prenom,nom),circuit:circuits(nom,emoji)")
         .eq("conducteur_id", driverId)
         .order("date_absence", { ascending: false }),
-      sb.from("profiles").select("id,role").eq("conducteur_id", driverId).single(),
+      sb.from("profiles").select("id,role,photo_url").eq("conducteur_id", driverId).single(),
       sb.from("conges_demandes").select("*")
         .eq("conducteur_id", driverId)
         .order("created_at", { ascending: false }),
@@ -210,10 +221,13 @@ export default function ConducteursPage() {
     setCreateBusy(false);
     setCreateResult(null);
     setCreateError("");
-    setInviteSent(false);
     setLinkBusy(false);
     setLinkDone(false);
     setLinkError("");
+    setGeneratedPwd(null);
+    setPwdError("");
+    setPwdCopied(false);
+    setPhotoErr("");
     setCongesCondu([]);
     setCongeRefusId(null); setCongeRefusMotif("");
     setCongeTransId(null); setCongeTransNote("");
@@ -260,20 +274,48 @@ export default function ConducteursPage() {
     fetchAll();
   };
 
-  const handleSendInvite = async () => {
+  const handleGeneratePassword = async () => {
     if (!profile) return;
     setPwdBusy(true);
+    setPwdError("");
+    setPwdCopied(false);
+    const pwd = genPassword();
     const res = await fetch("/api/admin/set-password", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: profile.id }),
+      body: JSON.stringify({ userId: profile.id, password: pwd }),
     });
-    const json = await res.json();
+    const json = await res.json().catch(() => ({}));
     setPwdBusy(false);
     if (res.ok) {
-      setInviteSent(true);
+      setGeneratedPwd(pwd);
     } else {
-      alert(`Erreur : ${json.error ?? "Impossible d'envoyer l'invitation"}`);
+      setPwdError(json.error ?? "Impossible de générer le mot de passe");
     }
+  };
+
+  const handlePhotoUpload = async (file: File) => {
+    if (!sel || !profile) return;
+    setPhotoBusy(true);
+    setPhotoErr("");
+    const path = `conducteur-${sel}.jpg`;
+    const { error: upErr } = await sb.storage.from("avatars")
+      .upload(path, file, { upsert: true, contentType: file.type });
+    if (upErr) {
+      setPhotoErr(upErr.message);
+      setPhotoBusy(false);
+      return;
+    }
+    const { data: pub } = sb.storage.from("avatars").getPublicUrl(path);
+    const url = `${pub.publicUrl}?t=${Date.now()}`;
+    const { error: updErr } = await sb.from("profiles")
+      .update({ photo_url: url }).eq("conducteur_id", sel);
+    if (updErr) {
+      setPhotoErr(updErr.message);
+      setPhotoBusy(false);
+      return;
+    }
+    setProfile(p => p ? { ...p, photo_url: url } : p);
+    setPhotoBusy(false);
   };
 
   const handleCreateAccount = async () => {
@@ -282,15 +324,18 @@ export default function ConducteursPage() {
     if (!drv) return;
     setCreateBusy(true);
     setCreateError("");
+    setPwdCopied(false);
+    const pwd = genPassword();
     const res = await fetch("/api/gestionnaire/create-account", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conducteurId: drv.id, prenom: drv.prenom, nom: drv.nom }),
+      body: JSON.stringify({ conducteurId: drv.id, prenom: drv.prenom, nom: drv.nom, password: pwd }),
     });
     const json = await res.json();
     setCreateBusy(false);
     if (res.ok) {
       setCreateResult({ email: json.email });
+      setGeneratedPwd(pwd);
       fetchHistory(drv.id);
     } else {
       setCreateError(json.error || "Erreur inconnue");
@@ -412,7 +457,7 @@ export default function ConducteursPage() {
         )}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <button onClick={() => { setSel(null); setTab("infos"); setInviteSent(false); setCreateResult(null); setCreateError(""); }}
+          <button onClick={() => { setSel(null); setTab("infos"); setGeneratedPwd(null); setCreateResult(null); setCreateError(""); }}
             style={{ background: "none", border: "none", color: C.navyL, cursor: "pointer",
               fontWeight: 700, fontSize: 14, padding: 0 }}>
             ← Tous les conducteurs
@@ -429,8 +474,8 @@ export default function ConducteursPage() {
           <div>
             <Card style={{ padding: 22, marginBottom: 14 }}>
               <div style={{ display: "flex", gap: 14, alignItems: "center", padding: 16,
-                background: C.skyL, borderRadius: 12, marginBottom: 18 }}>
-                <Avatar initials={d.photo_initials} size={52} />
+                background: C.skyL, borderRadius: 12, marginBottom: 14 }}>
+                <Avatar initials={d.photo_initials} size={80} photoUrl={profile?.photo_url} />
                 <div>
                   <div style={{ fontSize: 17, fontWeight: 900, color: C.navy }}>{d.prenom} {d.nom}</div>
                   <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>{d.tel || "—"} · {d.affectation}</div>
@@ -441,6 +486,25 @@ export default function ConducteursPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Upload photo (compte requis pour stocker l'URL) */}
+              {profile && (
+                <div style={{ marginBottom: 18 }}>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "7px 14px", borderRadius: 8, border: `1px solid ${C.gray200}`,
+                    background: C.white, cursor: photoBusy ? "wait" : "pointer",
+                    fontSize: 12, fontWeight: 700, color: C.navyL }}>
+                    {photoBusy ? "Téléversement…" : (profile.photo_url ? "Changer la photo" : "Ajouter une photo")}
+                    <input type="file" accept="image/jpeg,image/png,image/webp"
+                      disabled={photoBusy}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); e.target.value = ""; }}
+                      style={{ display: "none" }} />
+                  </label>
+                  {photoErr && (
+                    <div style={{ fontSize: 11, color: C.red, marginTop: 6, fontWeight: 600 }}>{photoErr}</div>
+                  )}
+                </div>
+              )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <InfoBox label="Véhicule"      value={d.vehicule?.plaque} />
                 <InfoBox label="Circuit"       value={circ ? `${circ.emoji} ${circ.nom}` : "—"} />
@@ -452,12 +516,51 @@ export default function ConducteursPage() {
               </div>
             </Card>
 
-            {/* Compte conducteur */}
+            {/* Accès conducteur */}
             <Card style={{ padding: 18 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: C.navy, marginBottom: 12 }}>
-                Compte conducteur
+              <div style={{ fontWeight: 700, fontSize: 13, color: C.navy, marginBottom: 12,
+                textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Accès conducteur
               </div>
-              {profile ? (
+
+              {/* Bloc d'affichage du mot de passe généré (une seule fois) */}
+              {generatedPwd ? (
+                <div>
+                  <div style={{ padding: "8px 12px", background: C.greenL, borderRadius: 8,
+                    fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 10,
+                    display: "flex", alignItems: "center", gap: 6 }}>
+                    <CheckCircle2 size={13} /> Mot de passe généré
+                  </div>
+                  {createResult && (
+                    <div style={{ fontSize: 11, color: C.gray600, marginBottom: 8, padding: "4px 10px",
+                      background: C.gray50, borderRadius: 6, fontFamily: "monospace" }}>
+                      {createResult.email}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+                    <code style={{ flex: 1, padding: "10px 12px", background: C.navy, color: C.white,
+                      borderRadius: 8, fontSize: 16, fontWeight: 800, letterSpacing: 1,
+                      textAlign: "center", fontFamily: "monospace" }}>
+                      {generatedPwd}
+                    </code>
+                    <button onClick={() => {
+                        navigator.clipboard?.writeText(generatedPwd);
+                        setPwdCopied(true);
+                      }}
+                      style={{ padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.gray200}`,
+                        background: C.white, cursor: "pointer", display: "flex", alignItems: "center",
+                        gap: 5, fontSize: 12, fontWeight: 700, color: pwdCopied ? C.green : C.navyL }}>
+                      {pwdCopied ? <Check size={14} /> : <ClipboardCopy size={14} />}
+                      {pwdCopied ? "Copié" : "Copier"}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.amber, fontWeight: 600, lineHeight: 1.5,
+                    background: C.amberL, borderRadius: 8, padding: "8px 10px" }}>
+                    Notez ce mot de passe maintenant, il ne sera plus affiché.
+                    Le conducteur devra le changer à la première connexion.
+                  </div>
+                </div>
+              ) : profile ? (
                 <div>
                   <div style={{ padding: "6px 10px", background: C.greenL, borderRadius: 8,
                     fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 6,
@@ -468,67 +571,59 @@ export default function ConducteursPage() {
                     background: C.gray50, borderRadius: 6, fontFamily: "monospace" }}>
                     {conducteurEmail(d.prenom, d.nom)}
                   </div>
-                  {inviteSent ? (
-                    <div style={{ padding: "8px 12px", background: C.greenL, borderRadius: 8,
-                      fontSize: 12, color: C.green, fontWeight: 700,
-                      display: "flex", alignItems: "center", gap: 6 }}>
-                      <CheckCircle2 size={13} /> Invitation envoyée par email
+                  {pwdError && (
+                    <div style={{ padding: "8px 10px", background: C.redL, borderRadius: 8,
+                      fontSize: 12, color: C.red, fontWeight: 600, marginBottom: 10,
+                      border: `1px solid #FCA5A5` }}>
+                      {pwdError}
                     </div>
-                  ) : (
-                    <Btn full onClick={handleSendInvite} disabled={pwdBusy} color={C.navyL}>
-                      {pwdBusy ? "Envoi…" : "Renvoyer l'invitation"}
-                    </Btn>
                   )}
+                  <Btn full onClick={handleGeneratePassword} disabled={pwdBusy} color={C.navyL}>
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                      <Key size={14} /> {pwdBusy ? "Génération…" : "Générer un mot de passe"}
+                    </span>
+                  </Btn>
                 </div>
               ) : (
                 <div>
-                  {createResult ? (
+                  <div style={{ padding: "6px 10px", background: C.amberL, borderRadius: 8,
+                    fontSize: 12, color: C.amber, fontWeight: 700, marginBottom: 10,
+                    display: "flex", alignItems: "center", gap: 6 }}>
+                    <AlertTriangle size={12} /> Aucun compte lié
+                  </div>
+                  {createError && (
+                    <div style={{ padding: "8px 10px", background: C.redL, borderRadius: 8,
+                      fontSize: 12, color: C.red, fontWeight: 600, marginBottom: 10,
+                      border: `1px solid #FCA5A5` }}>
+                      {createError}
+                    </div>
+                  )}
+                  {createError.includes("existe déjà") || createError.toLowerCase().includes("already") ? (
                     <div>
-                      <div style={{ padding: "10px 14px", background: C.greenL, borderRadius: 10,
-                        border: `1px solid ${C.green}40`, marginBottom: 10 }}>
-                        <div style={{ fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 6,
-                          display: "flex", alignItems: "center", gap: 5 }}>
-                          <CheckCircle2 size={13} /> Invitation envoyée
+                      <Btn full onClick={handleLinkAccount} disabled={linkBusy} color={C.amber}>
+                        {linkBusy ? "Liaison en cours…" : "Lier le compte existant"}
+                      </Btn>
+                      {linkDone && (
+                        <div style={{ padding: "8px 10px", background: C.greenL, borderRadius: 8,
+                          fontSize: 12, color: C.green, fontWeight: 700, marginTop: 8,
+                          display: "flex", alignItems: "center", gap: 6 }}>
+                          <CheckCircle2 size={13} /> Compte lié
                         </div>
-                        <div style={{ fontSize: 11, color: C.gray600, lineHeight: 1.5 }}>
-                          Email envoyé à <strong>{createResult.email}</strong>.<br/>
-                          Le conducteur recevra un lien valable 24h pour créer son mot de passe.
+                      )}
+                      {linkError && (
+                        <div style={{ padding: "8px 10px", background: C.redL, borderRadius: 8,
+                          fontSize: 12, color: C.red, fontWeight: 600, marginTop: 8,
+                          border: `1px solid #FCA5A5` }}>
+                          {linkError}
                         </div>
-                      </div>
+                      )}
                     </div>
                   ) : (
-                    <div>
-                      <div style={{ padding: "6px 10px", background: C.amberL, borderRadius: 8,
-                        fontSize: 12, color: C.amber, fontWeight: 700, marginBottom: 10,
-                        display: "flex", alignItems: "center", gap: 6 }}>
-                        <AlertTriangle size={12} /> Aucun compte associé
-                      </div>
-                      {createError && (
-                        <div style={{ padding: "8px 10px", background: C.redL, borderRadius: 8,
-                          fontSize: 12, color: C.red, fontWeight: 600, marginBottom: 10,
-                          border: `1px solid #FCA5A5` }}>
-                          {createError}
-                        </div>
-                      )}
-                      {createError.includes("existe déjà") ? (
-                        <div>
-                          <Btn full onClick={handleLinkAccount} disabled={linkBusy} color={C.amber}>
-                            {linkBusy ? "Liaison en cours…" : "Lier le compte existant"}
-                          </Btn>
-                          {linkError && (
-                            <div style={{ padding: "8px 10px", background: C.redL, borderRadius: 8,
-                              fontSize: 12, color: C.red, fontWeight: 600, marginTop: 8,
-                              border: `1px solid #FCA5A5` }}>
-                              {linkError}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <Btn full onClick={handleCreateAccount} disabled={createBusy} color={C.green}>
-                          {createBusy ? "Envoi en cours…" : "Envoyer une invitation"}
-                        </Btn>
-                      )}
-                    </div>
+                    <Btn full onClick={handleCreateAccount} disabled={createBusy} color={C.green}>
+                      <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        <Key size={14} /> {createBusy ? "Création…" : "Créer le compte + mot de passe"}
+                      </span>
+                    </Btn>
                   )}
                 </div>
               )}
