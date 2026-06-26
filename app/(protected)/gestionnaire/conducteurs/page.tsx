@@ -42,10 +42,10 @@ const inp: React.CSSProperties = {
 };
 
 function genPassword(): string {
-  const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789";
-  let p = "";
-  for (let i = 0; i < 12; i++) p += chars[Math.floor(Math.random() * chars.length)];
-  return p;
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#!";
+  const arr = new Uint32Array(12);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(n => chars[n % chars.length]).join("");
 }
 
 // ── DriverForm ────────────────────────────────────────────────────────────────

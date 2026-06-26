@@ -6,7 +6,6 @@ import {
   Thermometer, Home, Edit3, CheckCircle2, Calendar, Printer, Send,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { fmtEnfant } from "@/lib/constants";
 import type { Enfant, AbsenceEnfant, Circuit, Profile, Conducteur } from "@/lib/types";
 
 /* ─── palette ─── */
@@ -277,8 +276,7 @@ export default function ParentPage() {
             Votre signalement du{" "}
             <strong>{new Date(lastConfirmed.date_absence).toLocaleDateString("fr-FR",
               { day:"numeric", month:"long" })}</strong>{" "}
-            concernant <strong>{child.prenom}</strong> a été pris en compte par notre
-            gestionnaire et transmis à votre conducteur.<br />
+            a bien été pris en compte par notre gestionnaire et transmis à votre conducteur.<br />
             Nous vous remercions de votre collaboration.
           </div>
         </div>
@@ -295,7 +293,7 @@ export default function ParentPage() {
           </div>
           <div>
             <div style={{ fontSize:22, fontWeight:900, color:G.navy }}>
-              {fmtEnfant(child.prenom, child.nom)}
+              Famille {child.nom}
             </div>
             <div style={{ fontSize:15, color:G.gray, marginTop:2 }}>
               {circuit?.cercle?.nom ?? "—"}
@@ -384,10 +382,7 @@ export default function ParentPage() {
           </div>
           <div style={{ fontSize:16, color:G.greenD, lineHeight:1.85 }}>
             {civility} {profile?.nom},<br />
-            Votre signalement concernant <strong>{child.prenom}</strong> a bien été
-            transmis à notre équipe.<br />
-            Notre gestionnaire en prendra connaissance dans les plus brefs délais.<br />
-            Nous vous remercions de votre collaboration.
+            Madame/Monsieur, votre signalement a bien été transmis au gestionnaire. Merci.
           </div>
           <button onClick={() => { setSent(false); setMotif(""); setComplement(""); }}
             style={{ marginTop:18, padding:"13px 22px", borderRadius:12,

@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { C, statusColor, statusLabel, todayStr, isoToday, fmtTime, fmtDateTime, fmtEnfant } from "@/lib/constants";
+import { C, statusColor, statusLabel, todayStr, isoToday, fmtTime, fmtDateTime } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal } from "@/components/ui";
 import {
   Bus, Users, UserX, AlertCircle, Bell, Route, Loader2,
@@ -151,7 +151,7 @@ function ChildAbsModal({ absence, enfants, drivers, circuits, onClose, onTransmi
     <Modal title="Absence enfant" onClose={onClose}>
       <div style={{ background: C.amberL, borderRadius: 12, padding: 16, marginBottom: 16, border: `1px solid #FDE68A` }}>
         <div style={{ fontSize: 15, fontWeight: 800, color: C.amber, marginBottom: 4, display: "flex", alignItems: "center", gap: 7 }}>
-          <AlertTriangle size={15} /> {fmtEnfant(child?.prenom, child?.nom)}
+          <AlertTriangle size={15} /> Famille {child?.nom || "—"}
         </div>
         <div style={{ fontSize: 13, color: C.gray800 }}>Motif : <strong>{absence.reason}</strong></div>
         <div style={{ fontSize: 12, color: C.gray600, marginTop: 4 }}>
@@ -386,8 +386,9 @@ export default function GestionnaireDashboard() {
   const [absentModal, setAbsentModal] = useState<Conducteur | null>(null);
   const [childAbsM,   setChildAbsM]   = useState<AbsenceEnfant | null>(null);
   const [incModal,    setIncModal]    = useState<Incident | null>(null);
-  const [showAllAbsents, setShowAllAbsents] = useState(false);
-  const [showAllChildAbs, setShowAllChildAbs] = useState(false);
+  const [showAllAbsents,   setShowAllAbsents]   = useState(false);
+  const [showAllChildAbs,  setShowAllChildAbs]  = useState(false);
+  const [showAllUncovered, setShowAllUncovered] = useState(false);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -787,9 +788,11 @@ export default function GestionnaireDashboard() {
           <Card>
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.gray200}`,
               display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontWeight: 700, fontSize: 14, color: C.red, display: "flex", alignItems: "center", gap: 6 }}><Route size={15} /> Circuits non couverts</span>
+              <span style={{ fontWeight: 700, fontSize: 14, color: C.red, display: "flex", alignItems: "center", gap: 6 }}>
+                <Route size={15} /> Circuits non couverts ({uncoveredCirc.length})
+              </span>
             </div>
-            {uncoveredCirc.map(circ => {
+            {(showAllUncovered ? uncoveredCirc : uncoveredCirc.slice(0, 3)).map(circ => {
               const absDrv = drivers.find(d => d.circuit_id === circ.id && d.status === "absent");
               return (
                 <div key={circ.id} style={{ ...row }}>
@@ -810,6 +813,13 @@ export default function GestionnaireDashboard() {
                 </div>
               );
             })}
+            {uncoveredCirc.length > 3 && (
+              <button onClick={() => setShowAllUncovered(v => !v)}
+                style={{ width: "100%", background: "none", border: "none", padding: "10px 16px",
+                  color: C.navyL, fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "center" }}>
+                {showAllUncovered ? "Voir moins" : `Voir les ${uncoveredCirc.length} circuits non couverts`}
+              </button>
+            )}
           </Card>
         )}
 
@@ -832,7 +842,7 @@ export default function GestionnaireDashboard() {
                 <div key={a.id} onClick={() => setChildAbsM(a)}
                   style={{ ...row, cursor: "pointer", background: a.read_by_gestionnaire ? C.white : C.amberL }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>{fmtEnfant(child?.prenom, child?.nom)}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>Famille {child?.nom || "—"}</div>
                     <div style={{ fontSize: 11, color: C.gray400 }}>
                       {a.reason} · {circ?.emoji} {circ?.nom} · {fmtTime(a.reported_at)}
                     </div>
