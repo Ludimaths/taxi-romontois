@@ -2,13 +2,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import {
   Bus, Users, Wrench, AlertTriangle, LayoutDashboard,
   Download, LogOut, BarChart2, CheckCircle2, CalendarDays, MessageSquare,
-  CheckSquare, History, Map, Bell, Heart,
+  History, QrCode, Settings,
 } from "lucide-react";
 import MessagerieBox from "@/components/MessagerieBox";
 import { createClient } from "@/lib/supabase/client";
@@ -18,15 +17,12 @@ import type { Conducteur, Vehicule, Incident, Reparation, AbsenceConducteur, Ale
 type AdminTab = "dashboard" | "stats" | "validation" | "historique" | "messages";
 type Period   = "week" | "month" | "annee";
 
-const PIE_COLORS = [C.red, C.amber, "#2563EB", C.green, "#7C3AED", C.gray400];
-
 const inp: React.CSSProperties = {
   width: "100%", padding: "12px 14px", borderRadius: 10,
   border: `1.5px solid ${C.gray200}`, fontSize: 14, color: C.gray800,
   background: C.white, boxSizing: "border-box",
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function addDays(iso: string, n: number) {
   const d = new Date(iso); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10);
 }
@@ -35,18 +31,14 @@ function groupByDay<T extends { created_at: string }>(items: T[]): { day: string
   const today = new Date(); today.setHours(0,0,0,0);
   const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
   const map: Record<string, T[]> = {};
-  items.forEach(m => {
-    const d = m.created_at.slice(0, 10);
-    if (!map[d]) map[d] = [];
-    map[d].push(m);
-  });
-  return Object.entries(map).sort(([a], [b]) => b.localeCompare(a)).map(([day, items]) => {
+  items.forEach(m => { const d = m.created_at.slice(0, 10); if (!map[d]) map[d] = []; map[d].push(m); });
+  return Object.entries(map).sort(([a], [b]) => b.localeCompare(a)).map(([day, its]) => {
     const d = new Date(day + "T00:00:00");
     let label = day;
     if (d.getTime() === today.getTime()) label = "Aujourd'hui";
     else if (d.getTime() === yesterday.getTime()) label = "Hier";
     else label = d.toLocaleDateString("fr-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    return { day, label, items: items.slice().sort((x, y) => y.created_at.localeCompare(x.created_at)) };
+    return { day, label, items: its.slice().sort((x, y) => y.created_at.localeCompare(x.created_at)) };
   });
 }
 function currentSchoolYear() {
@@ -54,18 +46,6 @@ function currentSchoolYear() {
   return m >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1;
 }
 
-// ── Mini-composants ───────────────────────────────────────────────────────────
-function PeriodBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{ padding: "8px 16px", borderRadius: 10, border: "none",
-      fontWeight: 700, fontSize: 13, cursor: "pointer",
-      background: active ? C.navy : C.gray100, color: active ? C.white : C.gray600 }}>
-      {label}
-    </button>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const sb     = createClient();
   const router = useRouter();
@@ -88,17 +68,15 @@ export default function AdminPage() {
   const [msgExpandedDays,  setMsgExpandedDays]  = useState<Record<string, boolean>>({});
   const [histValExpanded, setHistValExpanded] = useState<Record<string, boolean>>({});
 
-  // Congés
-  const [congesAdmin,        setCongesAdmin]        = useState<CongesDemande[]>([]);
-  const [congeAdminRefusId,  setCongeAdminRefusId]  = useState<number | null>(null);
+  const [congesAdmin,          setCongesAdmin]          = useState<CongesDemande[]>([]);
+  const [congeAdminRefusId,    setCongeAdminRefusId]    = useState<number | null>(null);
   const [congeAdminRefusMotif, setCongeAdminRefusMotif] = useState("");
-  const [congeAdminBusy,     setCongeAdminBusy]     = useState(false);
+  const [congeAdminBusy,       setCongeAdminBusy]       = useState(false);
 
   const [histYear,  setHistYear]  = useState(currentSchoolYear());
   const [histMonth, setHistMonth] = useState<number | null>(null);
   const [histDay,   setHistDay]   = useState<string | null>(null);
 
-  // ── Load ────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     const yearAgo = addDays(isoToday(), -365);
     const [c, v, inc, rep, abs, msgs, cng] = await Promise.all([
@@ -111,15 +89,11 @@ export default function AdminPage() {
       sb.from("absences_conducteurs")
         .select("*,conducteur:conducteurs!conducteur_id(prenom,nom)")
         .gte("date_absence", yearAgo).order("date_absence", { ascending: false }),
-      sb.from("alertes")
-        .select("*")
-        .eq("type", "msg_meca_admin")
-        .order("created_at", { ascending: false })
-        .limit(50),
+      sb.from("alertes").select("*").eq("type", "msg_meca_admin")
+        .order("created_at", { ascending: false }).limit(50),
       sb.from("conges_demandes")
         .select("*,conducteur:conducteurs!conducteur_id(prenom,nom)")
-        .eq("statut", "transmis_admin")
-        .order("created_at", { ascending: false }),
+        .eq("statut", "transmis_admin").order("created_at", { ascending: false }),
     ]);
     setConducteurs(c.data ?? []);
     setVehicules(v.data ?? []);
@@ -150,47 +124,34 @@ export default function AdminPage() {
     router.refresh();
   }
 
-  // ── Congés direction ────────────────────────────────────────────────────────
   async function doAccepterConge(conge: CongesDemande) {
     setCongeAdminBusy(true);
     const cond = conge.conducteur as { prenom?: string; nom?: string } | undefined;
-    await sb.from("conges_demandes").update({
-      statut: "accepte", updated_at: new Date().toISOString(),
-    }).eq("id", conge.id);
-    await sb.from("alertes").insert({
-      type: "conducteur", severity: "normale", driver_id: conge.conducteur_id, read: false,
-      message: `Direction : votre congé du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)} (${conge.motif}) a été approuvé.`,
-    });
-    await sb.from("alertes").insert({
-      type: "conducteur", severity: "normale", read: false,
-      message: `Direction : congé de ${cond?.prenom} ${cond?.nom} approuvé — du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)}`,
-    });
-    await load();
-    setCongeAdminBusy(false);
+    await sb.from("conges_demandes").update({ statut: "accepte", updated_at: new Date().toISOString() }).eq("id", conge.id);
+    await sb.from("alertes").insert([
+      { type: "conducteur", severity: "normale", driver_id: conge.conducteur_id, read: false,
+        message: `Direction : votre congé du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)} (${conge.motif}) a été approuvé.` },
+      { type: "conducteur", severity: "normale", read: false,
+        message: `Direction : congé de ${cond?.prenom} ${cond?.nom} approuvé — du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)}` },
+    ]);
+    await load(); setCongeAdminBusy(false);
   }
 
   async function doRefuserConge(conge: CongesDemande) {
     if (!congeAdminRefusMotif.trim()) return;
     setCongeAdminBusy(true);
     const cond = conge.conducteur as { prenom?: string; nom?: string } | undefined;
-    await sb.from("conges_demandes").update({
-      statut: "refuse", motif_refus: congeAdminRefusMotif.trim(),
-      updated_at: new Date().toISOString(),
-    }).eq("id", conge.id);
-    await sb.from("alertes").insert({
-      type: "conducteur", severity: "haute", driver_id: conge.conducteur_id, read: false,
-      message: `Direction : votre demande de congé du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)} a été refusée. Motif : ${congeAdminRefusMotif.trim()}`,
-    });
-    await sb.from("alertes").insert({
-      type: "conducteur", severity: "normale", read: false,
-      message: `Direction : congé de ${cond?.prenom} ${cond?.nom} refusé — du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)}`,
-    });
+    await sb.from("conges_demandes").update({ statut: "refuse", motif_refus: congeAdminRefusMotif.trim(), updated_at: new Date().toISOString() }).eq("id", conge.id);
+    await sb.from("alertes").insert([
+      { type: "conducteur", severity: "haute", driver_id: conge.conducteur_id, read: false,
+        message: `Direction : votre demande de congé du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)} a été refusée. Motif : ${congeAdminRefusMotif.trim()}` },
+      { type: "conducteur", severity: "normale", read: false,
+        message: `Direction : congé de ${cond?.prenom} ${cond?.nom} refusé — du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)}` },
+    ]);
     setCongeAdminRefusId(null); setCongeAdminRefusMotif("");
-    await load();
-    setCongeAdminBusy(false);
+    await load(); setCongeAdminBusy(false);
   }
 
-  // ── Period filter ────────────────────────────────────────────────────────────
   function periodStart(): string {
     const today = isoToday();
     if (period === "week")  return addDays(today, -7);
@@ -201,25 +162,26 @@ export default function AdminPage() {
   const filteredReparations = reparations.filter(r => (r.date_reception || r.created_at.slice(0, 10)) >= periodStart());
   const filteredAbsences    = absencesCond.filter(a => a.date_absence >= periodStart());
 
-  // ── Computed ─────────────────────────────────────────────────────────────────
   const vEnService  = vehicules.filter(v => ["bon","en_service"].includes(v.etat as string)).length;
   const cPresents   = conducteurs.filter(d => ["en_service","disponible"].includes(d.status)).length;
   const incOuverts  = incidents.filter(i => i.status !== "resolu").length;
-  const repEnCours  = reparations.filter(r => ["en_reparation","en_attente_piece"].includes(r.statut)).length;
-  const repAValider    = reparations.filter(r => r.statut === "en_attente_validation");
+  const repAValider = reparations.filter(r => r.statut === "en_attente_validation");
   const unreadMsgCount = adminMsgs.filter(m => !m.read).length;
 
-  // Graphiques
-  const today = isoToday();
-  const inc30 = (() => {
-    const cutoff = addDays(today, -29);
-    const map: Record<string, number> = {};
-    for (let i = 0; i < 30; i++) map[addDays(cutoff, i)] = 0;
-    incidents.filter(i => i.reported_at.slice(0, 10) >= cutoff)
-      .forEach(i => { const d = i.reported_at.slice(0, 10); if (d in map) map[d]++; });
-    return Object.entries(map).map(([day, count]) => ({ day: day.slice(5), count }));
+  // ── Données graphiques ──────────────────────────────────────────────────────
+  // Absences par semaine (12 dernières semaines)
+  const absencesByWeek = (() => {
+    const result: { week: string; count: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const monday = addDays(isoToday(), -i * 7 - new Date().getDay() + 1);
+      const friday = addDays(monday, 4);
+      const count  = filteredAbsences.filter(a => a.date_absence >= monday && a.date_absence <= friday).length;
+      result.push({ week: monday.slice(5), count });
+    }
+    return result;
   })();
 
+  // Coûts réparations par mois
   const repCostByMonth = (() => {
     const map: Record<string, number> = {};
     filteredReparations.forEach(r => {
@@ -227,15 +189,10 @@ export default function AdminPage() {
       map[mk] = (map[mk] ?? 0) + (r.cout ?? r.cout_estime ?? 0);
     });
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, total]) => ({ month, total: Math.round(total) }));
+      .map(([month, total]) => ({ month: month.slice(5), total: Math.round(total) }));
   })();
 
-  const incByType = (() => {
-    const map: Record<string, number> = {};
-    filteredIncidents.forEach(i => { map[i.type] = (map[i.type] ?? 0) + 1; });
-    return Object.entries(map).map(([name, value]) => ({ name, value }));
-  })();
-
+  // Top 4 véhicules coûteux
   const vehRank = (() => {
     const map: Record<string, { plaque: string; total: number }> = {};
     reparations.forEach(r => {
@@ -244,37 +201,77 @@ export default function AdminPage() {
       map[r.vehicule_id].total += r.cout ?? r.cout_estime ?? 0;
     });
     return Object.entries(map).map(([id, x]) => ({ id, ...x }))
-      .sort((a, b) => b.total - a.total).slice(0, 8);
+      .sort((a, b) => b.total - a.total).slice(0, 4);
   })();
+  const maxVehCost = vehRank[0]?.total || 1;
+  const vehBarColors = ["#DC2626", "#D97706", "#2563EB", "#94A3B8"];
 
-  const condRank = (() => {
-    const map: Record<string, { nom: string; count: number }> = {};
-    absencesCond.forEach(a => {
-      const cond = a.conducteur as { prenom?: string; nom?: string } | undefined;
-      const nm = cond ? `${cond.prenom} ${cond.nom}` : String(a.conducteur_id);
-      if (!map[a.conducteur_id]) map[a.conducteur_id] = { nom: nm, count: 0 };
-      map[a.conducteur_id].count++;
-    });
-    return Object.entries(map).map(([id, x]) => ({ id, ...x }))
-      .sort((a, b) => b.count - a.count).slice(0, 8);
+  // Incidents par type
+  const incByType = (() => {
+    const map: Record<string, number> = {};
+    filteredIncidents.forEach(i => { map[i.type] = (map[i.type] ?? 0) + 1; });
+    return Object.entries(map).sort(([, a], [, b]) => b - a);
   })();
+  const maxIncType = incByType[0]?.[1] || 1;
+  const totalIncType = incByType.reduce((s, [, v]) => s + v, 0);
 
-  // ── Handlers validation ───────────────────────────────────────────────────────
+  // Stats sous graphiques
+  const totalAbsences    = filteredAbsences.length;
+  const totalRemplace    = filteredAbsences.filter(a => a.status === "couvert").length;
+  const totalNonCouvert  = filteredAbsences.filter(a => a.status === "non_couvert").length;
+  const today2 = isoToday().slice(0, 7);
+  const coutCeMois  = filteredReparations.filter(r => (r.date_reception || r.created_at.slice(0,10)).slice(0,7) === today2)
+    .reduce((s, r) => s + (r.cout ?? r.cout_estime ?? 0), 0);
+  const coutAnnee   = filteredReparations.reduce((s, r) => s + (r.cout ?? r.cout_estime ?? 0), 0);
+
+  // ── Historique helpers ──────────────────────────────────────────────────────
+  const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  const SY_START  = currentSchoolYear();
+
+  function histDayData(day: string) {
+    return {
+      incidents:   incidents.filter(i => i.reported_at.slice(0, 10) === day),
+      absences:    absencesCond.filter(a => a.date_absence === day),
+      reparations: reparations.filter(r => (r.date_reception || r.created_at.slice(0, 10)) === day),
+    };
+  }
+  function histMonthData(year: number, month: number) {
+    const mk = `${year}-${String(month).padStart(2, "0")}`;
+    const mRep = reparations.filter(r => (r.date_reception || r.created_at.slice(0, 10)).slice(0, 7) === mk);
+    return {
+      incidents:   incidents.filter(i => i.reported_at.slice(0, 7) === mk).length,
+      absences:    absencesCond.filter(a => a.date_absence.slice(0, 7) === mk).length,
+      reparations: mRep.length,
+      cout:        mRep.reduce((s, r) => s + (r.cout ?? r.cout_estime ?? 0), 0),
+    };
+  }
+  function exportCSV(year: number, month: number) {
+    const pad = String(month).padStart(2, "0");
+    const mk = `${year}-${pad}`;
+    const days = new Date(year, month, 0).getDate();
+    const rows = [["Jour","Incidents","Absences","Réparations"]];
+    for (let d = 1; d <= days; d++) {
+      const day = `${mk}-${String(d).padStart(2, "0")}`;
+      const { incidents: di, absences: da, reparations: dr } = histDayData(day);
+      rows.push([day, String(di.length), String(da.length), String(dr.length)]);
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["﻿" + rows.map(r => r.join(";")).join("\n")], { type: "text/csv;charset=utf-8;" }));
+    a.download = `historique-${mk}.csv`; a.click();
+  }
+
   async function doValider(rep: Reparation) {
     setValBusy(true);
     const vv = rep.vehicule as { plaque?: string } | undefined;
     const plaque = vv?.plaque || rep.vehicule_id;
     await sb.from("reparations").update({ statut: "en_reparation" }).eq("id", rep.id);
     await sb.from("alertes").insert([
-      // Notification gestionnaire
       { type: "reparation", severity: "normale", read: false, vehicle_id: rep.vehicule_id,
         message: `Réparation validée — ${plaque} (${(rep.cout_estime ?? 0).toLocaleString("fr-CH")} CHF)` },
-      // Notification mécanicien → onglet Messages
       { type: "decision_admin", severity: "normale", read: false, vehicle_id: rep.vehicule_id,
         message: `Admin a validé la réparation de ${plaque} — ${(rep.cout_estime ?? 0).toLocaleString("fr-CH")} CHF. Vous pouvez continuer.` },
     ]);
-    setValBusy(false);
-    load();
+    setValBusy(false); load();
   }
 
   async function doRefuser(rep: Reparation) {
@@ -285,15 +282,12 @@ export default function AdminPage() {
     await sb.from("reparations").update({ statut: "receptionne",
       commentaire_mecanicien: `[Refusé par admin: ${refusMotif.trim()}]` }).eq("id", rep.id);
     await sb.from("alertes").insert([
-      // Notification gestionnaire
       { type: "reparation", severity: "haute", read: false, vehicle_id: rep.vehicule_id,
         message: `Réparation refusée — ${plaque} : ${refusMotif.trim()}` },
-      // Notification mécanicien → onglet Messages
       { type: "decision_admin", severity: "haute", read: false, vehicle_id: rep.vehicule_id,
         message: `Admin a refusé la réparation de ${plaque} — Motif : ${refusMotif.trim()}` },
     ]);
-    setRefusOpen(null); setRefusMotif(""); setValBusy(false);
-    load();
+    setRefusOpen(null); setRefusMotif(""); setValBusy(false); load();
   }
 
   function printFiche(rep: Reparation) {
@@ -313,358 +307,377 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
     if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 300); }
   }
 
-  // ── Historique helpers ────────────────────────────────────────────────────────
-  const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
-  const SY_START = currentSchoolYear();
-
-  function histDayData(day: string) {
-    return {
-      incidents:   incidents.filter(i => i.reported_at.slice(0, 10) === day),
-      absences:    absencesCond.filter(a => a.date_absence === day),
-      reparations: reparations.filter(r => (r.date_reception || r.created_at.slice(0, 10)) === day),
-    };
-  }
-  function histMonthData(year: number, month: number) {
-    const mk = `${year}-${String(month).padStart(2, "0")}`;
-    const mInc = incidents.filter(i => i.reported_at.slice(0, 7) === mk).length;
-    const mAbs = absencesCond.filter(a => a.date_absence.slice(0, 7) === mk).length;
-    const mRep = reparations.filter(r => (r.date_reception || r.created_at.slice(0, 10)).slice(0, 7) === mk);
-    return { incidents: mInc, absences: mAbs, reparations: mRep.length, cout: mRep.reduce((s, r) => s + (r.cout ?? r.cout_estime ?? 0), 0) };
-  }
-  function exportCSV(year: number, month: number) {
-    const pad = String(month).padStart(2, "0");
-    const mk = `${year}-${pad}`;
-    const days = new Date(year, month, 0).getDate();
-    const rows = [["Jour","Incidents","Absences","Réparations"]];
-    for (let d = 1; d <= days; d++) {
-      const day = `${mk}-${String(d).padStart(2, "0")}`;
-      const { incidents: di, absences: da, reparations: dr } = histDayData(day);
-      rows.push([day, String(di.length), String(da.length), String(dr.length)]);
-    }
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob(["﻿" + rows.map(r => r.join(";")).join("\n")], { type: "text/csv;charset=utf-8;" }));
-    a.download = `historique-${mk}.csv`;
-    a.click();
-  }
-
   if (loading) return (
-    <div style={{ textAlign: "center", padding: 80, color: C.gray400 }}>Chargement…</div>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
+      minHeight: "100vh", background: "#F7F8FC", color: C.gray400, fontSize: 14 }}>
+      Chargement…
+    </div>
   );
 
-  // ── Grille 4×2 accès rapide ─────────────────────────────────────────────────────
+  // ── Navigation sidebar items ────────────────────────────────────────────────
+  const NAV_ITEMS: { id: AdminTab; icon: React.ReactNode; label: string; badge?: number }[] = [
+    { id: "dashboard",  icon: <LayoutDashboard size={16} />, label: "Tableau de bord" },
+    { id: "stats",      icon: <BarChart2 size={16} />,       label: "Statistiques" },
+    { id: "validation", icon: <CheckCircle2 size={16} />,    label: "Validations",
+      badge: repAValider.length + congesAdmin.length },
+    { id: "historique", icon: <History size={16} />,         label: "Historique" },
+    { id: "messages",   icon: <MessageSquare size={16} />,   label: "Messages",
+      badge: unreadMsgCount || undefined },
+  ];
+
+  // ── Accès rapide ────────────────────────────────────────────────────────────
   const QUICK_ACCESS = [
-    { icon: <Users size={26} />,         label: "Conducteurs",  path: "/gestionnaire/conducteurs", color: "#1565C0" },
-    { icon: <Bus size={26} />,           label: "Véhicules",    path: "/gestionnaire/vehicules",   color: C.navy   },
-    { icon: <Map size={26} />,           label: "Circuits",     path: "/gestionnaire/circuits",    color: C.green  },
-    { icon: <AlertTriangle size={26} />, label: "Incidents",    path: "/gestionnaire/incidents",   color: C.red    },
-    { icon: <Wrench size={26} />,        label: "Réparations",  path: "/gestionnaire/reparations", color: C.amber  },
-    { icon: <Bell size={26} />,          label: "Alertes",      path: "/gestionnaire/alertes",     color: "#EA580C" },
-    { icon: <Download size={26} />,      label: "Exports",      path: "/gestionnaire/export",      color: C.green  },
-    { icon: <Heart size={26} />,         label: "Parents",      path: "/gestionnaire/parents",     color: "#7C3AED" },
+    { icon: Bus,           color: "#1565C0", label: "Flotte",       sub: "24 véhicules",  path: "/gestionnaire/vehicules"  },
+    { icon: Users,         color: "#16A34A", label: "Conducteurs",  sub: "53 actifs",     path: "/gestionnaire/conducteurs"},
+    { icon: Wrench,        color: "#D97706", label: "Réparations",  sub: "Atelier",       path: "/gestionnaire/reparations"},
+    { icon: AlertTriangle, color: "#DC2626", label: "Incidents",    sub: "Signalements",  path: "/gestionnaire/incidents"  },
+    { icon: QrCode,        color: "#7C3AED", label: "QR Codes",     sub: "Véhicules",     path: "/admin/qrcodes"           },
+    { icon: LayoutDashboard, color: "#0D3B7A", label: "Gestionnaire", sub: "Dashboard",   path: "/gestionnaire"            },
+    { icon: Settings,      color: "#EA580C", label: "Mécanicien",   sub: "Atelier",       path: "/mecanicien"              },
+    { icon: Download,      color: "#16A34A", label: "Exports",      sub: "CSV / PDF",     path: "/gestionnaire/export"     },
   ];
 
-  const TABS: { id: AdminTab; icon: React.ReactNode; label: string; badge?: number }[] = [
-    { id: "dashboard",   icon: <LayoutDashboard size={17} />, label: "Tableau de bord"                                       },
-    { id: "stats",       icon: <BarChart2 size={17} />,       label: "Statistiques"                                          },
-    { id: "validation",  icon: <CheckSquare size={17} />,     label: "Validations",  badge: repAValider.length + congesAdmin.length },
-    { id: "historique",  icon: <History size={17} />,         label: "Historique"                                            },
-    { id: "messages",    icon: <MessageSquare size={17} />,   label: "Messages",     badge: unreadMsgCount || undefined      },
-  ];
-
-  // ── Render ────────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: C.gray50 }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "#F7F8FC" }}>
 
-      {/* ── Sidebar admin ──────────────────────────────────────────────────── */}
-      <aside style={{ width: 228, background: C.navy, display: "flex", flexDirection: "column",
-        flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.2)", position: "sticky", top: 0,
-        height: "100vh" }}>
-        {/* Logo + titre */}
-        <div style={{ padding: "20px 18px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+      {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
+      <aside style={{ width: 200, background: C.navy, display: "flex", flexDirection: "column",
+        flexShrink: 0, position: "sticky", top: 0, height: "100vh", overflow: "hidden" }}>
+
+        {/* Logo + Administration */}
+        <div style={{ padding: "20px 16px 14px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
           {logoErr
-            ? <div style={{ color: C.white, fontWeight: 900, fontSize: 16 }}>Taxi Romontois</div>
+            ? <div style={{ color: C.white, fontWeight: 900, fontSize: 15 }}>Taxi Romontois</div>
             : <img src="/logo.png" alt="Taxi Romontois"
-                style={{ width: 140, height: "auto", objectFit: "contain", display: "block" }}
+                style={{ width: 130, height: "auto", objectFit: "contain", display: "block" }}
                 onError={() => setLogoErr(true)} />}
-          <div style={{ color: C.white, fontWeight: 800, fontSize: 14, marginTop: 10 }}>Taxi Romontois</div>
+          <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, marginTop: 8, letterSpacing: 0.3 }}>
+            Administration
+          </div>
         </div>
+
         {/* Avatar */}
-        <div style={{ padding: "16px 18px", borderBottom: "1px solid rgba(255,255,255,0.1)",
-          display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 42, height: 42, borderRadius: "50%", background: C.white, color: C.navy,
-            display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 16 }}>
+        <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)",
+          display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 38, height: 38, borderRadius: "50%", background: "#1565C0",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: C.white, fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
             AA
           </div>
           <div>
-            <div style={{ fontSize: 14, color: C.white, fontWeight: 700 }}>Admin</div>
-            <div style={{ fontSize: 12, color: C.sky, fontWeight: 600 }}>Administrateur</div>
+            <div style={{ color: C.white, fontSize: 13, fontWeight: 600 }}>Administrateur</div>
+            <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>Accès complet</div>
           </div>
         </div>
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: "10px", overflowY: "auto" }}>
-          {TABS.map(t => {
-            const active = tab === t.id;
+
+        {/* Navigation */}
+        <div style={{ padding: "14px 10px 0", flex: 1, overflowY: "auto" }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.3)",
+            textTransform: "uppercase", letterSpacing: 1, padding: "0 8px", marginBottom: 6 }}>
+            Navigation
+          </div>
+          {NAV_ITEMS.map(item => {
+            const active = tab === item.id;
             return (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
+              <button key={item.id} onClick={() => setTab(item.id)}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
                 onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
-                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
-                  padding: "10px 12px", borderRadius: 8, border: "none", cursor: "pointer",
-                  background: active ? C.white : "transparent", color: active ? C.navy : C.white,
-                  fontWeight: active ? 800 : 600, fontSize: 13, textAlign: "left", marginBottom: 2,
-                  transition: "background .15s" }}>
-                {t.icon}
-                <span style={{ flex: 1 }}>{t.label}</span>
-                {t.badge != null && t.badge > 0 && (
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 9,
+                  padding: "9px 10px", borderRadius: 7, border: "none", cursor: "pointer",
+                  background: active ? "rgba(255,255,255,0.12)" : "transparent",
+                  color: C.white, fontWeight: 500, fontSize: 13, textAlign: "left",
+                  marginBottom: 2, transition: "background .12s" }}>
+                {item.icon}
+                <span style={{ flex: 1 }}>{item.label}</span>
+                {!!item.badge && item.badge > 0 && (
                   <span style={{ background: C.red, color: C.white, borderRadius: 20,
-                    fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{t.badge}</span>
+                    fontSize: 10, fontWeight: 800, padding: "1px 6px" }}>{item.badge}</span>
                 )}
               </button>
             );
           })}
-        </nav>
-        {/* Footer */}
-        <div style={{ padding: "12px 14px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+        </div>
+
+        {/* Footer déconnexion */}
+        <div style={{ padding: "10px 10px 14px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
           <button onClick={handleSignOut}
-            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
             style={{ width: "100%", background: "transparent", border: "none", color: C.white,
-              cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: "12px 16px",
-              borderRadius: 10, fontWeight: 700, fontSize: 14, transition: "background .15s" }}>
-            <LogOut size={16} color={C.white} /> Déconnexion
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 8,
+              padding: "10px 10px", borderRadius: 7, fontWeight: 500, fontSize: 13,
+              transition: "background .12s" }}>
+            <LogOut size={15} /> Déconnexion
           </button>
         </div>
       </aside>
 
-      {/* ── Contenu principal ──────────────────────────────────────────────── */}
+      {/* ── Contenu principal ─────────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: "auto", maxHeight: "100vh" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 20px" }}>
+      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "24px 20px" }}>
 
-        {/* ══ TAB : TABLEAU DE BORD ════════════════════════════════════════════ */}
+        {/* ══ TABLEAU DE BORD ═════════════════════════════════════════════════ */}
         {tab === "dashboard" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, alignItems: "start" }}>
-
-            {/* ── Colonne gauche ── */}
-            <div>
-              {/* 4 KPI compacts */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
-                {[
-                  { label: "Véhicules en service",   value: vEnService,         color: C.green  },
-                  { label: "Conducteurs présents",   value: cPresents,          color: C.navyL  },
-                  { label: "Incidents ouverts",      value: incOuverts,         color: incOuverts > 0 ? C.red : C.green },
-                  { label: "Réparations en cours",   value: repEnCours,         color: repEnCours > 0 ? C.amber : C.green },
-                ].map(s => (
-                  <div key={s.label} style={{ background: C.white, borderRadius: 14,
-                    padding: "18px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                    borderTop: `3px solid ${s.color}` }}>
-                    <div style={{ fontSize: 30, fontWeight: 900, color: s.color }}>{s.value}</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, marginTop: 4, lineHeight: 1.3 }}>{s.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Grille 4×2 accès rapide */}
-              <div style={{ fontWeight: 800, fontSize: 11, color: C.gray400, textTransform: "uppercase",
-                letterSpacing: 0.5, marginBottom: 12 }}>
-                Accès rapide
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-                {QUICK_ACCESS.map(c => (
-                  <div key={c.path} onClick={() => router.push(c.path)}
-                    style={{ background: C.white, borderRadius: 14, padding: "18px 12px",
-                      cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
-                      border: `1px solid ${C.gray200}`, display: "flex", flexDirection: "column",
-                      alignItems: "center", gap: 8, textAlign: "center" }}>
-                    <span style={{ color: c.color }}>{c.icon}</span>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: C.navy }}>{c.label}</div>
-                  </div>
-                ))}
-              </div>
+          <div>
+            {/* 4 KPI */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 20 }}>
+              {[
+                { label: "Véhicules en service", value: vEnService,        color: "#1565C0" },
+                { label: "Conducteurs présents", value: cPresents,         color: "#16A34A" },
+                { label: "Incidents ouverts",    value: incOuverts,        color: "#DC2626" },
+                { label: "Réparations à valider",value: repAValider.length,color: "#D97706" },
+              ].map(k => (
+                <div key={k.label} style={{ background: C.white, borderRadius: 8,
+                  border: "0.5px solid rgba(0,0,0,0.05)", padding: "12px 14px" }}>
+                  <div style={{ fontSize: 22, fontWeight: 500, color: k.color, lineHeight: 1.2 }}>{k.value}</div>
+                  <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 4, lineHeight: 1.4 }}>{k.label}</div>
+                </div>
+              ))}
             </div>
 
-            {/* ── Colonne droite ── */}
-            <div>
-              {/* Budget — priorité validation */}
-              {repAValider.length > 0 && (
-                <div style={{ background: C.redL, borderRadius: 14, padding: 16,
-                  borderLeft: `4px solid ${C.red}`, marginBottom: 14 }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: C.red, marginBottom: 10,
-                    display: "flex", alignItems: "center", gap: 6 }}>
-                    <AlertTriangle size={14} color={C.red} />
-                    {repAValider.length} réparation(s) à valider
+            {/* Accès rapide */}
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8",
+              textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
+              Accès rapide
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 20 }}>
+              {QUICK_ACCESS.map(c => {
+                const Icon = c.icon;
+                return (
+                  <div key={c.path} onClick={() => router.push(c.path)}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)";
+                      e.currentTarget.style.background = "#F8FAFC";
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.borderColor = "rgba(0,0,0,0.05)";
+                      e.currentTarget.style.background = C.white;
+                    }}
+                    style={{ background: C.white, borderRadius: 8,
+                      border: "0.5px solid rgba(0,0,0,0.05)", padding: "14px 10px",
+                      cursor: "pointer", display: "flex", flexDirection: "column",
+                      alignItems: "center", gap: 6, textAlign: "center",
+                      transition: "background .12s, border-color .12s" }}>
+                    <Icon size={22} color={c.color} />
+                    <div style={{ fontSize: 11, fontWeight: 500, color: "#0F172A" }}>{c.label}</div>
+                    <div style={{ fontSize: 9, color: "#94A3B8" }}>{c.sub}</div>
                   </div>
-                  {repAValider.map(r => {
-                    const vv = r.vehicule as { plaque?: string } | undefined;
-                    return (
-                      <div key={r.id} style={{ display: "flex", justifyContent: "space-between",
-                        alignItems: "center", padding: "6px 0",
-                        borderBottom: `1px solid ${C.red}20`, flexWrap: "wrap", gap: 6 }}>
-                        <span style={{ fontWeight: 700, fontSize: 13 }}>{vv?.plaque || r.vehicule_id}</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontWeight: 900, color: C.red, fontSize: 13 }}>
-                            {(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF
-                          </span>
-                          <button onClick={() => setTab("validation")}
-                            style={{ padding: "4px 10px", borderRadius: 8, border: "none",
-                              background: C.red, color: C.white, fontWeight: 700, fontSize: 11, cursor: "pointer" }}>
-                            →
-                          </button>
+                );
+              })}
+            </div>
+
+            {/* Validation urgente */}
+            {repAValider.length > 0 ? (
+              <div style={{ background: C.white, borderRadius: 8, border: "0.5px solid rgba(0,0,0,0.05)", padding: "14px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <Wrench size={15} color="#D97706" />
+                  <span style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>Validation en attente</span>
+                  <span style={{ background: C.amberL, color: C.amber, borderRadius: 20,
+                    fontSize: 11, fontWeight: 700, padding: "1px 8px" }}>{repAValider.length}</span>
+                </div>
+                {repAValider.map(r => {
+                  const vv = r.vehicule as { plaque?: string } | undefined;
+                  return (
+                    <div key={r.id} style={{ display: "flex", justifyContent: "space-between",
+                      alignItems: "center", padding: "8px 0",
+                      borderBottom: `1px solid ${C.gray100}` }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: C.gray800 }}>
+                          {vv?.plaque || r.vehicule_id}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>
+                          {r.description?.slice(0, 60)}{(r.description?.length ?? 0) > 60 ? "…" : ""}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Congés en attente */}
-              {congesAdmin.length > 0 && (
-                <div style={{ background: "#EFF6FF", borderRadius: 14, padding: 14,
-                  borderLeft: `4px solid #2563EB`, marginBottom: 14 }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#2563EB", marginBottom: 8,
-                    display: "flex", alignItems: "center", gap: 6 }}>
-                    <CalendarDays size={14} />
-                    {congesAdmin.length} congé(s) à valider
-                  </div>
-                  <button onClick={() => setTab("validation")}
-                    style={{ width: "100%", padding: "8px 0", borderRadius: 8, border: "none",
-                      background: "#2563EB", color: C.white, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                    Voir les demandes →
-                  </button>
-                </div>
-              )}
-
-              {repAValider.length === 0 && congesAdmin.length === 0 && (
-                <div style={{ background: C.greenL, borderRadius: 14, padding: 16,
-                  borderLeft: `4px solid ${C.green}`, display: "flex", alignItems: "center", gap: 8 }}>
-                  <CheckCircle2 size={16} color={C.green} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>
-                    Aucune validation en attente
-                  </span>
-                </div>
-              )}
-            </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontWeight: 800, color: C.red, fontSize: 14 }}>
+                          {(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF
+                        </span>
+                        <button onClick={() => doValider(r)} disabled={valBusy}
+                          style={{ padding: "6px 12px", borderRadius: 7, border: "none",
+                            background: C.green, color: C.white, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                          Valider
+                        </button>
+                        <button onClick={() => { setRefusOpen(r.id); setRefusMotif(""); setTab("validation"); }}
+                          style={{ padding: "6px 12px", borderRadius: 7,
+                            border: `1px solid ${C.red}`, background: C.white,
+                            color: C.red, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                          Refuser
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ background: C.greenL, borderRadius: 8, padding: "12px 16px",
+                border: "0.5px solid rgba(0,0,0,0.05)",
+                display: "flex", alignItems: "center", gap: 8 }}>
+                <CheckCircle2 size={15} color={C.green} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.green }}>
+                  Aucune validation en attente
+                </span>
+              </div>
+            )}
           </div>
         )}
 
-        {/* ══ TAB : STATISTIQUES ══════════════════════════════════════════════ */}
+        {/* ══ STATISTIQUES ═══════════════════════════════════════════════════ */}
         {tab === "stats" && (
           <div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              <PeriodBtn label="Cette semaine" active={period === "week"}  onClick={() => setPeriod("week")} />
-              <PeriodBtn label="Ce mois"       active={period === "month"} onClick={() => setPeriod("month")} />
-              <PeriodBtn label="Année scolaire" active={period === "annee"} onClick={() => setPeriod("annee")} />
+            {/* Filtres période */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+              {([ ["week","Cette semaine"], ["month","Ce mois"], ["annee","Année scolaire"] ] as [Period,string][]).map(([p, l]) => (
+                <button key={p} onClick={() => setPeriod(p)}
+                  style={{ padding: "7px 14px", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer",
+                    background:  period === p ? "#EFF6FF" : C.white,
+                    border:      period === p ? "1px solid #BFDBFE" : `1px solid ${C.gray200}`,
+                    color:       period === p ? "#1D4ED8" : C.gray600 }}>
+                  {l}
+                </button>
+              ))}
             </div>
 
-            {/* Incidents 30j */}
-            <div style={{ background: C.white, borderRadius: 16, padding: 20, marginBottom: 20,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 16 }}>
-                Incidents — 30 derniers jours
-              </div>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={inc30} margin={{ left: -20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.gray100} />
-                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: C.gray400 }} tickLine={false} interval={4} />
-                  <YAxis tick={{ fontSize: 11, fill: C.gray400 }} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${C.gray200}`, fontSize: 13 }} />
-                  <Bar dataKey="count" name="Incidents" fill={C.red} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
 
-            {/* Coût réparations par mois */}
-            <div style={{ background: C.white, borderRadius: 16, padding: 20, marginBottom: 20,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 16 }}>
-                Coût réparations par mois (CHF)
-              </div>
-              {repCostByMonth.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "30px 0", color: C.gray400, fontSize: 13 }}>Aucune donnée</div>
-              ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={repCostByMonth} margin={{ left: -10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.gray100} />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: C.gray400 }} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: C.gray400 }} tickLine={false} />
-                    <Tooltip formatter={(v) => `${(v as number).toLocaleString("fr-CH")} CHF`}
-                      contentStyle={{ borderRadius: 10, border: `1px solid ${C.gray200}`, fontSize: 13 }} />
-                    <Bar dataKey="total" name="Coût CHF" fill={C.amber} radius={[4, 4, 0, 0]} />
+              {/* Panel 1 — Absences conducteurs */}
+              <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+                  <Users size={15} color="#1565C0" />
+                  <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Absences conducteurs</span>
+                </div>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={absencesByWeek} margin={{ left: -20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.gray100} vertical={false} />
+                    <XAxis dataKey="week" tick={{ fontSize: 9, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: "#94A3B8" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 12 }} />
+                    <Bar dataKey="count" name="Absences" radius={[3,3,0,0]}>
+                      {absencesByWeek.map((_, i) => (
+                        <Cell key={i} fill={i === absencesByWeek.length - 1 ? "#1565C0" : "#BFDBFE"} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              )}
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-              {/* Pie incidents par type */}
-              <div style={{ background: C.white, borderRadius: 16, padding: 20,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 12 }}>
-                  Incidents par type
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 12 }}>
+                  {[
+                    { label: "Total absences",  value: totalAbsences, color: "#1565C0" },
+                    { label: "Remplacements",   value: totalRemplace,  color: C.green   },
+                    { label: "Non couverts",    value: totalNonCouvert,color: C.red     },
+                  ].map(s => (
+                    <div key={s.label} style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</div>
+                      <div style={{ fontSize: 10, color: "#94A3B8" }}>{s.label}</div>
+                    </div>
+                  ))}
                 </div>
-                {incByType.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "30px 0", color: C.gray400, fontSize: 13 }}>Aucun incident</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie data={incByType} dataKey="value" nameKey="name" cx="50%" cy="50%"
-                        outerRadius={70} label={({ name, percent = 0 }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        labelLine={false} fontSize={11}>
-                        {incByType.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${C.gray200}`, fontSize: 12 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
               </div>
 
-              {/* Classement véhicules */}
-              <div style={{ background: C.white, borderRadius: 16, padding: 20,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 12 }}>
-                  Top véhicules — coût
+              {/* Panel 2 — Coûts réparations */}
+              <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+                  <Wrench size={15} color="#D97706" />
+                  <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Coûts réparations CHF</span>
+                </div>
+                {repCostByMonth.length === 0 ? (
+                  <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "#94A3B8", fontSize: 13 }}>Aucune donnée</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={160}>
+                    <BarChart data={repCostByMonth} margin={{ left: -10 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.gray100} vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 9, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: "#94A3B8" }} tickLine={false} axisLine={false} />
+                      <Tooltip formatter={(v) => `${(v as number).toLocaleString("fr-CH")} CHF`}
+                        contentStyle={{ borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 12 }} />
+                      <Bar dataKey="total" name="CHF" radius={[3,3,0,0]}>
+                        {repCostByMonth.map((_, i) => (
+                          <Cell key={i} fill={i === repCostByMonth.length - 1 ? "#D97706" : "#FEF3C7"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 12 }}>
+                  {[
+                    { label: "Ce mois", value: `${Math.round(coutCeMois).toLocaleString("fr-CH")} CHF`, color: "#D97706" },
+                    { label: "Total période", value: `${Math.round(coutAnnee).toLocaleString("fr-CH")} CHF`, color: C.gray800 },
+                    { label: "À valider", value: repAValider.length, color: C.red },
+                  ].map(s => (
+                    <div key={s.label} style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: typeof s.value === "number" ? 18 : 12, fontWeight: 700, color: s.color }}>{s.value}</div>
+                      <div style={{ fontSize: 10, color: "#94A3B8" }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Panel 3 — Véhicules coûteux */}
+              <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+                  <Bus size={15} color="#DC2626" />
+                  <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Véhicules coûteux</span>
                 </div>
                 {vehRank.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "30px 0", color: C.gray400, fontSize: 13 }}>Aucune réparation</div>
+                  <div style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
+                    Aucune réparation
+                  </div>
                 ) : vehRank.map((v, i) => (
-                  <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 10,
-                    padding: "7px 0", borderBottom: `1px solid ${C.gray100}` }}>
-                    <span style={{ width: 20, fontSize: 12, fontWeight: 900, color: i === 0 ? C.red : C.gray400 }}>#{i + 1}</span>
-                    <div style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{v.plaque}</div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: v.total > 5000 ? C.red : C.gray800 }}>
-                      {Math.round(v.total).toLocaleString("fr-CH")} CHF
+                  <div key={v.id} style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.gray800 }}>{v.plaque}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: vehBarColors[i] }}>
+                        {Math.round(v.total).toLocaleString("fr-CH")} CHF
+                      </span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 3, background: C.gray100 }}>
+                      <div style={{ height: 6, borderRadius: 3, background: vehBarColors[i],
+                        width: `${Math.round(v.total / maxVehCost * 100)}%`, transition: "width .4s" }} />
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
 
-            {/* Classement conducteurs absences */}
-            <div style={{ background: C.white, borderRadius: 16, padding: 20,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 12 }}>
-                Conducteurs — classement absences
-              </div>
-              {condRank.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "20px 0", color: C.gray400, fontSize: 13 }}>Aucune absence enregistrée</div>
-              ) : condRank.map((c, i) => (
-                <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-                  <span style={{ width: 24, fontSize: 12, fontWeight: 900, color: i === 0 ? C.red : C.gray400 }}>#{i + 1}</span>
-                  <div style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{c.nom}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ height: 8, borderRadius: 4, background: C.red,
-                      width: Math.max(20, c.count * 12), maxWidth: 120 }} />
-                    <span style={{ fontSize: 13, fontWeight: 800, minWidth: 24 }}>{c.count}j</span>
-                  </div>
+              {/* Panel 4 — Incidents par type */}
+              <div style={{ background: C.white, borderRadius: 12, padding: 18, border: "0.5px solid rgba(0,0,0,0.05)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+                  <AlertTriangle size={15} color="#DC2626" />
+                  <span style={{ fontWeight: 700, fontSize: 14, color: C.gray800 }}>Incidents par type</span>
                 </div>
-              ))}
+                {incByType.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "30px 0", color: "#94A3B8", fontSize: 13 }}>
+                    Aucun incident
+                  </div>
+                ) : (
+                  <>
+                    {incByType.map(([type, count]) => (
+                      <div key={type} style={{ marginBottom: 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: C.gray800, textTransform: "capitalize" }}>{type}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: C.red }}>{count}</span>
+                        </div>
+                        <div style={{ height: 5, borderRadius: 3, background: C.gray100 }}>
+                          <div style={{ height: 5, borderRadius: 3, background: "#FCA5A5",
+                            width: `${Math.round(count / maxIncType * 100)}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ paddingTop: 10, borderTop: `1px solid ${C.gray100}`,
+                      fontSize: 12, fontWeight: 700, color: C.gray600, display: "flex", justifyContent: "space-between" }}>
+                      <span>Total</span><span>{totalIncType}</span>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* ══ TAB : VALIDATIONS ═══════════════════════════════════════════════ */}
+        {/* ══ VALIDATIONS ════════════════════════════════════════════════════ */}
         {tab === "validation" && (
           <div>
-            {/* Congés transmis par gestionnaire */}
+            {/* Congés */}
             {congesAdmin.length > 0 && (
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 14,
@@ -675,8 +688,8 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                   const cond = conge.conducteur as { prenom?: string; nom?: string } | undefined;
                   const isRefusing = congeAdminRefusId === conge.id;
                   return (
-                    <div key={conge.id} style={{ background: C.white, borderRadius: 16, padding: 20,
-                      marginBottom: 14, boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+                    <div key={conge.id} style={{ background: C.white, borderRadius: 14, padding: 20,
+                      marginBottom: 14, boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
                       borderLeft: `4px solid #2563EB` }}>
                       <div style={{ display: "flex", justifyContent: "space-between",
                         alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
@@ -687,19 +700,12 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                           <div style={{ fontSize: 13, color: C.gray600, marginTop: 2 }}>
                             {conge.motif} · {fmtDate(conge.date_debut)} → {fmtDate(conge.date_fin)}
                           </div>
-                          <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>
-                            Soumis le {fmtDate(conge.created_at.slice(0, 10))}
-                          </div>
                         </div>
                         <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
-                          background: "#EFF6FF", color: "#2563EB" }}>
-                          Transmis gestionnaire
-                        </span>
+                          background: "#EFF6FF", color: "#2563EB" }}>Transmis gestionnaire</span>
                       </div>
-                      <p style={{ fontSize: 14, color: "#1E293B", lineHeight: 1.6, margin: "0 0 10px",
-                        borderLeft: `3px solid ${C.gray200}`, paddingLeft: 10 }}>
-                        {conge.justification}
-                      </p>
+                      <p style={{ fontSize: 14, color: C.gray800, lineHeight: 1.6, margin: "0 0 10px",
+                        borderLeft: `3px solid ${C.gray200}`, paddingLeft: 10 }}>{conge.justification}</p>
                       {conge.note_gestionnaire && (
                         <div style={{ background: C.skyL, borderRadius: 10, padding: "8px 12px",
                           fontSize: 13, color: C.navyL, marginBottom: 12, fontStyle: "italic" }}>
@@ -721,9 +727,10 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                           <>
                             <button onClick={() => doAccepterConge(conge)} disabled={congeAdminBusy}
                               style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
-                                border: "none", background: C.green, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer",
-                                display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                              <CheckCircle2 size={16} /> Approuver
+                                border: "none", background: C.green, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                                <CheckCircle2 size={15} /> Approuver
+                              </span>
                             </button>
                             <button onClick={() => { setCongeAdminRefusId(conge.id); setCongeAdminRefusMotif(""); }}
                               style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
@@ -758,96 +765,98 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
             {/* Réparations */}
             {repAValider.length === 0 && congesAdmin.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
-                <CheckCircle2 size={48} strokeWidth={1} style={{ marginBottom: 12, display: "block", margin: "0 auto 12px" }} />
+                <CheckCircle2 size={48} strokeWidth={1} style={{ display: "block", margin: "0 auto 12px" }} />
                 <p style={{ fontWeight: 700, fontSize: 15 }}>Aucun élément en attente de validation</p>
               </div>
-            ) : repAValider.length > 0 && (
-              <div>
-                {congesAdmin.length > 0 && (
+            ) : (
+              <>
+                {repAValider.length > 0 && congesAdmin.length > 0 && (
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 14,
                     display: "flex", alignItems: "center", gap: 8 }}>
                     <Wrench size={18} /> Réparations à valider ({repAValider.length})
                   </div>
                 )}
-            </div>
+                {repAValider.map(r => {
+                  const vv = r.vehicule as { plaque?: string; marque?: string; modele?: string } | undefined;
+                  const isRefusing = refusOpen === r.id;
+                  return (
+                    <div key={r.id} style={{ background: C.white, borderRadius: 14, padding: 20,
+                      marginBottom: 16, boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+                      borderLeft: `4px solid ${C.red}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between",
+                        alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>{vv?.plaque || r.vehicule_id}</div>
+                          <div style={{ fontSize: 12, color: C.gray400 }}>{vv?.marque} {vv?.modele}</div>
+                          {r.date_reception && <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>Réceptionné {fmtDate(r.date_reception)}</div>}
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 24, fontWeight: 900, color: C.red }}>{(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF</div>
+                          <div style={{ fontSize: 11, color: C.gray400 }}>Coût estimé</div>
+                        </div>
+                      </div>
+                      <p style={{ fontSize: 14, color: C.gray800, lineHeight: 1.6, margin: "0 0 12px",
+                        borderLeft: `3px solid ${C.gray200}`, paddingLeft: 10 }}>{r.description}</p>
+                      {r.commentaire_mecanicien && !r.commentaire_mecanicien.startsWith("[Refusé") && (
+                        <div style={{ background: C.gray50, borderRadius: 10, padding: "8px 12px",
+                          fontSize: 13, color: C.gray600, marginBottom: 14, fontStyle: "italic" }}>
+                          {r.commentaire_mecanicien.split(" | ").filter((s: string) => !s.startsWith("Photos:")).join(" | ")}
+                        </div>
+                      )}
+                      {isRefusing && (
+                        <div style={{ marginBottom: 14 }}>
+                          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 6 }}>
+                            Motif du refus *
+                          </label>
+                          <textarea value={refusMotif} onChange={e => setRefusMotif(e.target.value)}
+                            rows={2} placeholder="Ex: Obtenir deuxième devis…"
+                            style={{ ...inp, resize: "vertical" }} />
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        {!isRefusing ? (
+                          <>
+                            <button onClick={() => doValider(r)} disabled={valBusy}
+                              style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
+                                border: "none", background: C.green, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                                <CheckCircle2 size={15} /> Valider
+                              </span>
+                            </button>
+                            <button onClick={() => { setRefusOpen(r.id); setRefusMotif(""); }}
+                              style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
+                                border: `2px solid ${C.red}`, background: C.white, color: C.red, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                              Refuser
+                            </button>
+                            <button onClick={() => printFiche(r)}
+                              style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
+                                background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                              Imprimer
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => doRefuser(r)} disabled={valBusy || !refusMotif.trim()}
+                              style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none",
+                                background: refusMotif.trim() ? C.red : C.gray200, color: C.white,
+                                fontWeight: 800, fontSize: 14, cursor: refusMotif.trim() ? "pointer" : "not-allowed" }}>
+                              Confirmer le refus
+                            </button>
+                            <button onClick={() => setRefusOpen(null)}
+                              style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
+                                background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                              Annuler
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
             )}
-            {repAValider.length > 0 && repAValider.map(r => {
-              const vv = r.vehicule as { plaque?: string; marque?: string; modele?: string } | undefined;
-              const isRefusing = refusOpen === r.id;
-              return (
-                <div key={r.id} style={{ background: C.white, borderRadius: 16, padding: 20,
-                  marginBottom: 16, boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
-                  borderLeft: `4px solid ${C.red}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between",
-                    alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>{vv?.plaque || r.vehicule_id}</div>
-                      <div style={{ fontSize: 12, color: C.gray400 }}>{vv?.marque} {vv?.modele}</div>
-                      {r.date_reception && <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>Réceptionné {fmtDate(r.date_reception)}</div>}
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 26, fontWeight: 900, color: C.red }}>{(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF</div>
-                      <div style={{ fontSize: 11, color: C.gray400 }}>Coût estimé</div>
-                    </div>
-                  </div>
-                  <p style={{ fontSize: 14, color: "#1E293B", lineHeight: 1.6, margin: "0 0 12px",
-                    borderLeft: `3px solid ${C.gray200}`, paddingLeft: 10 }}>{r.description}</p>
-                  {r.commentaire_mecanicien && !r.commentaire_mecanicien.startsWith("[Refusé") && (
-                    <div style={{ background: C.gray50, borderRadius: 10, padding: "8px 12px",
-                      fontSize: 13, color: C.gray600, marginBottom: 14, fontStyle: "italic" }}>
-                      {r.commentaire_mecanicien.split(" | ").filter(s => !s.startsWith("Photos:")).join(" | ")}
-                    </div>
-                  )}
-                  {isRefusing && (
-                    <div style={{ marginBottom: 14 }}>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 6 }}>
-                        Motif du refus *
-                      </label>
-                      <textarea value={refusMotif} onChange={e => setRefusMotif(e.target.value)}
-                        rows={2} placeholder="Ex: Obtenir deuxième devis…"
-                        style={{ ...inp, resize: "vertical" }} />
-                    </div>
-                  )}
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    {!isRefusing ? (
-                      <>
-                        <button onClick={() => doValider(r)} disabled={valBusy}
-                          style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
-                            border: "none", background: C.green, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                          <span style={{display:"flex",alignItems:"center",gap:6}}><CheckCircle2 size={15} /> Valider</span>
-                        </button>
-                        <button onClick={() => { setRefusOpen(r.id); setRefusMotif(""); }}
-                          style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
-                            border: `2px solid ${C.red}`, background: C.white, color: C.red, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
-                          Refuser
-                        </button>
-                        <button onClick={() => printFiche(r)}
-                          style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
-                            background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                          Imprimer
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={() => doRefuser(r)} disabled={valBusy || !refusMotif.trim()}
-                          style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none",
-                            background: refusMotif.trim() ? C.red : C.gray200, color: C.white,
-                            fontWeight: 800, fontSize: 14, cursor: refusMotif.trim() ? "pointer" : "not-allowed" }}>
-                          Confirmer le refus
-                        </button>
-                        <button onClick={() => setRefusOpen(null)}
-                          style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
-                            background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                          Annuler
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
 
-            {/* Historique validations — groupé par date */}
+            {/* Historique validations */}
             {(() => {
               const histItems = reparations.filter(r =>
                 ["en_reparation","remis_en_circulation"].includes(r.statut) ||
@@ -861,6 +870,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                 grouped[d].push(r);
               });
               const days = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+              const tod = isoToday();
               return (
                 <div style={{ marginTop: 32 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: C.gray600, marginBottom: 14 }}>
@@ -868,14 +878,12 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                   </div>
                   {days.map((day, di) => {
                     const isOpen = di === 0 || !!histValExpanded[day];
-                    const tod = isoToday();
                     const dayLabel = day === tod ? "Aujourd'hui"
                       : day === addDays(tod, -1) ? "Hier"
                       : new Date(day + "T00:00:00").toLocaleDateString("fr-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
                     return (
                       <div key={day} style={{ marginBottom: 6 }}>
-                        <div
-                          onClick={() => { if (di !== 0) setHistValExpanded(s => ({ ...s, [day]: !s[day] })); }}
+                        <div onClick={() => { if (di !== 0) setHistValExpanded(s => ({ ...s, [day]: !s[day] })); }}
                           style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 10px",
                             cursor: di === 0 ? "default" : "pointer" }}>
                           <div style={{ flex: 1, height: 1, background: C.gray200 }} />
@@ -884,7 +892,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                             {dayLabel}
                           </span>
                           {di !== 0 && !isOpen && (
-                            <span style={{ fontSize: 11, color: C.navy, fontWeight: 700, whiteSpace: "nowrap" }}>
+                            <span style={{ fontSize: 11, color: C.navy, fontWeight: 700 }}>
                               Voir les {grouped[day].length} élément{grouped[day].length > 1 ? "s" : ""}
                             </span>
                           )}
@@ -917,7 +925,8 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                                     </span>
                                   )}
                                   <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                                    background: wasRefused ? C.redL : C.greenL, color: wasRefused ? C.red : C.green }}>
+                                    background: wasRefused ? C.redL : C.greenL,
+                                    color: wasRefused ? C.red : C.green }}>
                                     {wasRefused ? "Refusé" : "Validé"}
                                   </span>
                                 </div>
@@ -934,10 +943,9 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
           </div>
         )}
 
-        {/* ══ TAB : HISTORIQUE ════════════════════════════════════════════════ */}
+        {/* ══ HISTORIQUE ═════════════════════════════════════════════════════ */}
         {tab === "historique" && (
           <div>
-            {/* Sélecteur année */}
             <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
               {[SY_START, SY_START - 1].map(y => (
                 <button key={y} onClick={() => { setHistYear(y); setHistMonth(null); setHistDay(null); }}
@@ -964,16 +972,15 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
               )}
             </div>
 
-            {/* Grille mois */}
             {histMonth === null && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12 }}>
-                {([9,10,11,12,1,2,3,4,5,6,7,8]).map(m => {
+                {[9,10,11,12,1,2,3,4,5,6,7,8].map(m => {
                   const yr = m >= 9 ? histYear : histYear + 1;
                   const data = histMonthData(yr, m);
                   const hasData = data.incidents > 0 || data.absences > 0 || data.reparations > 0;
                   return (
                     <div key={m} onClick={() => setHistMonth(m)}
-                      style={{ background: C.white, borderRadius: 14, padding: 16, cursor: "pointer",
+                      style={{ background: C.white, borderRadius: 12, padding: 16, cursor: "pointer",
                         boxShadow: "0 1px 6px rgba(0,0,0,0.06)", opacity: hasData ? 1 : 0.5,
                         borderTop: `3px solid ${hasData ? C.navy : C.gray200}` }}>
                       <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 8 }}>
@@ -996,7 +1003,6 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
               </div>
             )}
 
-            {/* Calendrier jours */}
             {histMonth !== null && histDay === null && (() => {
               const yr = histMonth >= 9 ? histYear : histYear + 1;
               const pad = String(histMonth).padStart(2, "0");
@@ -1019,18 +1025,16 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                       </button>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
-                      <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 24, fontWeight: 900, color: C.red }}>{data.incidents}</div>
-                        <div style={{ fontSize: 11, color: C.gray400 }}>Incidents</div>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 24, fontWeight: 900, color: C.amber }}>{data.absences}</div>
-                        <div style={{ fontSize: 11, color: C.gray400 }}>Absences</div>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 24, fontWeight: 900, color: C.navyL }}>{data.reparations}</div>
-                        <div style={{ fontSize: 11, color: C.gray400 }}>Réparations</div>
-                      </div>
+                      {[
+                        { val: data.incidents, label: "Incidents", color: C.red },
+                        { val: data.absences, label: "Absences", color: C.amber },
+                        { val: data.reparations, label: "Réparations", color: C.navyL },
+                      ].map(s => (
+                        <div key={s.label} style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 24, fontWeight: 900, color: s.color }}>{s.val}</div>
+                          <div style={{ fontSize: 11, color: C.gray400 }}>{s.label}</div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
@@ -1074,7 +1078,6 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
               );
             })()}
 
-            {/* Détail jour */}
             {histDay !== null && (() => {
               const { incidents: di, absences: da, reparations: dr } = histDayData(histDay);
               return (
@@ -1089,7 +1092,10 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                       {di.map(i => (
                         <div key={i.id} style={{ background: C.white, borderRadius: 12, padding: 14,
                           marginBottom: 8, borderLeft: `3px solid ${C.red}` }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: C.red }}><span style={{display:"flex",alignItems:"center",gap:6}}><AlertTriangle size={13} color={C.red} /> {i.type}</span></div>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: C.red,
+                            display: "flex", alignItems: "center", gap: 6 }}>
+                            <AlertTriangle size={13} /> {i.type}
+                          </div>
                           <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>{i.description}</div>
                         </div>
                       ))}
@@ -1098,8 +1104,9 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                         return (
                           <div key={a.id} style={{ background: C.white, borderRadius: 12, padding: 14,
                             marginBottom: 8, borderLeft: `3px solid ${C.amber}` }}>
-                            <div style={{ fontWeight: 700, fontSize: 14, color: C.amber }}>
-                              <span style={{display:"flex",alignItems:"center",gap:6}}><Users size={13} color={C.amber} /> {cond?.prenom} {cond?.nom}</span>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: C.amber,
+                              display: "flex", alignItems: "center", gap: 6 }}>
+                              <Users size={13} /> {cond?.prenom} {cond?.nom}
                             </div>
                             <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>
                               {a.motif || "—"} · {a.status === "couvert" ? "Couvert" : "Non couvert"}
@@ -1112,7 +1119,10 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                         return (
                           <div key={r.id} style={{ background: C.white, borderRadius: 12, padding: 14,
                             marginBottom: 8, borderLeft: `3px solid ${C.navy}` }}>
-                            <div style={{ fontWeight: 700, fontSize: 14, color: C.navy }}><span style={{display:"flex",alignItems:"center",gap:6}}><Wrench size={13} color={C.navy} /> {vv?.plaque || r.vehicule_id}</span></div>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: C.navy,
+                              display: "flex", alignItems: "center", gap: 6 }}>
+                              <Wrench size={13} /> {vv?.plaque || r.vehicule_id}
+                            </div>
                             <div style={{ fontSize: 13, color: C.gray600, marginTop: 4 }}>{r.description}</div>
                           </div>
                         );
@@ -1124,10 +1134,10 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
             })()}
           </div>
         )}
-        {/* ══ TAB : MESSAGES ═════════════════════════════════════════════════ */}
+
+        {/* ══ MESSAGES ═══════════════════════════════════════════════════════ */}
         {tab === "messages" && (
           <div>
-            {/* Messagerie directe */}
             <div style={{ marginBottom: 28 }}>
               <div style={{ fontWeight: 800, fontSize: 13, color: C.navy, textTransform: "uppercase",
                 letterSpacing: 0.5, marginBottom: 12 }}>
@@ -1141,69 +1151,67 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                 ]} />
             </div>
 
-            {/* Messages du mécanicien (alertes) */}
-            {adminMsgs.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
-                <MessageSquare size={48} strokeWidth={1} style={{ marginBottom: 12, display: "block", margin: "0 auto 12px" }} />
-                <p style={{ fontWeight: 700, fontSize: 15 }}>Aucun message du mécanicien</p>
-              </div>
-            ) : groupByDay(adminMsgs).map((grp, gi) => {
-              const isFirst = gi === 0;
-              const open = isFirst || msgExpandedDays[grp.day];
-              return (
-              <div key={grp.day}>
-                <div onClick={() => !isFirst && setMsgExpandedDays(s => ({ ...s, [grp.day]: !s[grp.day] }))}
-                  style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 10px",
-                    cursor: isFirst ? "default" : "pointer" }}>
-                  <div style={{ flex: 1, height: 1, background: C.gray200 }} />
-                  <span style={{ fontSize: 11, fontWeight: 800, color: C.gray600, textTransform: "uppercase",
-                    letterSpacing: 0.5, whiteSpace: "nowrap" }}>{grp.label}</span>
-                  {!isFirst && !open && (
-                    <span style={{ fontSize: 11, color: C.navyL, fontWeight: 700, whiteSpace: "nowrap" }}>
-                      Voir les {grp.items.length} message{grp.items.length > 1 ? "s" : ""}
-                    </span>
-                  )}
-                  <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+            {adminMsgs.length > 0 && (
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 13, color: C.navy, textTransform: "uppercase",
+                  letterSpacing: 0.5, marginBottom: 12 }}>
+                  Messages mécanicien
                 </div>
-                {open && grp.items.map(m => (
-              <div key={m.id} style={{ background: m.read ? C.gray50 : C.white, borderRadius: 14, padding: 18,
-                marginBottom: 12, border: `1px solid ${m.read ? C.gray200 : C.navyL}`,
-                boxShadow: m.read ? "none" : "0 2px 10px rgba(0,0,0,0.08)",
-                borderLeft: `4px solid ${m.read ? C.gray400 : C.navyL}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between",
-                  alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: C.navyL }}>
-                    Mécanicien
-                    {!m.read && (
-                      <span style={{ marginLeft: 8, background: C.navyL, color: C.white,
-                        borderRadius: 99, padding: "1px 7px", fontSize: 10, fontWeight: 900 }}>
-                        Nouveau
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 12, color: C.gray400 }}>
-                    {fmtDateTime(m.created_at)}
-                  </div>
-                </div>
-                <p style={{ fontSize: 14, color: "#1E293B", lineHeight: 1.5, margin: "0 0 12px" }}>
-                  {(m.message || "").replace("Message du mécanicien : ", "")}
-                </p>
-                {!m.read && (
-                  <button onClick={async () => {
-                    await sb.from("alertes")
-                      .update({ read: true, read_at: new Date().toISOString() }).eq("id", m.id);
-                    load();
-                  }} style={{ padding: "9px 20px", borderRadius: 10,
-                    border: `2px solid ${C.navyL}`, background: C.white,
-                    color: C.navyL, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
-                    Lu
-                  </button>
-                )}
+                {groupByDay(adminMsgs).map((grp, gi) => {
+                  const isFirst = gi === 0;
+                  const open = isFirst || msgExpandedDays[grp.day];
+                  return (
+                    <div key={grp.day}>
+                      <div onClick={() => !isFirst && setMsgExpandedDays(s => ({ ...s, [grp.day]: !s[grp.day] }))}
+                        style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 10px",
+                          cursor: isFirst ? "default" : "pointer" }}>
+                        <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+                        <span style={{ fontSize: 11, fontWeight: 800, color: C.gray600,
+                          textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{grp.label}</span>
+                        {!isFirst && !open && (
+                          <span style={{ fontSize: 11, color: C.navyL, fontWeight: 700, whiteSpace: "nowrap" }}>
+                            Voir les {grp.items.length} message{grp.items.length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                        <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+                      </div>
+                      {open && grp.items.map(m => (
+                        <div key={m.id} style={{ background: m.read ? C.gray50 : C.white, borderRadius: 14, padding: 18,
+                          marginBottom: 12, border: `1px solid ${m.read ? C.gray200 : C.navyL}`,
+                          boxShadow: m.read ? "none" : "0 2px 10px rgba(0,0,0,0.08)",
+                          borderLeft: `4px solid ${m.read ? C.gray400 : C.navyL}` }}>
+                          <div style={{ display: "flex", justifyContent: "space-between",
+                            alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: C.navyL }}>
+                              Mécanicien
+                              {!m.read && (
+                                <span style={{ marginLeft: 8, background: C.navyL, color: C.white,
+                                  borderRadius: 99, padding: "1px 7px", fontSize: 10, fontWeight: 900 }}>
+                                  Nouveau
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 12, color: C.gray400 }}>{fmtDateTime(m.created_at)}</div>
+                          </div>
+                          <p style={{ fontSize: 14, color: C.gray800, lineHeight: 1.5, margin: "0 0 12px" }}>
+                            {(m.message || "").replace("Message du mécanicien : ", "")}
+                          </p>
+                          {!m.read && (
+                            <button onClick={async () => {
+                              await sb.from("alertes").update({ read: true, read_at: new Date().toISOString() }).eq("id", m.id);
+                              load();
+                            }} style={{ padding: "9px 20px", borderRadius: 10, border: `2px solid ${C.navyL}`,
+                              background: C.white, color: C.navyL, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+                              Lu
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
-                ))}
-              </div>
-              );
-            })}
+            )}
           </div>
         )}
 
