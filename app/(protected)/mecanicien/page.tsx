@@ -627,7 +627,8 @@ export default function MecanicienPage() {
       </div>
 
       {/* Tab nav */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 20, overflowX: "auto", paddingBottom: 4,
+        scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 16px",

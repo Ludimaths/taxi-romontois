@@ -52,9 +52,10 @@ interface SidebarProps {
   alertesCount?: number;
   reparationsCount?: number;
   messagesCount?: number;
+  onNavClick?: () => void;
 }
 
-export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount = 0, alertesCount = 0, reparationsCount = 0, messagesCount = 0 }: SidebarProps) {
+export default function Sidebar({ role, nom, prenom, onSignOut, onNavClick, incidentsCount = 0, alertesCount = 0, reparationsCount = 0, messagesCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [logoError, setLogoError] = useState(false);
@@ -117,7 +118,7 @@ export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount =
           const Icon = item.icon;
 
           return (
-            <button key={item.path} onClick={() => router.push(item.path)}
+            <button key={item.path} onClick={() => { router.push(item.path); onNavClick?.(); }}
               onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.1)"; }}
               onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
               style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,

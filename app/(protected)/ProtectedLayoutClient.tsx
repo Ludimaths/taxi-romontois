@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import Sidebar from "@/components/Sidebar";
 import { C } from "@/lib/constants";
@@ -21,6 +21,7 @@ export default function ProtectedLayoutClient({
   const [alertesCount,    setAlertesCount]    = useState(0);
   const [reparationsCount,setReparationsCount]= useState(0);
   const [messagesCount,   setMessagesCount]   = useState(0);
+  const [mobileNavOpen,   setMobileNavOpen]   = useState(false);
 
   const fetchCounts = useCallback(async () => {
     const [{ count: ic }, { count: ac }, { count: rc }, { count: mc }] = await Promise.all([
@@ -119,13 +120,42 @@ export default function ProtectedLayoutClient({
       }}>
         <img src="/logo.png" alt="Taxi Romontois"
           style={{ height: 32, width: "auto", display: "block" }} />
-        <button onClick={handleSignOut}
-          style={{ background: "transparent", border: "none", color: C.white, cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10,
-            fontWeight: 700, fontSize: 14 }}>
-          <LogOut size={16} color={C.white} /> Déconnexion
+        <button onClick={() => setMobileNavOpen(true)}
+          style={{ position: "relative", background: "transparent", border: "none",
+            color: C.white, cursor: "pointer", padding: 8, borderRadius: 8,
+            display: "flex", alignItems: "center" }}>
+          <Menu size={24} color={C.white} />
+          {(incidentsCount + alertesCount + reparationsCount + messagesCount) > 0 && (
+            <span style={{ position: "absolute", top: 4, right: 4, background: C.red,
+              color: C.white, borderRadius: 99, fontSize: 9, fontWeight: 900,
+              minWidth: 14, height: 14, display: "flex", alignItems: "center",
+              justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
+              {Math.min(incidentsCount + alertesCount + reparationsCount + messagesCount, 99)}
+            </span>
+          )}
         </button>
       </header>
+
+      {/* ── Drawer mobile ── */}
+      {mobileNavOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200 }}>
+          <div onClick={() => setMobileNavOpen(false)}
+            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
+          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 260, zIndex: 1 }}>
+            <Sidebar
+              role={profile.role}
+              nom={profile.nom}
+              prenom={profile.prenom}
+              onSignOut={handleSignOut}
+              onNavClick={() => setMobileNavOpen(false)}
+              incidentsCount={incidentsCount}
+              alertesCount={alertesCount}
+              reparationsCount={reparationsCount}
+              messagesCount={messagesCount}
+            />
+          </div>
+        </div>
+      )}
 
       {/* ── Corps : sidebar + contenu ── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>

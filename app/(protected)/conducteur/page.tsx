@@ -288,7 +288,7 @@ export default function ConducteurPage(){
     conges:       <CalendarDays size={14} />,
   };
   const TABS:{id:Tab;label:string;badge?:number}[]=[
-    {id:"dashboard",    label:"Dashboard"},
+    {id:"dashboard",    label:"Tableau de bord"},
     {id:"fiche",        label:"Ma fiche"},
     {id:"service",      label:"Mon service"},
     {id:"signalements", label:"Signalements",badge:pendingInc||undefined},
@@ -339,7 +339,8 @@ export default function ConducteurPage(){
       </div>
 
       {/* Barre d'onglets */}
-      <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:20,paddingBottom:4}}>
+      <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:20,paddingBottom:4,
+        scrollbarWidth:"none",msOverflowStyle:"none"} as React.CSSProperties}>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
             style={{padding:"10px 14px",borderRadius:12,border:"none",cursor:"pointer",
