@@ -61,7 +61,7 @@ export default function AdminPage() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Seuil budget configurable
-  const [seuil,       setSeuil]       = useState(1000);
+  const [seuil,       setSeuil]       = useState<number | null>(null);
   const [seuilEdit,   setSeuilEdit]   = useState(false);
   const [seuilInput,  setSeuilInput]  = useState("1000");
   const [seuilSaving, setSeuilSaving] = useState(false);
@@ -103,6 +103,12 @@ export default function AdminPage() {
         if (data?.valeur) {
           const v = parseInt(data.valeur as string, 10);
           if (!isNaN(v)) { setSeuil(v); setSeuilInput(String(v)); }
+          else { setSeuil(1000); setSeuilInput("1000"); }
+        } else {
+          // Insérer la valeur par défaut si absente
+          sb.from("parametres").upsert({ cle: "seuil_validation", valeur: "1000" }, { onConflict: "cle" });
+          setSeuil(1000);
+          setSeuilInput("1000");
         }
       });
   }, [sb]);
@@ -539,12 +545,14 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                   const Icon = c.icon;
                   return (
                     <Link key={c.path} href={c.path}
+                      onClick={() => setMobileOpen(false)}
                       style={{ background: C.white, borderRadius: 8,
                         border: "0.5px solid rgba(0,0,0,0.05)", padding: "14px 10px",
                         cursor: "pointer", display: "flex", flexDirection: "column",
                         alignItems: "center", gap: 6, textAlign: "center",
                         transition: "background .12s, border-color .12s",
-                        textDecoration: "none" }}>
+                        textDecoration: "none",
+                        position: "relative", pointerEvents: "all" }}>
                       <Icon size={22} color={c.color} />
                       <div style={{ fontSize: 11, fontWeight: 500, color: "#0F172A" }}>{c.label}</div>
                       <div style={{ fontSize: 9, color: "#94A3B8" }}>{c.sub}</div>
@@ -785,7 +793,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                     </span>
                   </div>
                   {!seuilEdit && (
-                    <button onClick={() => { setSeuilEdit(true); setSeuilInput(String(seuil)); }}
+                    <button onClick={() => { setSeuilEdit(true); setSeuilInput(String(seuil ?? 1000)); }}
                       style={{ padding: "5px 12px", borderRadius: 8, border: `1px solid ${C.gray200}`,
                         background: C.white, color: C.gray600, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
                       Modifier
@@ -796,7 +804,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                   <p style={{ fontSize: 13, color: C.gray600, margin: "10px 0 0", lineHeight: 1.6 }}>
                     Toute réparation dépassant{" "}
                     <strong style={{ color: C.amber, fontSize: 15 }}>
-                      {seuil.toLocaleString("fr-CH")} CHF
+                      {seuil !== null ? seuil.toLocaleString("fr-CH") : "…"} CHF
                     </strong>{" "}
                     nécessite votre validation avant que le mécanicien puisse continuer.
                   </p>

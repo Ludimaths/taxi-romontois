@@ -9,7 +9,7 @@ import type { Vehicule, Reparation, Alerte } from "@/lib/types";
 
 type MTab = "accueil" | "flotte" | "alertes" | "atelier" | "prets" | "historique" | "messages";
 
-const BUDGET_SEUIL = 1000;
+const BUDGET_SEUIL_DEFAULT = 1000;
 
 const RS: Record<string, { l: string; c: string; bg: string }> = {
   receptionne:           { l: "Réceptionné",          c: "#2563EB", bg: "#DBEAFE" },
@@ -168,9 +168,6 @@ export default function MecanicienPage() {
   // Messages
   const [msgDecisions,   setMsgDecisions]   = useState<Alerte[]>([]);
   const [msgExpandedDays, setMsgExpandedDays] = useState<Record<string, boolean>>({});
-  const [msgSendText,    setMsgSendText]    = useState("");
-  const [msgSendTarget,  setMsgSendTarget]  = useState<"gestionnaire"|"admin">("gestionnaire");
-  const [msgSending,     setMsgSending]     = useState(false);
 
   // Réception depuis alerte
   const [recepAlerte, setRecepAlerte] = useState<Alerte | null>(null);
@@ -202,6 +199,9 @@ export default function MecanicienPage() {
   const [veSheet, setVeSheet] = useState<Vehicule | null>(null);
   const [veF,     setVeF]     = useState({ km: "", ct_date: "", date_vidange: "", etat: "", notes: "" });
   const [saveErr, setSaveErr] = useState("");
+
+  // Seuil budget (chargé depuis Supabase)
+  const [budgetSeuil, setBudgetSeuil] = useState<number>(BUDGET_SEUIL_DEFAULT);
 
   // ── Load ────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -241,6 +241,17 @@ export default function MecanicienPage() {
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [load, sb]);
+
+  // Chargement seuil budget depuis parametres
+  useEffect(() => {
+    sb.from("parametres").select("valeur").eq("cle", "seuil_validation").maybeSingle()
+      .then(({ data }) => {
+        if (data?.valeur) {
+          const v = parseInt(data.valeur as string, 10);
+          if (!isNaN(v)) setBudgetSeuil(v);
+        }
+      });
+  }, [sb]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   function vehOf(id: string | undefined) {
@@ -439,7 +450,7 @@ export default function MecanicienPage() {
 
     const cout = suiviF.cout ? +suiviF.cout : null;
     let newStatut = (suiviF.statut || suiviRep.statut) as string;
-    if (cout !== null && cout > BUDGET_SEUIL) newStatut = "en_attente_validation";
+    if (cout !== null && cout > budgetSeuil) newStatut = "en_attente_validation";
 
     const upd: Record<string, unknown> = {
       statut: newStatut,
@@ -1126,48 +1137,6 @@ export default function MecanicienPage() {
             </div>
           )}
 
-          {/* Envoyer un message */}
-          <div style={{ background: C.white, borderRadius: 16, padding: 20,
-            boxShadow: "0 2px 10px rgba(0,0,0,0.07)" }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 16 }}>
-              Envoyer un message
-            </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 700,
-                color: C.gray600, marginBottom: 6 }}>
-                Destinataire
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
-                {(["gestionnaire", "admin"] as const).map(t => (
-                  <button key={t} onClick={() => setMsgSendTarget(t)}
-                    style={{ flex: 1, padding: "10px 0", borderRadius: 10, fontWeight: 700,
-                      fontSize: 13, cursor: "pointer", border: "none",
-                      background: msgSendTarget === t ? C.navy : C.gray100,
-                      color: msgSendTarget === t ? C.white : C.gray600 }}>
-                    {t === "gestionnaire" ? "Gestionnaire" : "Admin"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <TA label="Message *" value={msgSendText}
-              onChange={v => setMsgSendText(v)}
-              rows={4} placeholder="Votre message…" />
-            <BigBtn label={msgSending ? "Envoi…" : "Envoyer le message"}
-              onClick={async () => {
-                if (!msgSendText.trim()) return;
-                setMsgSending(true);
-                await sb.from("alertes").insert({
-                  type: msgSendTarget === "admin" ? "msg_meca_admin" : "msg_meca_gest",
-                  severity: "normale",
-                  message: `Message du mécanicien : ${msgSendText.trim()}`,
-                  read: false,
-                });
-                setMsgSendText("");
-                setMsgSending(false);
-              }}
-              disabled={msgSending || !msgSendText.trim()}
-              color={C.navy} />
-          </div>
         </div>
       )}
 
@@ -1309,10 +1278,10 @@ export default function MecanicienPage() {
             <F label="Montant estimé (CHF)" type="number" value={suiviF.cout}
               onChange={v => setSuiviF(p => ({ ...p, cout: v }))}
               placeholder="Ex: 450" />
-            {suiviF.cout && +suiviF.cout > BUDGET_SEUIL && (
+            {suiviF.cout && +suiviF.cout > budgetSeuil && (
               <div style={{ background: C.redL, borderRadius: 10, padding: 12, marginBottom: 16,
                 fontSize: 13, color: C.red, fontWeight: 700 }}>
-                Montant &gt; {BUDGET_SEUIL} CHF — statut automatique "En attente de validation"
+                Montant &gt; {budgetSeuil} CHF — statut automatique "En attente de validation"
               </div>
             )}
             <TA label="Notes mécanicien" value={suiviF.notes}

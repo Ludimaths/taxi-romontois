@@ -129,7 +129,7 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
     return () => { sb.removeChannel(ch); };
   }, [fetchMessages, sb, myRole, myId]);
 
-  // Sélectionner une conversation + marquer comme lu
+  // Sélectionner une conversation + marquer comme lu (local-first)
   const selectPerson = useCallback(async (person: Person) => {
     setSelectedPerson(person);
     if (isMobile) setShowConvo(true);
@@ -139,8 +139,13 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
       (m.destinataire_id === myId || (m.destinataire_role === myRole && !m.destinataire_id))
     );
     if (unread.length > 0) {
-      await sb.from("messages_internes").update({ lu: true }).in("id", unread.map(m => m.id));
-      fetchMessages();
+      // 1. Mise à jour locale immédiate (badge disparaît sans attendre Supabase)
+      setMessages(prev => prev.map(m =>
+        unread.some(u => u.id === m.id) ? { ...m, lu: true } : m
+      ));
+      // 2. Persistance en arrière-plan
+      sb.from("messages_internes").update({ lu: true }).in("id", unread.map(m => m.id))
+        .then(() => fetchMessages());
     }
   }, [messages, myId, myRole, sb, fetchMessages, isMobile]);
 

@@ -180,7 +180,7 @@ function ChildAbsModal({ absence, enfants, drivers, circuits, onClose, onTransmi
 function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, onAction }: {
   incident: Incident; drivers: Conducteur[]; vehicles: Vehicule[]; circuits: Circuit[];
   onClose: () => void;
-  onAction: (id: number, response: string, status: "en_cours" | "resolu", extra?: string) => Promise<void>;
+  onAction: (id: number, response: string, status: "en_cours" | "resolu", extra?: string, note?: string) => Promise<void>;
 }) {
   const [response,        setResponse]        = useState(incident.response || "");
   const [status,          setStatus]          = useState<"en_cours" | "resolu">(
@@ -188,6 +188,10 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
   );
   const [busy,            setBusy]            = useState(false);
   const [vehicleOverride, setVehicleOverride] = useState(incident.vehicule_id || "");
+
+  // Confirmation avant envoi aux tiers (mécanicien, parents, admin)
+  const [confirmAction, setConfirmAction] = useState<{ label: string; msg: string; extra?: string } | null>(null);
+  const [noteDestinataire, setNoteDestinataire] = useState("");
 
   const drv  = incident.conducteur || drivers.find(d => d.id === incident.conducteur_id);
   const veh  = incident.vehicule   || vehicles.find(v => v.id === incident.vehicule_id);
@@ -203,10 +207,29 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
   const isRetard = incident.type === "retard";
   const isPers   = ["enfant", "parent"].includes(incident.type);
 
-  const quick = async (msg: string, extra?: string) => {
+  // Action directe sans confirmation
+  const quickDirect = async (msg: string, extra?: string) => {
     setBusy(true);
     await onAction(incident.id, msg, "en_cours", extra);
     setBusy(false);
+    onClose();
+  };
+
+  // Déclenche la mini-modale de confirmation
+  const askConfirm = (label: string, msg: string, extra?: string) => {
+    setNoteDestinataire("");
+    setConfirmAction({ label, msg, extra });
+  };
+
+  // Confirme et envoie avec note optionnelle
+  const confirmAndSend = async () => {
+    if (!confirmAction) return;
+    setBusy(true);
+    const note = noteDestinataire.trim() || undefined;
+    const msgFinal = note ? `${confirmAction.msg} — Note : ${note}` : confirmAction.msg;
+    await onAction(incident.id, msgFinal, "en_cours", confirmAction.extra, note);
+    setBusy(false);
+    setConfirmAction(null);
     onClose();
   };
 
@@ -222,6 +245,39 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
     border: `1px solid ${C.gray200}`, marginBottom: 8, background: C.white,
     cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.gray800, width: "100%", textAlign: "left",
   };
+
+  // Mini-modale de confirmation
+  if (confirmAction) {
+    return (
+      <Modal title={confirmAction.label} onClose={() => setConfirmAction(null)}>
+        <div style={{ background: C.amberL, borderRadius: 10, padding: "12px 14px",
+          fontSize: 13, color: C.amber, fontWeight: 600, marginBottom: 14,
+          border: `1px solid #FDE68A`, lineHeight: 1.6 }}>
+          <div style={{ fontWeight: 800, marginBottom: 4 }}>Résumé de l&apos;incident</div>
+          <div>Type : {TYPE_LABEL[incident.type] || incident.type}</div>
+          {veh && <div>Véhicule : {veh.plaque}</div>}
+          {drv && <div>Conducteur : {drv.prenom} {drv.nom}</div>}
+        </div>
+        <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.gray600,
+          textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+          Note pour le destinataire (optionnel)
+        </label>
+        <textarea
+          value={noteDestinataire}
+          onChange={e => setNoteDestinataire(e.target.value)}
+          rows={3}
+          placeholder="Ex: Priorité urgente, contacter avant midi…"
+          style={{ ...inputSt, resize: "vertical", marginBottom: 14 }}
+        />
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn full onClick={confirmAndSend} color={C.navyL} disabled={busy}>
+            {busy ? "Envoi…" : "Confirmer et envoyer"}
+          </Btn>
+          <Btn outline onClick={() => setConfirmAction(null)} color={C.gray600}>Annuler</Btn>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal title="Traiter l'incident" onClose={onClose} wide>
@@ -262,27 +318,27 @@ function IncidentActionModal({ incident, drivers, vehicles, circuits, onClose, o
             <button style={qBtn} onClick={() => {
               const vId = vehicleOverride || incident.vehicule_id || "";
               const vPlaque = vehicles.find(v => v.id === vId)?.plaque || veh?.plaque || "";
-              quick(`Transmis au mécanicien — véhicule ${vPlaque}`, `transmis_meca|${vId}`);
+              askConfirm("Envoyer au mécanicien", `Transmis au mécanicien — véhicule ${vPlaque}`, `transmis_meca|${vId}`);
             }}>
               Envoyer au mécanicien
             </button>
-            <button style={qBtn} onClick={() => quick(`Véhicule ${veh?.plaque || ""} immobilisé.`, "immobiliser")}>
+            <button style={qBtn} onClick={() => quickDirect(`Véhicule ${veh?.plaque || ""} immobilisé.`, "immobiliser")}>
               Immobiliser le véhicule
             </button>
           </>}
           {isRetard && <>
             <div style={{ ...labelSt, marginBottom: 8 }}>Actions rapides</div>
-            <button style={qBtn} onClick={() => quick("École informée du retard.")}>
-              Informer l'école
+            <button style={qBtn} onClick={() => quickDirect("École informée du retard.")}>
+              Informer l&apos;école
             </button>
-            <button style={qBtn} onClick={() => quick("Parents informés du retard.")}>
+            <button style={qBtn} onClick={() => askConfirm("Informer les parents", "Parents informés du retard.")}>
               Informer les parents
             </button>
           </>}
           {isPers && <>
             <div style={{ ...labelSt, marginBottom: 8 }}>Actions rapides</div>
-            <button style={qBtn} onClick={() => quick("Parent contacté.")}>Contacter le parent</button>
-            <button style={qBtn} onClick={() => quick("École contactée.")}>Contacter l'école</button>
+            <button style={qBtn} onClick={() => quickDirect("Parent contacté.")}>Contacter le parent</button>
+            <button style={qBtn} onClick={() => quickDirect("École contactée.")}>Contacter l&apos;école</button>
           </>}
           <div style={{ marginTop: 12 }}>
             <label style={labelSt}>Réponse / note</label>
@@ -469,7 +525,7 @@ export default function GestionnaireDashboard() {
     fetchAll();
   };
 
-  const handleIncidentAction = async (id: number, response: string, status: "en_cours" | "resolu", extra?: string) => {
+  const handleIncidentAction = async (id: number, response: string, status: "en_cours" | "resolu", extra?: string, note?: string) => {
     await sb.from("incidents")
       .update({ response, status, resolved_at: status === "resolu" ? new Date().toISOString() : null })
       .eq("id", id);
@@ -494,10 +550,13 @@ export default function GestionnaireDashboard() {
       const vPlaque = vehicles.find(v => v.id === vehicleIdToUse)?.plaque
         || (inc?.vehicule as { plaque?: string } | undefined)?.plaque
         || vehicleIdToUse || "";
+      const msgMeca = note
+        ? `Incident transmis au mécanicien : ${vPlaque} — ${inc?.description?.slice(0, 100) || ""} — Note : ${note}`
+        : `Incident transmis au mécanicien : ${vPlaque} — ${inc?.description?.slice(0, 100) || ""}`;
       await sb.from("alertes").insert({
         type: "transmis_meca",
         severity: "haute",
-        message: `Incident transmis au mécanicien : ${vPlaque} — ${inc?.description?.slice(0, 100) || ""}`,
+        message: msgMeca,
         read: false,
         vehicle_id: vehicleIdToUse,
       });
@@ -555,7 +614,7 @@ export default function GestionnaireDashboard() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1200, margin: "0 auto", overflowX: "hidden", width: "100%" }}>
 
       {/* Global modals */}
       {absentModal && (
@@ -568,7 +627,8 @@ export default function GestionnaireDashboard() {
       )}
       {incModal && (
         <IncidentActionModal incident={incModal} drivers={drivers} vehicles={vehicles} circuits={circuits}
-          onClose={() => setIncModal(null)} onAction={handleIncidentAction} />
+          onClose={() => setIncModal(null)}
+          onAction={(id, response, status, extra, note) => handleIncidentAction(id, response, status, extra, note)} />
       )}
 
       {/* ── Welcome banner ────────────────────────────────────────────────── */}
