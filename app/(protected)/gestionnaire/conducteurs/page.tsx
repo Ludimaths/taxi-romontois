@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, statusColor, statusLabel, fmtDate, fmtDateTime, conducteurEmail, isoToday } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal, TabBar } from "@/components/ui";
-import { CheckCircle2, AlertTriangle, Pen, Trash2, Key, RefreshCw, Link2, UserPlus, ClipboardCopy, Check, Bus, FileText, Users, CalendarDays, XCircle, Send } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Pen, Trash2, KeyRound, RefreshCw, Link2, UserPlus, ClipboardCopy, Check, Bus, FileText, Users, CalendarDays, XCircle, Send } from "lucide-react";
 import type { Conducteur, Circuit, Vehicule, CongesDemande } from "@/lib/types";
 
 
@@ -338,7 +338,10 @@ export default function ConducteursPage() {
       setGeneratedPwd(pwd);
       fetchHistory(drv.id);
     } else {
-      setCreateError(json.error || "Erreur inconnue");
+      const raw = json.error || "Erreur inconnue";
+      setCreateError(raw.toLowerCase().includes("already") || raw.toLowerCase().includes("registered")
+        ? "Un compte existe déjà avec cet email — cliquez sur 'Lier le compte existant'"
+        : raw);
     }
   };
 
@@ -578,9 +581,9 @@ export default function ConducteursPage() {
                       {pwdError}
                     </div>
                   )}
-                  <Btn full onClick={handleGeneratePassword} disabled={pwdBusy} color={C.navyL}>
+                  <Btn full onClick={handleGeneratePassword} disabled={pwdBusy} color={C.navy}>
                     <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                      <Key size={14} /> {pwdBusy ? "Génération…" : "Générer un mot de passe"}
+                      <KeyRound size={14} /> {pwdBusy ? "Génération…" : "Générer un mot de passe"}
                     </span>
                   </Btn>
                 </div>
@@ -621,7 +624,7 @@ export default function ConducteursPage() {
                   ) : (
                     <Btn full onClick={handleCreateAccount} disabled={createBusy} color={C.green}>
                       <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                        <Key size={14} /> {createBusy ? "Création…" : "Créer le compte + mot de passe"}
+                        <KeyRound size={14} /> {createBusy ? "Création…" : "Créer le compte + mot de passe"}
                       </span>
                     </Btn>
                   )}

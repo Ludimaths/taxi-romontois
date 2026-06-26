@@ -138,7 +138,6 @@ export default function VehiculesPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filterEtat, setFilterEtat] = useState("all");
-  const [qrUrl, setQrUrl] = useState("");
 
   const fetchAll = useCallback(async () => {
     const [veh, cir, drv] = await Promise.all([
@@ -169,13 +168,20 @@ export default function VehiculesPage() {
   }, [sb, fetchAll, fetchReps, sel]);
 
   useEffect(() => {
-    if (sel) {
-      fetchReps(sel);
-      setQrUrl(`https://taxi-romontois.onrender.com/scan/${sel}`);
-    }
+    if (sel) fetchReps(sel);
   }, [sel, fetchReps]);
 
+  // Auto-génération du qr_token manquant
+  useEffect(() => {
+    if (!sel) return;
+    const vehicle = vehicles.find(x => x.id === sel);
+    if (!vehicle || vehicle.qr_token) return;
+    const token = crypto.randomUUID();
+    sb.from("vehicules").update({ qr_token: token }).eq("id", sel).then(() => fetchAll());
+  }, [sel, vehicles, sb, fetchAll]);
+
   const v = sel ? vehicles.find(x => x.id === sel) : null;
+  const qrUrl = v?.qr_token ? `https://taxi-romontois.onrender.com/scan/${v.qr_token}` : null;
 
   const handleSave = async (form: Partial<Vehicule> & { conducteur_new_id?: number }) => {
     setSaving(true);
