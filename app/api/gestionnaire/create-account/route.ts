@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth-guard";
 
 function buildEmail(prenom: string, nom: string): string {
   const clean = (s: string) =>
@@ -24,6 +25,9 @@ function buildPassword(): string {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireRole(["gestionnaire", "admin"]);
+  if ("guard" in auth) return auth.guard;
+
   try {
     const { conducteurId, prenom, nom } = await req.json();
 

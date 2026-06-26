@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth-guard";
 
 function toCSV(headers: string[], rows: (string | number | null | undefined)[][]): string {
   const BOM = "﻿";
@@ -9,6 +10,9 @@ function toCSV(headers: string[], rows: (string | number | null | undefined)[][]
 }
 
 export async function GET(req: NextRequest) {
+  const auth = await requireRole(["gestionnaire", "admin", "mecanicien"]);
+  if ("guard" in auth) return auth.guard;
+
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type") ?? "conducteurs";
   const supabase = await createServiceClient();

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth-guard";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireRole(["gestionnaire", "admin"]);
+  if ("guard" in auth) return auth.guard;
+
   const supabase = await createServiceClient();
   const formData = await req.formData();
   const file = formData.get("file") as File;
