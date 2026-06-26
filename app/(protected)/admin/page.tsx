@@ -467,11 +467,11 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
 
       {/* ── Sidebar desktop / Drawer mobile ──────────────────────────────── */}
       <aside style={{
-        width: 200, background: C.navy, display: "flex", flexDirection: "column",
+        width: 260, background: C.navy, display: "flex", flexDirection: "column",
         overflow: "hidden",
         ...(isMobile ? {
-          position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 500,
-          transform: mobileOpen ? "translateX(0)" : "translateX(-200px)",
+          position: "fixed", top: 0, right: 0, height: "100vh", zIndex: 500,
+          transform: mobileOpen ? "translateX(0)" : "translateX(260px)",
           transition: "transform .25s ease",
         } : {
           position: "sticky", top: 0, height: "100vh", flexShrink: 0,

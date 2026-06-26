@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
-import { Send, MessageSquare, Search } from "lucide-react";
+import { Send, MessageSquare, Search, ArrowLeft } from "lucide-react";
 
 interface MsgInterne {
   id: number;
@@ -46,7 +46,20 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
   const [searchQuery,    setSearchQuery]    = useState("");
   const [text,           setText]           = useState("");
   const [sending,        setSending]        = useState(false);
+
+  // Mobile state (tâche 3)
+  const [isMobile,  setIsMobile]  = useState(false);
+  const [showConvo, setShowConvo] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Détection mobile
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   // Identité
   useEffect(() => {
@@ -61,12 +74,24 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Chargement de tous les contacts
+  // Chargement de tous les contacts avec fallback (tâche 4)
   useEffect(() => {
     const roles = allowedTargets.map(t => t.role);
-    sb.from("profiles").select("id,prenom,nom,role").in("role", roles)
-      .then(({ data }) => {
-        if (!data) return;
+    sb.from("profiles")
+      .select("id,prenom,nom,role")
+      .in("role", roles)
+      .then(({ data, error }) => {
+        if (error) { console.error("[MessagerieBox] contacts:", error.message); }
+        if (!data || data.length === 0) {
+          // Fallback : contacts synthétiques depuis allowedTargets si profiles vide ou RLS bloque
+          const fallback = allowedTargets.map((t, i) => ({
+            id:   `role-${t.role}-${i}`,
+            nom:  t.label,
+            role: t.role,
+          }));
+          setAllPersons(fallback);
+          return;
+        }
         const persons = data.map(p => ({
           id:   p.id as string,
           nom:  `${p.prenom} ${p.nom}`,
@@ -87,11 +112,19 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
     setMessages((data ?? []) as MsgInterne[]);
   }, [sb, myId, myRole]);
 
+  // Realtime filtré (tâche 5)
   useEffect(() => {
     if (!myId) return;
     fetchMessages();
     const ch = sb.channel(`msg-box-${myRole}-${myId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages_internes" }, fetchMessages)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "messages_internes",
+        filter: `destinataire_id=eq.${myId}`,
+      }, fetchMessages)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "messages_internes",
+        filter: `destinataire_role=eq.${myRole}`,
+      }, fetchMessages)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [fetchMessages, sb, myRole, myId]);
@@ -99,6 +132,7 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
   // Sélectionner une conversation + marquer comme lu
   const selectPerson = useCallback(async (person: Person) => {
     setSelectedPerson(person);
+    if (isMobile) setShowConvo(true);
     const unread = messages.filter(m =>
       !m.lu &&
       m.expediteur_id === person.id &&
@@ -108,31 +142,40 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
       await sb.from("messages_internes").update({ lu: true }).in("id", unread.map(m => m.id));
       fetchMessages();
     }
-  }, [messages, myId, myRole, sb, fetchMessages]);
+  }, [messages, myId, myRole, sb, fetchMessages, isMobile]);
 
   // Scroll vers le bas
   useEffect(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
   }, [messages, selectedPerson]);
 
-  // Envoi
+  // Envoi — adapté fallback (tâche 4)
   async function send() {
     if (!text.trim() || !selectedPerson || !myId) return;
     setSending(true);
+    const isFallback = selectedPerson.id.startsWith("role-");
     await sb.from("messages_internes").insert({
       expediteur_id:     myId,
       expediteur_nom:    myNom,
       expediteur_role:   myRole,
       destinataire_role: selectedPerson.role,
-      destinataire_id:   selectedPerson.id,
+      destinataire_id:   isFallback ? null : selectedPerson.id,
       message:           text.trim(),
     });
     setText("");
     setSending(false);
+    fetchMessages();
   }
 
-  // Helpers conversation
+  // Helpers conversation — adapté fallback (tâche 4)
   function getConvoMessages(person: Person): MsgInterne[] {
+    const isFallback = person.id.startsWith("role-");
+    if (isFallback) {
+      return messages.filter(m =>
+        (m.expediteur_id === myId && m.destinataire_role === person.role && !m.destinataire_id) ||
+        (m.destinataire_role === myRole && m.expediteur_role === person.role && !m.destinataire_id)
+      );
+    }
     return messages.filter(m =>
       (m.expediteur_id === myId && m.destinataire_id === person.id) ||
       (m.expediteur_id === person.id && (
@@ -207,14 +250,15 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
     (m.destinataire_id === myId || (m.destinataire_role === myRole && !m.destinataire_id))
   ).length;
 
-  return (
-    <div style={{ display: "flex", border: `1px solid ${C.gray200}`, borderRadius: 16,
-      overflow: "hidden", height: 520, background: C.white }}>
-
-      {/* ── Colonne gauche : liste contacts ─────────────────────────────── */}
-      <div style={{ width: 256, borderRight: `1px solid ${C.gray200}`,
-        display: "flex", flexDirection: "column", background: C.gray50, flexShrink: 0 }}>
-
+  // ── Rendu liste contacts ─────────────────────────────────────────────────────
+  function renderContactList() {
+    return (
+      <div style={{
+        display: "flex", flexDirection: "column", background: C.gray50,
+        ...(isMobile
+          ? { width: "100%", height: "100%" }
+          : { width: 256, borderRight: `1px solid ${C.gray200}`, flexShrink: 0 }),
+      }}>
         {/* Barre de recherche */}
         <div style={{ padding: "12px 12px 10px", borderBottom: `1px solid ${C.gray200}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7,
@@ -292,14 +336,27 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
           })}
         </div>
       </div>
+    );
+  }
 
-      {/* ── Colonne droite : conversation ───────────────────────────────── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+  // ── Rendu conversation ───────────────────────────────────────────────────────
+  function renderConversation() {
+    return (
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0,
+        ...(isMobile ? { width: "100%", height: "100%" } : {}) }}>
         {selectedPerson ? (
           <>
             {/* En-tête */}
             <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.gray200}`,
               display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+              {/* Bouton retour mobile */}
+              {isMobile && (
+                <button onClick={() => setShowConvo(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer",
+                    color: C.navyL, padding: "4px 8px 4px 0", display: "flex", alignItems: "center" }}>
+                  <ArrowLeft size={20} />
+                </button>
+              )}
               <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.navy,
                 color: C.white, display: "flex", alignItems: "center", justifyContent: "center",
                 fontWeight: 800, fontSize: 11 }}>
@@ -387,6 +444,29 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
           </div>
         )}
       </div>
+    );
+  }
+
+  // ── Layout mobile vs desktop ─────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div style={{ border: `1px solid ${C.gray200}`, borderRadius: 16,
+        overflow: "hidden", background: C.white,
+        minHeight: 480, display: "flex", flexDirection: "column" }}>
+        {showConvo && selectedPerson
+          ? renderConversation()
+          : renderContactList()
+        }
+      </div>
+    );
+  }
+
+  // Desktop : 2 colonnes côte à côte
+  return (
+    <div style={{ display: "flex", border: `1px solid ${C.gray200}`, borderRadius: 16,
+      overflow: "hidden", height: 520, background: C.white }}>
+      {renderContactList()}
+      {renderConversation()}
     </div>
   );
 }
