@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { C, fmtDateTime } from "@/lib/constants";
+import { C, fmtDateTime, isoToday } from "@/lib/constants";
 import { Badge, InfoBox, Btn, Modal } from "@/components/ui";
 import {
   AlertCircle, Baby, Wrench, Lightbulb, Clock, Phone, ShieldAlert,
@@ -12,9 +12,6 @@ import type { Incident } from "@/lib/types";
 type DrvMin = { id: number; prenom: string; nom: string; tel?: string };
 type VehMin = { id: string; plaque: string };
 type CirMin = { id: string; nom: string; emoji: string; num: string };
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const isoToday  = () => new Date().toISOString().slice(0, 10);
 
 // ── Severity map ──────────────────────────────────────────────────────────────
 const SEV: Record<string, { level: number; label: string; color: string; bg: string; icon: React.ReactNode }> = {

@@ -30,6 +30,24 @@ function addDays(iso: string, n: number) {
   const d = new Date(iso); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10);
 }
 function monthKey(iso: string) { return iso.slice(0, 7); }
+function groupByDay<T extends { created_at: string }>(items: T[]): { day: string; label: string; items: T[] }[] {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const map: Record<string, T[]> = {};
+  items.forEach(m => {
+    const d = m.created_at.slice(0, 10);
+    if (!map[d]) map[d] = [];
+    map[d].push(m);
+  });
+  return Object.entries(map).sort(([a], [b]) => b.localeCompare(a)).map(([day, items]) => {
+    const d = new Date(day + "T00:00:00");
+    let label = day;
+    if (d.getTime() === today.getTime()) label = "Aujourd'hui";
+    else if (d.getTime() === yesterday.getTime()) label = "Hier";
+    else label = d.toLocaleDateString("fr-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    return { day, label, items: items.slice().sort((x, y) => y.created_at.localeCompare(x.created_at)) };
+  });
+}
 function currentSchoolYear() {
   const m = new Date().getMonth();
   return m >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1;
@@ -65,6 +83,7 @@ export default function AdminPage() {
   const [refusMotif, setRefusMotif] = useState("");
   const [valBusy,    setValBusy]    = useState(false);
   const [adminMsgs,  setAdminMsgs]  = useState<Alerte[]>([]);
+  const [msgExpandedDays, setMsgExpandedDays] = useState<Record<string, boolean>>({});
 
   // Congés
   const [congesAdmin,        setCongesAdmin]        = useState<CongesDemande[]>([]);
@@ -1101,7 +1120,25 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                 <MessageSquare size={48} strokeWidth={1} style={{ marginBottom: 12, display: "block", margin: "0 auto 12px" }} />
                 <p style={{ fontWeight: 700, fontSize: 15 }}>Aucun message du mécanicien</p>
               </div>
-            ) : adminMsgs.map(m => (
+            ) : groupByDay(adminMsgs).map((grp, gi) => {
+              const isFirst = gi === 0;
+              const open = isFirst || msgExpandedDays[grp.day];
+              return (
+              <div key={grp.day}>
+                <div onClick={() => !isFirst && setMsgExpandedDays(s => ({ ...s, [grp.day]: !s[grp.day] }))}
+                  style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 10px",
+                    cursor: isFirst ? "default" : "pointer" }}>
+                  <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+                  <span style={{ fontSize: 11, fontWeight: 800, color: C.gray600, textTransform: "uppercase",
+                    letterSpacing: 0.5, whiteSpace: "nowrap" }}>{grp.label}</span>
+                  {!isFirst && !open && (
+                    <span style={{ fontSize: 11, color: C.navyL, fontWeight: 700, whiteSpace: "nowrap" }}>
+                      Voir les {grp.items.length} message{grp.items.length > 1 ? "s" : ""}
+                    </span>
+                  )}
+                  <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+                </div>
+                {open && grp.items.map(m => (
               <div key={m.id} style={{ background: m.read ? C.gray50 : C.white, borderRadius: 14, padding: 18,
                 marginBottom: 12, border: `1px solid ${m.read ? C.gray200 : C.navyL}`,
                 boxShadow: m.read ? "none" : "0 2px 10px rgba(0,0,0,0.08)",
@@ -1136,7 +1173,10 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                   </button>
                 )}
               </div>
-            ))}
+                ))}
+              </div>
+              );
+            })}
           </div>
         )}
 

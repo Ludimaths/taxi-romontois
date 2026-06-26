@@ -330,6 +330,8 @@ export default function GestionnaireDashboard() {
   const [absentModal, setAbsentModal] = useState<Conducteur | null>(null);
   const [childAbsM,   setChildAbsM]   = useState<AbsenceEnfant | null>(null);
   const [incModal,    setIncModal]    = useState<Incident | null>(null);
+  const [showAllAbsents, setShowAllAbsents] = useState(false);
+  const [showAllChildAbs, setShowAllChildAbs] = useState(false);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -387,6 +389,8 @@ export default function GestionnaireDashboard() {
       .on("postgres_changes", { event: "*", schema: "public", table: "alertes" },               fetchAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "absences_enfants" },      fetchAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "absences_conducteurs" },  fetchAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "service_logs" },         fetchAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conges_demandes" },      fetchAll)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [fetchAll, sb]);
@@ -729,7 +733,7 @@ export default function GestionnaireDashboard() {
                 Voir tout →
               </button>
             </div>
-            {absents.map(d => {
+            {(showAllAbsents ? absents : absents.slice(0, 3)).map(d => {
               const circ = circuits.find(c => c.id === d.circuit_id);
               return (
                 <div key={d.id} style={{ ...row, background: C.amberL }}>
@@ -751,6 +755,13 @@ export default function GestionnaireDashboard() {
                 </div>
               );
             })}
+            {absents.length > 3 && (
+              <button onClick={() => setShowAllAbsents(v => !v)}
+                style={{ width: "100%", background: "none", border: "none", padding: "10px 16px",
+                  color: C.navyL, fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "center" }}>
+                {showAllAbsents ? "Voir moins" : `Voir tout (${absents.length})`}
+              </button>
+            )}
           </Card>
         )}
 
@@ -797,7 +808,7 @@ export default function GestionnaireDashboard() {
                 )}
               </span>
             </div>
-            {todayAbs.slice(0, 6).map(a => {
+            {(showAllChildAbs ? todayAbs : todayAbs.slice(0, 3)).map(a => {
               const child = a.enfant || enfants.find(e => e.id === a.enfant_id);
               const circ  = circuits.find(c => c.id === a.circuit_id);
               return (
@@ -815,6 +826,13 @@ export default function GestionnaireDashboard() {
                 </div>
               );
             })}
+            {todayAbs.length > 3 && (
+              <button onClick={() => setShowAllChildAbs(v => !v)}
+                style={{ width: "100%", background: "none", border: "none", padding: "10px 16px",
+                  color: C.navyL, fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "center" }}>
+                {showAllChildAbs ? "Voir moins" : `Voir les ${todayAbs.length} absences`}
+              </button>
+            )}
           </Card>
         )}
 

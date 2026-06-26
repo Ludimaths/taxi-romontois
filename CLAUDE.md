@@ -60,7 +60,7 @@ app/
   scan/[vehicleId]/page.tsx         → Scan QR véhicule
 
 components/
-  Sidebar.tsx                       → Sidebar desktop gestionnaire (9 onglets)
+  Sidebar.tsx                       → Sidebar desktop gestionnaire (12 onglets)
   ui/index.tsx                      → Composants UI partagés
 
 lib/
@@ -76,7 +76,7 @@ lib/
 
 | Rôle | Page principale | Sidebar |
 |---|---|---|
-| `gestionnaire` | `/gestionnaire` | Oui — 9 onglets |
+| `gestionnaire` | `/gestionnaire` | Oui — 12 onglets |
 | `conducteur` | `/conducteur` | Non — header mobile |
 | `mecanicien` | `/mecanicien` | Non |
 | `admin` | `/admin` | Oui |
@@ -86,7 +86,7 @@ Le rôle vient de `profiles.role`. Après login, `ProtectedLayoutClient` reçoit
 
 ---
 
-## Sidebar gestionnaire (9 onglets exacts, dans cet ordre)
+## Sidebar gestionnaire (12 onglets exacts, dans cet ordre)
 
 ```typescript
 { path: "/gestionnaire",             label: "Tableau de bord",   icon: "🏠" },
@@ -95,9 +95,12 @@ Le rôle vient de `profiles.role`. Après login, `ProtectedLayoutClient` reçoit
 { path: "/gestionnaire/conducteurs", label: "Conducteurs",       icon: "👤" },
 { path: "/gestionnaire/vehicules",   label: "Véhicules",         icon: "🚌" },
 { path: "/gestionnaire/circuits",    label: "Circuits",          icon: "🛣️" },
+{ path: "/gestionnaire/parents",     label: "Parents",           icon: "👪" },
 { path: "/gestionnaire/incidents",   label: "Incidents",         icon: "🚨" },
 { path: "/gestionnaire/alertes",     label: "Alertes",           icon: "🔔" },
+{ path: "/gestionnaire/reparations", label: "Réparations",       icon: "🔧" },
 { path: "/gestionnaire/export",      label: "Exports",           icon: "📊" },
+{ path: "/gestionnaire/messages",    label: "Messages",          icon: "💬" },
 ```
 
 ---
@@ -159,6 +162,16 @@ Le rôle vient de `profiles.role`. Après login, `ProtectedLayoutClient` reçoit
 
 ### `reparations`
 Workflow statuts : `receptionne → en_attente_validation → en_attente_piece → en_reparation → repare → remis_en_circulation`
+
+### `conges_demandes`
+- `id` — `conducteur_id` — `date_debut` — `date_fin` — `motif` — `justification` — `statut` — `note_gestionnaire` — `motif_refus` — `created_at` — `updated_at`
+
+Demandes de congé conducteur (onglet Congés). Validées/refusées par le gestionnaire et l'admin.
+
+### `messages_internes`
+- `id` — `expediteur_id` — `expediteur_nom` — `expediteur_role` — `destinataire_role` — `message` — `lu` — `created_at`
+
+Messagerie directe entre rôles (composant `MessagerieBox`). Présente dans les onglets Messages de chaque rôle.
 
 ---
 

@@ -34,6 +34,25 @@ function nbJ(a: string, b: string) {
   return Math.round((+new Date(b) - +new Date(a)) / 86400000);
 }
 
+function groupByDay<T extends { created_at: string }>(items: T[]): { day: string; label: string; items: T[] }[] {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const map: Record<string, T[]> = {};
+  items.forEach(m => {
+    const d = m.created_at.slice(0, 10);
+    if (!map[d]) map[d] = [];
+    map[d].push(m);
+  });
+  return Object.entries(map).sort(([a], [b]) => b.localeCompare(a)).map(([day, items]) => {
+    const d = new Date(day + "T00:00:00");
+    let label = day;
+    if (d.getTime() === today.getTime()) label = "Aujourd'hui";
+    else if (d.getTime() === yesterday.getTime()) label = "Hier";
+    else label = d.toLocaleDateString("fr-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    return { day, label, items: items.slice().sort((x, y) => y.created_at.localeCompare(x.created_at)) };
+  });
+}
+
 // ── Micro-composants ──────────────────────────────────────────────────────────
 
 function ChipR({ s }: { s: string }) {
@@ -145,6 +164,7 @@ export default function MecanicienPage() {
 
   // Messages
   const [msgDecisions,   setMsgDecisions]   = useState<Alerte[]>([]);
+  const [msgExpandedDays, setMsgExpandedDays] = useState<Record<string, boolean>>({});
   const [msgSendText,    setMsgSendText]    = useState("");
   const [msgSendTarget,  setMsgSendTarget]  = useState<"gestionnaire"|"admin">("gestionnaire");
   const [msgSending,     setMsgSending]     = useState(false);
@@ -253,7 +273,6 @@ export default function MecanicienPage() {
     setRecepBusy(true);
     setRecepErr("");
     const vId = recepAlerte.vehicle_id;
-    console.log("[doReceptionner] vehicle_id:", vId);
     if (!vId) {
       console.error("[doReceptionner] vehicle_id manquant sur l'alerte", recepAlerte);
       setRecepErr("Aucun véhicule associé à cet incident — le gestionnaire doit préciser le véhicule concerné");
@@ -261,7 +280,6 @@ export default function MecanicienPage() {
       return;
     }
     const plaque = plaqueOf(vId);
-    console.log("[doReceptionner] plaque:", plaque, "description:", recepF.description);
 
     // Vérifier si une réparation active existe déjà pour ce véhicule
     const { data: existingRep } = await sb.from("reparations")
@@ -301,7 +319,6 @@ export default function MecanicienPage() {
       urls.length ? `Photos:${urls.join(",")}` : "",
     ].filter(Boolean);
 
-    console.log("[doReceptionner] INSERT reparation…");
     const { error } = await sb.from("reparations").insert({
       vehicule_id: vId,
       statut: "receptionne",
@@ -318,7 +335,6 @@ export default function MecanicienPage() {
       setRecepBusy(false);
       return;
     }
-    console.log("[doReceptionner] INSERT OK");
 
     const { error: vErr } = await sb.from("vehicules").update({ etat: "atelier" }).eq("id", vId);
     if (vErr) console.error("[doReceptionner] vehicule update:", vErr.message);
@@ -348,7 +364,6 @@ export default function MecanicienPage() {
     setDirectRecepErr("");
     const vId = directRecepVehId;
     const plaque = plaqueOf(vId);
-    console.log("[doReceptionnerDirect] vId:", vId, "plaque:", plaque);
 
     // Vérifier si une réparation active existe déjà pour ce véhicule
     const { data: existingRepD } = await sb.from("reparations")
@@ -393,7 +408,6 @@ export default function MecanicienPage() {
       setDirectRecepBusy(false);
       return;
     }
-    console.log("[doReceptionnerDirect] INSERT OK");
 
     const { error: vErr } = await sb.from("vehicules").update({ etat: "atelier" }).eq("id", vId);
     if (vErr) console.error("[doReceptionnerDirect] vehicule update:", vErr.message);
@@ -917,7 +931,25 @@ export default function MecanicienPage() {
               <div style={{ fontWeight: 800, fontSize: 14, color: C.gray600, marginBottom: 12 }}>
                 Décisions de l&apos;administrateur
               </div>
-              {msgDecisions.map(a => {
+              {groupByDay(msgDecisions).map((grp, gi) => {
+                const isFirst = gi === 0;
+                const open = isFirst || msgExpandedDays[grp.day];
+                return (
+                <div key={grp.day}>
+                  <div onClick={() => !isFirst && setMsgExpandedDays(s => ({ ...s, [grp.day]: !s[grp.day] }))}
+                    style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 10px",
+                      cursor: isFirst ? "default" : "pointer" }}>
+                    <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+                    <span style={{ fontSize: 11, fontWeight: 800, color: C.gray600, textTransform: "uppercase",
+                      letterSpacing: 0.5, whiteSpace: "nowrap" }}>{grp.label}</span>
+                    {!isFirst && !open && (
+                      <span style={{ fontSize: 11, color: C.navy, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        Voir les {grp.items.length} message{grp.items.length > 1 ? "s" : ""}
+                      </span>
+                    )}
+                    <div style={{ flex: 1, height: 1, background: C.gray200 }} />
+                  </div>
+                  {open && grp.items.map(a => {
                 const isOk = !a.message.toLowerCase().includes("refus");
                 return (
                   <div key={a.id} style={{ background: C.white, borderRadius: 14, padding: 16,
@@ -944,6 +976,9 @@ export default function MecanicienPage() {
                       Lu
                     </button>
                   </div>
+                );
+              })}
+                </div>
                 );
               })}
             </div>

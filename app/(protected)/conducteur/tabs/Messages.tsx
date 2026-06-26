@@ -1,9 +1,29 @@
 "use client";
+import { useState } from "react";
 import { RefreshCw, Zap, Inbox } from "lucide-react";
 import { C, fmtDateTime, isoToday, fmtEnfant } from "@/lib/constants";
 import type { Alerte, Incident, AbsenceEnfant, Enfant } from "@/lib/types";
 import { SIGN_TYPES } from "./shared";
 import MessagerieBox from "@/components/MessagerieBox";
+
+function groupByDay<T extends { created_at: string }>(items: T[]): { day: string; label: string; items: T[] }[] {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const map: Record<string, T[]> = {};
+  items.forEach(m => {
+    const d = m.created_at.slice(0, 10);
+    if (!map[d]) map[d] = [];
+    map[d].push(m);
+  });
+  return Object.entries(map).sort(([a], [b]) => b.localeCompare(a)).map(([day, items]) => {
+    const d = new Date(day + "T00:00:00");
+    let label = day;
+    if (d.getTime() === today.getTime()) label = "Aujourd'hui";
+    else if (d.getTime() === yesterday.getTime()) label = "Hier";
+    else label = d.toLocaleDateString("fr-CH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    return { day, label, items: items.slice().sort((x, y) => y.created_at.localeCompare(x.created_at)) };
+  });
+}
 
 export interface MessagesProps {
   messages: Alerte[];
@@ -23,6 +43,115 @@ export function TabMessages({
   messages,incidents,absences,enfants,incWithResponse,unreadMsg,myNom,
   onMarquerLu,onSetTab,
 }:MessagesProps){
+  const [expandedDays,setExpandedDays]=useState<Record<string,boolean>>({});
+  const msgGroups=groupByDay(messages);
+
+  function renderMsg(m:Alerte){
+    const isNew=!m.read;
+
+    if(m.type==="remplacement"){
+      return(
+        <div key={m.id} style={{background:isNew?C.amberL:C.gray100,borderRadius:16,
+          padding:16,marginBottom:10,border:`2px solid ${isNew?C.amber:C.gray200}`,
+          boxShadow:isNew?"0 2px 12px rgba(217,119,6,0.15)":"none",opacity:isNew?1:0.75}}>
+          <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
+            <span style={{display:"flex",alignItems:"center"}}><RefreshCw size={22} color={C.amber} /></span>
+            <div>
+              <div style={{fontWeight:800,fontSize:14,color:isNew?C.amber:C.gray}}>
+                Mission de remplacement
+              </div>
+              <div style={{fontSize:11,color:C.gray}}>{fmtDateTime(m.created_at)}</div>
+            </div>
+          </div>
+          <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5,
+            fontWeight:isNew?600:400,marginBottom:isNew?12:0}}>
+            {m.message}
+          </p>
+          {isNew?(
+            <button onClick={()=>onMarquerLu(m)} style={{
+              width:"100%",padding:"12px",borderRadius:10,
+              background:C.green,color:"#fff",border:"none",
+              fontWeight:800,fontSize:14,cursor:"pointer",
+              boxShadow:"0 2px 8px rgba(22,163,74,0.25)"}}>
+              J'ai pris connaissance
+            </button>
+          ):(
+            <div style={{fontSize:12,color:C.green,fontWeight:700}}>Prise en charge confirmée</div>
+          )}
+        </div>
+      );
+    }
+
+    if(m.type==="imprévu"){
+      return(
+        <div key={m.id} style={{background:isNew?"#EFF6FF":C.gray100,borderRadius:16,
+          padding:16,marginBottom:10,border:`2px solid ${isNew?"#3B82F6":C.gray200}`,
+          boxShadow:isNew?"0 2px 12px rgba(59,130,246,0.15)":"none",opacity:isNew?1:0.75}}>
+          <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
+            <span style={{display:"flex",alignItems:"center"}}><Zap size={22} color="#2563EB" /></span>
+            <div>
+              <div style={{fontWeight:800,fontSize:14,color:isNew?"#2563EB":C.gray}}>
+                Message du gestionnaire
+              </div>
+              <div style={{fontSize:11,color:C.gray}}>{fmtDateTime(m.created_at)}</div>
+            </div>
+          </div>
+          <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5,
+            fontWeight:isNew?600:400,marginBottom:isNew?12:0}}>
+            {m.message}
+          </p>
+          {isNew?(
+            <button onClick={()=>onMarquerLu(m)} style={{
+              width:"100%",padding:"12px",borderRadius:10,
+              background:"#2563EB",color:"#fff",border:"none",
+              fontWeight:800,fontSize:14,cursor:"pointer",
+              boxShadow:"0 2px 8px rgba(37,99,235,0.25)"}}>
+              Confirmer lecture
+            </button>
+          ):(
+            <div style={{fontSize:12,color:"#2563EB",fontWeight:700}}>Lu et confirmé</div>
+          )}
+        </div>
+      );
+    }
+
+    const sev=m.severity;
+    const col=sev==="critique"?C.red:sev==="haute"?C.amber:C.navy;
+    const bg=sev==="critique"?C.redL:sev==="haute"?C.amberL:"#EFF6FF";
+    return(
+      <div key={m.id} style={{background:isNew?"#fff":C.gray100,borderRadius:16,
+        padding:16,marginBottom:10,
+        boxShadow:isNew?"0 2px 8px rgba(0,0,0,0.06)":"none",
+        borderLeft:`4px solid ${isNew?col:C.gray200}`,opacity:isNew?1:0.75}}>
+        <div style={{display:"flex",justifyContent:"space-between",
+          alignItems:"flex-start",marginBottom:8,gap:8,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+            {isNew&&<span style={{width:8,height:8,borderRadius:"50%",
+              background:col,display:"inline-block",flexShrink:0}}/>}
+            <span style={{fontSize:11,fontWeight:700,color:isNew?col:C.gray,
+              background:isNew?bg:"transparent",borderRadius:99,
+              padding:isNew?"2px 8px":"0"}}>
+              {sev==="critique"?"Critique":sev==="haute"?"Important":"Info"}
+            </span>
+          </div>
+          <span style={{fontSize:12,color:C.gray}}>{fmtDateTime(m.created_at)}</span>
+        </div>
+        <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5,
+          fontWeight:isNew?600:400,marginBottom:isNew?10:0}}>
+          {m.message}
+        </p>
+        {isNew&&(
+          <button onClick={()=>onMarquerLu(m)} style={{
+            fontSize:12,padding:"6px 12px",borderRadius:8,
+            border:`1px solid ${C.green}`,background:C.greenL,
+            color:C.greenD,fontWeight:700,cursor:"pointer"}}>
+            Lu
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return(
     <div>
       {/* Messagerie directe */}
@@ -51,108 +180,25 @@ export function TabMessages({
             textAlign:"center",color:C.gray,fontSize:14}}>
             Aucun message du gestionnaire
           </div>
-        ):messages.map(m=>{
-          const isNew=!m.read;
-
-          if(m.type==="remplacement"){
-            return(
-              <div key={m.id} style={{background:isNew?C.amberL:C.gray100,borderRadius:16,
-                padding:16,marginBottom:10,border:`2px solid ${isNew?C.amber:C.gray200}`,
-                boxShadow:isNew?"0 2px 12px rgba(217,119,6,0.15)":"none",opacity:isNew?1:0.75}}>
-                <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
-                  <span style={{display:"flex",alignItems:"center"}}><RefreshCw size={22} color={C.amber} /></span>
-                  <div>
-                    <div style={{fontWeight:800,fontSize:14,color:isNew?C.amber:C.gray}}>
-                      Mission de remplacement
-                    </div>
-                    <div style={{fontSize:11,color:C.gray}}>{fmtDateTime(m.created_at)}</div>
-                  </div>
-                </div>
-                <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5,
-                  fontWeight:isNew?600:400,marginBottom:isNew?12:0}}>
-                  {m.message}
-                </p>
-                {isNew?(
-                  <button onClick={()=>onMarquerLu(m)} style={{
-                    width:"100%",padding:"12px",borderRadius:10,
-                    background:C.green,color:"#fff",border:"none",
-                    fontWeight:800,fontSize:14,cursor:"pointer",
-                    boxShadow:"0 2px 8px rgba(22,163,74,0.25)"}}>
-                    J'ai pris connaissance
-                  </button>
-                ):(
-                  <div style={{fontSize:12,color:C.green,fontWeight:700}}>Prise en charge confirmée</div>
-                )}
-              </div>
-            );
-          }
-
-          if(m.type==="imprévu"){
-            return(
-              <div key={m.id} style={{background:isNew?"#EFF6FF":C.gray100,borderRadius:16,
-                padding:16,marginBottom:10,border:`2px solid ${isNew?"#3B82F6":C.gray200}`,
-                boxShadow:isNew?"0 2px 12px rgba(59,130,246,0.15)":"none",opacity:isNew?1:0.75}}>
-                <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8}}>
-                  <span style={{display:"flex",alignItems:"center"}}><Zap size={22} color="#2563EB" /></span>
-                  <div>
-                    <div style={{fontWeight:800,fontSize:14,color:isNew?"#2563EB":C.gray}}>
-                      Message du gestionnaire
-                    </div>
-                    <div style={{fontSize:11,color:C.gray}}>{fmtDateTime(m.created_at)}</div>
-                  </div>
-                </div>
-                <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5,
-                  fontWeight:isNew?600:400,marginBottom:isNew?12:0}}>
-                  {m.message}
-                </p>
-                {isNew?(
-                  <button onClick={()=>onMarquerLu(m)} style={{
-                    width:"100%",padding:"12px",borderRadius:10,
-                    background:"#2563EB",color:"#fff",border:"none",
-                    fontWeight:800,fontSize:14,cursor:"pointer",
-                    boxShadow:"0 2px 8px rgba(37,99,235,0.25)"}}>
-                    Confirmer lecture
-                  </button>
-                ):(
-                  <div style={{fontSize:12,color:"#2563EB",fontWeight:700}}>Lu et confirmé</div>
-                )}
-              </div>
-            );
-          }
-
-          const sev=m.severity;
-          const col=sev==="critique"?C.red:sev==="haute"?C.amber:C.navy;
-          const bg=sev==="critique"?C.redL:sev==="haute"?C.amberL:"#EFF6FF";
+        ):msgGroups.map((grp,gi)=>{
+          const isFirst=gi===0;
+          const open=isFirst||expandedDays[grp.day];
           return(
-            <div key={m.id} style={{background:isNew?"#fff":C.gray100,borderRadius:16,
-              padding:16,marginBottom:10,
-              boxShadow:isNew?"0 2px 8px rgba(0,0,0,0.06)":"none",
-              borderLeft:`4px solid ${isNew?col:C.gray200}`,opacity:isNew?1:0.75}}>
-              <div style={{display:"flex",justifyContent:"space-between",
-                alignItems:"flex-start",marginBottom:8,gap:8,flexWrap:"wrap"}}>
-                <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                  {isNew&&<span style={{width:8,height:8,borderRadius:"50%",
-                    background:col,display:"inline-block",flexShrink:0}}/>}
-                  <span style={{fontSize:11,fontWeight:700,color:isNew?col:C.gray,
-                    background:isNew?bg:"transparent",borderRadius:99,
-                    padding:isNew?"2px 8px":"0"}}>
-                    {sev==="critique"?"Critique":sev==="haute"?"Important":"Info"}
+            <div key={grp.day} style={{marginBottom:8}}>
+              <div onClick={()=>!isFirst&&setExpandedDays(s=>({...s,[grp.day]:!s[grp.day]}))}
+                style={{display:"flex",alignItems:"center",gap:8,margin:"14px 0 10px",
+                  cursor:isFirst?"default":"pointer"}}>
+                <div style={{flex:1,height:1,background:C.gray200}}/>
+                <span style={{fontSize:11,fontWeight:800,color:C.gray,textTransform:"uppercase",
+                  letterSpacing:0.5,whiteSpace:"nowrap"}}>{grp.label}</span>
+                {!isFirst&&!open&&(
+                  <span style={{fontSize:11,color:C.navy,fontWeight:700,whiteSpace:"nowrap"}}>
+                    Voir les {grp.items.length} message{grp.items.length>1?"s":""}
                   </span>
-                </div>
-                <span style={{fontSize:12,color:C.gray}}>{fmtDateTime(m.created_at)}</span>
+                )}
+                <div style={{flex:1,height:1,background:C.gray200}}/>
               </div>
-              <p style={{fontSize:14,color:"#1E293B",lineHeight:1.5,
-                fontWeight:isNew?600:400,marginBottom:isNew?10:0}}>
-                {m.message}
-              </p>
-              {isNew&&(
-                <button onClick={()=>onMarquerLu(m)} style={{
-                  fontSize:12,padding:"6px 12px",borderRadius:8,
-                  border:`1px solid ${C.green}`,background:C.greenL,
-                  color:C.greenD,fontWeight:700,cursor:"pointer"}}>
-                  Lu
-                </button>
-              )}
+              {open&&grp.items.map(renderMsg)}
             </div>
           );
         })}
