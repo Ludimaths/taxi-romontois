@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { C } from "@/lib/constants";
 import type { Role } from "@/lib/types";
 
@@ -12,11 +13,12 @@ const NAV_ITEMS: Record<Role, { path: string; label: string; icon: string }[]> =
     { path: "/gestionnaire/conducteurs",   label: "Conducteurs",       icon: "👤" },
     { path: "/gestionnaire/vehicules",     label: "Véhicules",         icon: "🚌" },
     { path: "/gestionnaire/circuits",      label: "Circuits",          icon: "🛣️" },
+    { path: "/gestionnaire/parents",       label: "Parents",           icon: "👪" },
     { path: "/gestionnaire/incidents",     label: "Incidents",         icon: "🚨" },
     { path: "/gestionnaire/alertes",       label: "Alertes",           icon: "🔔" },
     { path: "/gestionnaire/reparations",   label: "Réparations",       icon: "🔧" },
-    { path: "/gestionnaire/parents",       label: "Parents",           icon: "👪" },
     { path: "/gestionnaire/export",        label: "Exports",           icon: "📊" },
+    { path: "/gestionnaire/messages",      label: "Messages",          icon: "💬" },
   ],
   conducteur: [
     { path: "/conducteur", label: "Mon tableau de bord", icon: "📊" },
@@ -118,8 +120,10 @@ export default function Sidebar({ role, nom, prenom, onSignOut, incidentsCount =
         <button onClick={onSignOut}
           style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "none",
             background: "rgba(220,38,38,0.15)", color: "#FCA5A5",
-            cursor: "pointer", fontSize: 12, fontWeight: 700, textAlign: "left" }}>
-          🚪 Déconnexion
+            cursor: "pointer", fontSize: 12, fontWeight: 700, textAlign: "left",
+            display: "flex", alignItems: "center", gap: 8 }}>
+          <LogOut size={14} />
+          Déconnexion
         </button>
         <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", marginTop: 8 }}>
           v2.0 · Taxi Romontois

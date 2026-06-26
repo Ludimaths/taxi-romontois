@@ -49,13 +49,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F1F5F9",
+    <div style={{ minHeight: "100vh",
+      background: "linear-gradient(160deg, #F0F4FF 0%, #E8EFFF 100%)",
       display: "flex", alignItems: "center", justifyContent: "center",
       padding: "24px 16px" }}>
 
       <div style={{ background: "#FFFFFF", borderRadius: 20, padding: "36px 28px",
         width: "100%", maxWidth: 420,
-        boxShadow: "0 8px 40px rgba(0,0,0,0.12)" }}>
+        boxShadow: "0 12px 48px rgba(13,59,122,0.12)" }}>
 
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 32 }}>

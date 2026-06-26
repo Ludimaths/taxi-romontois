@@ -9,6 +9,7 @@ import {
   Bus, Users, Wrench, AlertTriangle, Smartphone, LayoutDashboard,
   Cog, Download, LogOut, Home, BarChart2, CheckCircle2, CalendarDays, MessageSquare,
 } from "lucide-react";
+import MessagerieBox from "@/components/MessagerieBox";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDate, fmtDateTime, isoToday } from "@/lib/constants";
 import type { Conducteur, Vehicule, Incident, Reparation, AbsenceConducteur, Alerte, CongesDemande } from "@/lib/types";
@@ -197,6 +198,18 @@ export default function AdminPage() {
     incidents.filter(i => i.reported_at.slice(0, 10) >= cutoff)
       .forEach(i => { const d = i.reported_at.slice(0, 10); if (d in map) map[d]++; });
     return Object.entries(map).map(([day, count]) => ({ day: day.slice(5), count }));
+  })();
+
+  const abs7 = (() => {
+    const cutoff = addDays(today, -6);
+    const m7: Record<string, number> = {};
+    for (let i = 0; i < 7; i++) { const d = addDays(cutoff, i); m7[d] = 0; }
+    absencesCond.filter(a => a.date_absence >= cutoff)
+      .forEach(a => { if (a.date_absence in m7) m7[a.date_absence]++; });
+    return Object.entries(m7).map(([day, count]) => ({
+      day: new Date(day + "T12:00:00").toLocaleDateString("fr-CH", { weekday: "short", day: "numeric" }),
+      count,
+    }));
   })();
 
   const repCostByMonth = (() => {
@@ -392,73 +405,135 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px" }}>
 
-        {/* ── Cards navigables ──────────────────────────────────────────────── */}
-        <div style={{ display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, marginBottom: 24 }}>
-          {NAV_CARDS.map(c => (
-            <div key={c.path} onClick={() => router.push(c.path)}
-              style={{ background: C.white, borderRadius: 16, padding: "18px 14px",
-                cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.07)",
-                borderTop: `3px solid ${c.color}`, display: "flex",
-                flexDirection: "column", alignItems: "flex-start", gap: 8,
-                transition: "box-shadow 0.15s", minWidth: 0 }}>
-              <span style={{ color: c.color }}>{c.icon}</span>
-              <div style={{ minWidth: 0, width: "100%" }}>
-                <div style={{ fontSize: 13, fontWeight: 900, color: C.navy,
-                  wordBreak: "break-word", lineHeight: 1.3 }}>{c.label}</div>
-                <div style={{ fontSize: 11, color: C.gray400, marginTop: 2,
-                  wordBreak: "break-word", lineHeight: 1.3 }}>{c.sub}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
         {/* ══ TAB : TABLEAU DE BORD ════════════════════════════════════════════ */}
         {tab === "dashboard" && (
-          <div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 24 }}>
-              {[
-                { label: "Véhicules en service",     value: vEnService,   color: C.green  },
-                { label: "En réparation / atelier",  value: vReparation,  color: C.amber  },
-                { label: "Attention requise",         value: vAttention,   color: C.red    },
-                { label: "Conducteurs présents",      value: cPresents,    color: C.navyL  },
-                { label: "Absents aujourd'hui",       value: cAbsents,     color: C.red    },
-                { label: "Incidents ouverts",         value: incOuverts,   color: incOuverts > 0 ? C.red : C.green },
-              ].map(s => (
-                <div key={s.label} style={{ background: C.white, borderRadius: 14,
-                  padding: "16px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-                  borderTop: `3px solid ${s.color}`, minWidth: 0 }}>
-                  <div style={{ fontSize: 28, fontWeight: 900, color: s.color }}>{s.value}</div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, marginTop: 4,
-                    lineHeight: 1.3, wordBreak: "break-word" }}>{s.label}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, alignItems: "start" }}>
+
+            {/* ── Colonne gauche ── */}
+            <div>
+              {/* 3 KPI cards */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 20 }}>
+                {[
+                  { label: "Véhicules en service", value: vEnService, color: C.green  },
+                  { label: "Conducteurs présents", value: cPresents,  color: C.navyL  },
+                  { label: "Incidents ouverts",    value: incOuverts, color: incOuverts > 0 ? C.red : C.green },
+                ].map(s => (
+                  <div key={s.label} style={{ background: C.white, borderRadius: 14,
+                    padding: "18px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                    borderTop: `3px solid ${s.color}` }}>
+                    <div style={{ fontSize: 32, fontWeight: 900, color: s.color }}>{s.value}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, marginTop: 4, lineHeight: 1.3 }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Graphique absences 7 jours */}
+              <div style={{ background: C.white, borderRadius: 16, padding: 20, marginBottom: 20,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 16 }}>
+                  Absences conducteurs — 7 derniers jours
                 </div>
-              ))}
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={abs7} margin={{ left: -20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.gray100} />
+                    <XAxis dataKey="day" tick={{ fontSize: 10, fill: C.gray400 }} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: C.gray400 }} tickLine={false} allowDecimals={false} />
+                    <Tooltip contentStyle={{ borderRadius: 10, border: `1px solid ${C.gray200}`, fontSize: 13 }} />
+                    <Bar dataKey="count" name="Absences" fill={C.amber} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* 4 mini stats */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { label: "En réparation",          value: vReparation,        color: C.amber },
+                  { label: "Absents aujourd'hui",    value: cAbsents,           color: C.red   },
+                  { label: "Réparations à valider",  value: repAValider.length, color: C.red   },
+                  { label: "Attention véhicules",    value: vAttention,         color: C.amber },
+                ].map(s => (
+                  <div key={s.label} style={{ background: C.white, borderRadius: 12,
+                    padding: "14px 12px", boxShadow: "0 1px 6px rgba(0,0,0,0.05)",
+                    borderLeft: `3px solid ${s.color}` }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: s.color }}>{s.value}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.gray600, marginTop: 3 }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {repAValider.length > 0 && (
-              <div style={{ background: C.redL, borderRadius: 14, padding: 18,
-                borderLeft: `4px solid ${C.red}`, marginBottom: 16 }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.red, marginBottom: 12 }}>
-                  <span style={{display:"flex",alignItems:"center",gap:8}}><AlertTriangle size={15} color={C.red} /> {repAValider.length} réparation(s) en attente de validation</span>
+            {/* ── Colonne droite ── */}
+            <div>
+              {/* Budget — priorité validation */}
+              {repAValider.length > 0 && (
+                <div style={{ background: C.redL, borderRadius: 14, padding: 16,
+                  borderLeft: `4px solid ${C.red}`, marginBottom: 14 }}>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: C.red, marginBottom: 10,
+                    display: "flex", alignItems: "center", gap: 6 }}>
+                    <AlertTriangle size={14} color={C.red} />
+                    {repAValider.length} réparation(s) à valider
+                  </div>
+                  {repAValider.map(r => {
+                    const vv = r.vehicule as { plaque?: string } | undefined;
+                    return (
+                      <div key={r.id} style={{ display: "flex", justifyContent: "space-between",
+                        alignItems: "center", padding: "6px 0",
+                        borderBottom: `1px solid ${C.red}20`, flexWrap: "wrap", gap: 6 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13 }}>{vv?.plaque || r.vehicule_id}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontWeight: 900, color: C.red, fontSize: 13 }}>
+                            {(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF
+                          </span>
+                          <button onClick={() => setTab("validation")}
+                            style={{ padding: "4px 10px", borderRadius: 8, border: "none",
+                              background: C.red, color: C.white, fontWeight: 700, fontSize: 11, cursor: "pointer" }}>
+                            →
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {repAValider.map(r => {
-                  const vv = r.vehicule as { plaque?: string } | undefined;
-                  return (
-                    <div key={r.id} style={{ display: "flex", justifyContent: "space-between",
-                      alignItems: "center", padding: "8px 0",
-                      borderBottom: `1px solid ${C.red}20`, flexWrap: "wrap", gap: 8 }}>
-                      <span style={{ fontWeight: 700 }}>{vv?.plaque || r.vehicule_id}</span>
-                      <span style={{ fontWeight: 900, color: C.red }}>{(r.cout_estime ?? 0).toLocaleString("fr-CH")} CHF</span>
-                      <button onClick={() => setTab("validation")}
-                        style={{ padding: "5px 12px", borderRadius: 8, border: "none",
-                          background: C.red, color: C.white, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                        Valider →
-                      </button>
-                    </div>
-                  );
-                })}
+              )}
+
+              {/* Congés en attente */}
+              {congesAdmin.length > 0 && (
+                <div style={{ background: "#EFF6FF", borderRadius: 14, padding: 14,
+                  borderLeft: `4px solid #2563EB`, marginBottom: 14 }}>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: "#2563EB", marginBottom: 8,
+                    display: "flex", alignItems: "center", gap: 6 }}>
+                    <CalendarDays size={14} />
+                    {congesAdmin.length} congé(s) à valider
+                  </div>
+                  <button onClick={() => setTab("validation")}
+                    style={{ width: "100%", padding: "8px 0", borderRadius: 8, border: "none",
+                      background: "#2563EB", color: C.white, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    Voir les demandes →
+                  </button>
+                </div>
+              )}
+
+              {/* 2×4 accès rapide */}
+              <div style={{ fontWeight: 800, fontSize: 11, color: C.gray400, textTransform: "uppercase",
+                letterSpacing: 0.5, marginBottom: 10 }}>
+                Accès rapide
               </div>
-            )}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {NAV_CARDS.map(c => (
+                  <div key={c.path} onClick={() => router.push(c.path)}
+                    style={{ background: C.white, borderRadius: 12, padding: "12px 10px",
+                      cursor: "pointer", boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+                      borderTop: `3px solid ${c.color}`, display: "flex",
+                      flexDirection: "column", gap: 5, minWidth: 0 }}>
+                    <span style={{ color: c.color }}>{c.icon}</span>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: C.navy,
+                      lineHeight: 1.3, wordBreak: "break-word" }}>{c.label}</div>
+                    <div style={{ fontSize: 10, color: C.gray400, lineHeight: 1.2,
+                      wordBreak: "break-word" }}>{c.sub}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1006,6 +1081,21 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
         {/* ══ TAB : MESSAGES ═════════════════════════════════════════════════ */}
         {tab === "messages" && (
           <div>
+            {/* Messagerie directe */}
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: C.navy, textTransform: "uppercase",
+                letterSpacing: 0.5, marginBottom: 12 }}>
+                Messagerie directe
+              </div>
+              <MessagerieBox myRole="admin"
+                allowedTargets={[
+                  { label: "Gestionnaire", role: "gestionnaire" },
+                  { label: "Mécanicien",   role: "mecanicien"   },
+                  { label: "Conducteurs",  role: "conducteur"   },
+                ]} />
+            </div>
+
+            {/* Messages du mécanicien (alertes) */}
             {adminMsgs.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
                 <MessageSquare size={48} strokeWidth={1} style={{ marginBottom: 12, display: "block", margin: "0 auto 12px" }} />

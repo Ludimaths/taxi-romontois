@@ -3,6 +3,7 @@ import { RefreshCw, Zap, Inbox } from "lucide-react";
 import { C, fmtDateTime, isoToday } from "@/lib/constants";
 import type { Alerte, Incident, AbsenceEnfant, Enfant } from "@/lib/types";
 import { SIGN_TYPES } from "./shared";
+import MessagerieBox from "@/components/MessagerieBox";
 
 export interface MessagesProps {
   messages: Alerte[];
@@ -11,18 +12,30 @@ export interface MessagesProps {
   enfants: Enfant[];
   incWithResponse: Incident[];
   unreadMsg: number;
+  myNom: string;
   onMarquerLu: (a: Alerte) => void;
   onSetTab: (t: string) => void;
 }
 
+const CONDUCTEUR_TARGETS = [{ label: "Gestionnaire", role: "gestionnaire" }];
+
 export function TabMessages({
-  messages,incidents,absences,enfants,incWithResponse,unreadMsg,
+  messages,incidents,absences,enfants,incWithResponse,unreadMsg,myNom,
   onMarquerLu,onSetTab,
 }:MessagesProps){
   return(
     <div>
+      {/* Messagerie directe */}
+      <div style={{marginBottom:28}}>
+        <div style={{fontWeight:800,fontSize:13,color:C.navy,textTransform:"uppercase",
+          letterSpacing:0.5,marginBottom:12}}>
+          Messagerie directe
+        </div>
+        <MessagerieBox myRole="conducteur" myNom={myNom} allowedTargets={CONDUCTEUR_TARGETS} />
+      </div>
+
       <p style={{fontSize:13,color:C.gray,marginBottom:16}}>
-        Messages du gestionnaire, réponses à vos signalements et absences de votre circuit.
+        Notifications du gestionnaire, réponses à vos signalements et absences de votre circuit.
       </p>
 
       {/* Section 1 : Messages gestionnaire */}

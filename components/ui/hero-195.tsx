@@ -111,9 +111,9 @@ export function Hero195() {
               <TabsContent value="gestionnaire">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
                   {[
-                    { label: "Véhicules en service", val: "18", color: "text-green-600 bg-green-50" },
-                    { label: "Conducteurs présents", val: "21", color: "text-blue-600 bg-blue-50" },
-                    { label: "Incidents ouverts",   val: "2",  color: "text-red-600 bg-red-50"   },
+                    { label: "Véhicules en service", val: "24", color: "text-green-600 bg-green-50" },
+                    { label: "Conducteurs présents", val: "53", color: "text-blue-600 bg-blue-50" },
+                    { label: "Circuits couverts",    val: "54", color: "text-green-600 bg-green-50" },
                   ].map(s => (
                     <div key={s.label} className={`rounded-xl p-4 ${s.color}`}>
                       <div className="text-2xl font-black">{s.val}</div>
@@ -122,8 +122,13 @@ export function Hero195() {
                   ))}
                 </div>
                 <div className="space-y-2">
-                  {["🚨 Panne moteur · FR-80058 · En cours", "👤 Conducteur absent · Circuit C007 · Non couvert"].map(t => (
-                    <div key={t} className="flex items-center gap-3 rounded-lg border border-slate-100 bg-white px-4 py-3 text-sm text-slate-700">
+                  {[
+                    "54 circuits couverts · Aucun incident",
+                    "Tous les conducteurs en service",
+                    "Flotte complète opérationnelle",
+                  ].map(t => (
+                    <div key={t} className="flex items-center gap-3 rounded-lg border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-700 font-semibold">
+                      <CheckCircle2 className="size-4 text-green-500 shrink-0" />
                       <span>{t}</span>
                     </div>
                   ))}

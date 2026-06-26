@@ -1,5 +1,6 @@
 "use client";
 import { Bell, Wrench, CheckCircle2, Archive, MessageSquare, Save, Bus, Package, AlertTriangle, Inbox, BarChart2, FileText, XCircle } from "lucide-react";
+import MessagerieBox from "@/components/MessagerieBox";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDate, fmtDateTime, isoToday } from "@/lib/constants";
@@ -894,6 +895,16 @@ export default function MecanicienPage() {
       {/* ── TAB MESSAGES ─────────────────────────────────────────────────────── */}
       {tab === "messages" && (
         <div>
+          {/* Messagerie directe */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ fontWeight: 800, fontSize: 13, color: C.navy, textTransform: "uppercase",
+              letterSpacing: 0.5, marginBottom: 12 }}>
+              Messagerie directe
+            </div>
+            <MessagerieBox myRole="mecanicien"
+              allowedTargets={[{ label: "Gestionnaire", role: "gestionnaire" }, { label: "Admin", role: "admin" }]} />
+          </div>
+
           {/* Décisions admin reçues */}
           {msgDecisions.length === 0 ? (
             <div style={{ textAlign: "center", padding: "32px 20px", color: C.gray400, marginBottom: 24 }}>

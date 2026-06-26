@@ -393,6 +393,7 @@ export default function ConducteurPage(){
       {tab==="messages"&&(
         <TabMessages messages={messages} incidents={incidents} absences={absences} enfants={enfants}
           incWithResponse={incWithResponse} unreadMsg={unreadMsg}
+          myNom={driver?`${driver.prenom} ${driver.nom}`:"Conducteur"}
           onMarquerLu={handleMarquerLu} onSetTab={t=>setTab(t as Tab)}/>
       )}
       {tab==="historique"&&(
