@@ -177,8 +177,8 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
     const isFallback = person.id.startsWith("role-");
     if (isFallback) {
       return messages.filter(m =>
-        (m.expediteur_id === myId && m.destinataire_role === person.role && !m.destinataire_id) ||
-        (m.destinataire_role === myRole && m.expediteur_role === person.role && !m.destinataire_id)
+        (m.expediteur_id === myId && m.destinataire_role === person.role) ||
+        (m.destinataire_role === myRole && m.expediteur_role === person.role)
       );
     }
     return messages.filter(m =>

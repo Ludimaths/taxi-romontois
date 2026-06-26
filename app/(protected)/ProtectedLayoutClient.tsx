@@ -42,9 +42,23 @@ export default function ProtectedLayoutClient({
     fetchCounts();
     const ch = sb.channel("layout-counts")
       .on("postgres_changes", { event: "*", schema: "public", table: "incidents" }, fetchCounts)
-      .on("postgres_changes", { event: "*", schema: "public", table: "alertes" }, fetchCounts)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "alertes" },
+        (payload) => {
+          const n = payload.new as { read?: boolean };
+          const o = payload.old as { read?: boolean };
+          if (o?.read === false && n?.read === true) setAlertesCount(prev => Math.max(0, prev - 1));
+          else fetchCounts();
+        })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "alertes" }, fetchCounts)
       .on("postgres_changes", { event: "*", schema: "public", table: "reparations" }, fetchCounts)
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages_internes" }, fetchCounts)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages_internes" },
+        (payload) => {
+          const n = payload.new as { lu?: boolean };
+          const o = payload.old as { lu?: boolean };
+          if (o?.lu === false && n?.lu === true) setMessagesCount(prev => Math.max(0, prev - 1));
+          else fetchCounts();
+        })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages_internes" }, fetchCounts)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [fetchCounts, sb, profile.role]);

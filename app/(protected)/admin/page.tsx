@@ -545,14 +545,14 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                   const Icon = c.icon;
                   return (
                     <Link key={c.path} href={c.path}
-                      onClick={() => setMobileOpen(false)}
+                      onClick={() => { setMobileOpen(false); router.push(c.path); }}
                       style={{ background: C.white, borderRadius: 8,
                         border: "0.5px solid rgba(0,0,0,0.05)", padding: "14px 10px",
                         cursor: "pointer", display: "flex", flexDirection: "column",
                         alignItems: "center", gap: 6, textAlign: "center",
                         transition: "background .12s, border-color .12s",
                         textDecoration: "none",
-                        position: "relative", pointerEvents: "all" }}>
+                        position: "relative", zIndex: 1, pointerEvents: "all" }}>
                       <Icon size={22} color={c.color} />
                       <div style={{ fontSize: 11, fontWeight: 500, color: "#0F172A" }}>{c.label}</div>
                       <div style={{ fontSize: 9, color: "#94A3B8" }}>{c.sub}</div>
