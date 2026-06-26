@@ -53,6 +53,10 @@
 .tx-mobile-header  { display: none; }
 .tx-main-padding   { padding: 26px; }
 
+/* Masquer scrollbar sidebar (nav interne) sans bloquer le scroll */
+.tx-sidebar nav { scrollbar-width: none; -ms-overflow-style: none; }
+.tx-sidebar nav::-webkit-scrollbar { display: none; }
+
 @media (max-width: 767px) {
   .tx-sidebar        { display: none !important; }
   .tx-mobile-header  { display: flex !important; }
