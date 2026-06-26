@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { C, fmtDate, fmtDateTime, isoToday } from "@/lib/constants";
-import type { Conducteur, Vehicule, Incident, Reparation, AbsenceConducteur, Alerte } from "@/lib/types";
+import type { Conducteur, Vehicule, Incident, Reparation, AbsenceConducteur, Alerte, CongesDemande } from "@/lib/types";
 
 type AdminTab = "dashboard" | "stats" | "validation" | "historique" | "messages";
 type Period   = "week" | "month" | "annee";
@@ -65,6 +65,12 @@ export default function AdminPage() {
   const [valBusy,    setValBusy]    = useState(false);
   const [adminMsgs,  setAdminMsgs]  = useState<Alerte[]>([]);
 
+  // Congés
+  const [congesAdmin,        setCongesAdmin]        = useState<CongesDemande[]>([]);
+  const [congeAdminRefusId,  setCongeAdminRefusId]  = useState<number | null>(null);
+  const [congeAdminRefusMotif, setCongeAdminRefusMotif] = useState("");
+  const [congeAdminBusy,     setCongeAdminBusy]     = useState(false);
+
   const [histYear,  setHistYear]  = useState(currentSchoolYear());
   const [histMonth, setHistMonth] = useState<number | null>(null);
   const [histDay,   setHistDay]   = useState<string | null>(null);
@@ -72,7 +78,7 @@ export default function AdminPage() {
   // ── Load ────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     const yearAgo = addDays(isoToday(), -365);
-    const [c, v, inc, rep, abs, msgs] = await Promise.all([
+    const [c, v, inc, rep, abs, msgs, cng] = await Promise.all([
       sb.from("conducteurs").select("*").order("nom"),
       sb.from("vehicules").select("*").order("plaque"),
       sb.from("incidents").select("*,vehicule:vehicules(id,plaque),conducteur:conducteurs(prenom,nom)")
@@ -87,6 +93,10 @@ export default function AdminPage() {
         .eq("type", "msg_meca_admin")
         .order("created_at", { ascending: false })
         .limit(50),
+      sb.from("conges_demandes")
+        .select("*,conducteur:conducteurs!conducteur_id(prenom,nom)")
+        .eq("statut", "transmis_admin")
+        .order("created_at", { ascending: false }),
     ]);
     setConducteurs(c.data ?? []);
     setVehicules(v.data ?? []);
@@ -94,6 +104,7 @@ export default function AdminPage() {
     setReparations(rep.data ?? []);
     setAbsencesCond(abs.data ?? []);
     setAdminMsgs(msgs.data ?? []);
+    setCongesAdmin(cng.data ?? []);
     setLoading(false);
   }, [sb]);
 
@@ -105,6 +116,7 @@ export default function AdminPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "incidents" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "reparations" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "absences_conducteurs" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conges_demandes" }, load)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [load, sb]);
@@ -113,6 +125,46 @@ export default function AdminPage() {
     await sb.auth.signOut();
     router.push("/login");
     router.refresh();
+  }
+
+  // ── Congés direction ────────────────────────────────────────────────────────
+  async function doAccepterConge(conge: CongesDemande) {
+    setCongeAdminBusy(true);
+    const cond = conge.conducteur as { prenom?: string; nom?: string } | undefined;
+    await sb.from("conges_demandes").update({
+      statut: "accepte", updated_at: new Date().toISOString(),
+    }).eq("id", conge.id);
+    await sb.from("alertes").insert({
+      type: "conducteur", severity: "normale", driver_id: conge.conducteur_id, read: false,
+      message: `Direction : votre congé du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)} (${conge.motif}) a été approuvé.`,
+    });
+    await sb.from("alertes").insert({
+      type: "conducteur", severity: "normale", read: false,
+      message: `Direction : congé de ${cond?.prenom} ${cond?.nom} approuvé — du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)}`,
+    });
+    await load();
+    setCongeAdminBusy(false);
+  }
+
+  async function doRefuserConge(conge: CongesDemande) {
+    if (!congeAdminRefusMotif.trim()) return;
+    setCongeAdminBusy(true);
+    const cond = conge.conducteur as { prenom?: string; nom?: string } | undefined;
+    await sb.from("conges_demandes").update({
+      statut: "refuse", motif_refus: congeAdminRefusMotif.trim(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", conge.id);
+    await sb.from("alertes").insert({
+      type: "conducteur", severity: "haute", driver_id: conge.conducteur_id, read: false,
+      message: `Direction : votre demande de congé du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)} a été refusée. Motif : ${congeAdminRefusMotif.trim()}`,
+    });
+    await sb.from("alertes").insert({
+      type: "conducteur", severity: "normale", read: false,
+      message: `Direction : congé de ${cond?.prenom} ${cond?.nom} refusé — du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)}`,
+    });
+    setCongeAdminRefusId(null); setCongeAdminRefusMotif("");
+    await load();
+    setCongeAdminBusy(false);
   }
 
   // ── Period filter ────────────────────────────────────────────────────────────
@@ -528,12 +580,114 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
         {/* ══ TAB : VALIDATIONS ═══════════════════════════════════════════════ */}
         {tab === "validation" && (
           <div>
-            {repAValider.length === 0 ? (
+            {/* Congés transmis par gestionnaire */}
+            {congesAdmin.length > 0 && (
+              <div style={{ marginBottom: 28 }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 14,
+                  display: "flex", alignItems: "center", gap: 8 }}>
+                  <CalendarDays size={18} /> Congés à valider ({congesAdmin.length})
+                </div>
+                {congesAdmin.map(conge => {
+                  const cond = conge.conducteur as { prenom?: string; nom?: string } | undefined;
+                  const isRefusing = congeAdminRefusId === conge.id;
+                  return (
+                    <div key={conge.id} style={{ background: C.white, borderRadius: 16, padding: 20,
+                      marginBottom: 14, boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+                      borderLeft: `4px solid #2563EB` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between",
+                        alignItems: "flex-start", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>
+                            {cond?.prenom} {cond?.nom}
+                          </div>
+                          <div style={{ fontSize: 13, color: C.gray600, marginTop: 2 }}>
+                            {conge.motif} · {fmtDate(conge.date_debut)} → {fmtDate(conge.date_fin)}
+                          </div>
+                          <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>
+                            Soumis le {fmtDate(conge.created_at.slice(0, 10))}
+                          </div>
+                        </div>
+                        <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                          background: "#EFF6FF", color: "#2563EB" }}>
+                          Transmis gestionnaire
+                        </span>
+                      </div>
+                      <p style={{ fontSize: 14, color: "#1E293B", lineHeight: 1.6, margin: "0 0 10px",
+                        borderLeft: `3px solid ${C.gray200}`, paddingLeft: 10 }}>
+                        {conge.justification}
+                      </p>
+                      {conge.note_gestionnaire && (
+                        <div style={{ background: C.skyL, borderRadius: 10, padding: "8px 12px",
+                          fontSize: 13, color: C.navyL, marginBottom: 12, fontStyle: "italic" }}>
+                          Note gestionnaire : {conge.note_gestionnaire}
+                        </div>
+                      )}
+                      {isRefusing && (
+                        <div style={{ marginBottom: 12 }}>
+                          <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 6 }}>
+                            Motif du refus *
+                          </label>
+                          <textarea value={congeAdminRefusMotif} onChange={e => setCongeAdminRefusMotif(e.target.value)}
+                            rows={2} placeholder="Ex: Période de pointe scolaire…"
+                            style={{ ...inp, resize: "vertical" }} />
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        {!isRefusing ? (
+                          <>
+                            <button onClick={() => doAccepterConge(conge)} disabled={congeAdminBusy}
+                              style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
+                                border: "none", background: C.green, color: C.white, fontWeight: 800, fontSize: 14, cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                              <CheckCircle2 size={16} /> Approuver
+                            </button>
+                            <button onClick={() => { setCongeAdminRefusId(conge.id); setCongeAdminRefusMotif(""); }}
+                              style={{ flex: 1, minWidth: 120, padding: "12px 0", borderRadius: 10,
+                                border: `2px solid ${C.red}`, background: C.white, color: C.red, fontWeight: 800, fontSize: 14, cursor: "pointer" }}>
+                              Refuser
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => doRefuserConge(conge)}
+                              disabled={congeAdminBusy || !congeAdminRefusMotif.trim()}
+                              style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none",
+                                background: congeAdminRefusMotif.trim() ? C.red : C.gray200,
+                                color: C.white, fontWeight: 800, fontSize: 14,
+                                cursor: congeAdminRefusMotif.trim() ? "pointer" : "not-allowed" }}>
+                              Confirmer le refus
+                            </button>
+                            <button onClick={() => setCongeAdminRefusId(null)}
+                              style={{ padding: "12px 18px", borderRadius: 10, border: `1px solid ${C.gray200}`,
+                                background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                              Annuler
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Réparations */}
+            {repAValider.length === 0 && congesAdmin.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
                 <CheckCircle2 size={48} strokeWidth={1} style={{ marginBottom: 12, display: "block", margin: "0 auto 12px" }} />
-                <p style={{ fontWeight: 700, fontSize: 15 }}>Aucune réparation en attente de validation</p>
+                <p style={{ fontWeight: 700, fontSize: 15 }}>Aucun élément en attente de validation</p>
               </div>
-            ) : repAValider.map(r => {
+            ) : repAValider.length > 0 && (
+              <div>
+                {congesAdmin.length > 0 && (
+                  <div style={{ fontWeight: 800, fontSize: 15, color: C.navy, marginBottom: 14,
+                    display: "flex", alignItems: "center", gap: 8 }}>
+                    <Wrench size={18} /> Réparations à valider ({repAValider.length})
+                  </div>
+                )}
+            </div>
+            )}
+            {repAValider.length > 0 && repAValider.map(r => {
               const vv = r.vehicule as { plaque?: string; marque?: string; modele?: string } | undefined;
               const isRefusing = refusOpen === r.id;
               return (

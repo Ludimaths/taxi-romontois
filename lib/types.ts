@@ -195,3 +195,21 @@ export interface Profile {
   enfant_id?: number;
   civilite?: "mere" | "pere" | null;
 }
+
+export type CongesStatut = "en_attente" | "transmis_admin" | "accepte" | "refuse";
+
+export interface CongesDemande {
+  id: number;
+  conducteur_id: number;
+  conducteur?: { prenom: string; nom: string };
+  date_debut: string;
+  date_fin: string;
+  motif: string;
+  justification: string;
+  statut: CongesStatut;
+  motif_refus?: string;
+  note_gestionnaire?: string;
+  transmis_par?: string;
+  created_at: string;
+  updated_at: string;
+}

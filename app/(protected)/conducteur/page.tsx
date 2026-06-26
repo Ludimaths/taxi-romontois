@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { C, isoToday, fmtHHMM, nowTimeStr } from "@/lib/constants";
-import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant } from "@/lib/types";
-import { Bus, Home, FileText, Activity, AlertCircle, Mail, History } from "lucide-react";
+import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant, CongesDemande } from "@/lib/types";
+import { Bus, Home, FileText, Activity, AlertCircle, Mail, History, CalendarDays } from "lucide-react";
 import { BSheet, BigBtn, Inp, TA, Chip, StatusBadge, SIGN_LABELS, schoolYearStart } from "./tabs/shared";
 import { TabDashboard } from "./tabs/Dashboard";
 import { TabFiche } from "./tabs/Fiche";
@@ -11,8 +11,9 @@ import { TabService } from "./tabs/Service";
 import { TabSignalements } from "./tabs/Signalements";
 import { TabMessages } from "./tabs/Messages";
 import { TabHistorique } from "./tabs/Historique";
+import { TabConges } from "./tabs/Conges";
 
-type Tab = "dashboard" | "fiche" | "service" | "signalements" | "messages" | "historique";
+type Tab = "dashboard" | "fiche" | "service" | "signalements" | "messages" | "historique" | "conges";
 
 export default function ConducteurPage(){
   const sb=createClient();
@@ -24,6 +25,7 @@ export default function ConducteurPage(){
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [messages,  setMessages]  = useState<Alerte[]>([]);
   const [histLogs,  setHistLogs]  = useState<ServiceLog[]>([]);
+  const [conges,    setConges]    = useState<CongesDemande[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState<Tab>("dashboard");
 
@@ -73,7 +75,7 @@ export default function ConducteurPage(){
     const cid=prof.conducteur_id;
     setCondId(cid);
 
-    const[drv,log,abs,enf,inc,msg,hist]=await Promise.all([
+    const[drv,log,abs,enf,inc,msg,hist,cng]=await Promise.all([
       sb.from("conducteurs").select("*,circuit:circuits(*,cercle:cercles_scolaires(*)),vehicule:vehicules(*)")
         .eq("id",cid).single(),
       sb.from("service_logs").select("*")
@@ -88,6 +90,8 @@ export default function ConducteurPage(){
         .eq("driver_id",cid).order("created_at",{ascending:false}).limit(50),
       sb.from("service_logs").select("*")
         .eq("conducteur_id",cid).order("date_service",{ascending:false}).limit(365),
+      sb.from("conges_demandes").select("*")
+        .eq("conducteur_id",cid).order("created_at",{ascending:false}),
     ]);
 
     if(drv.data) setDriver(drv.data);
@@ -100,6 +104,7 @@ export default function ConducteurPage(){
     if(inc.data) setIncidents(inc.data);
     if(msg.data) setMessages(msg.data);
     if(hist.data)setHistLogs(hist.data);
+    if(cng.data) setConges(cng.data);
     setLoading(false);
   },[sb]);
 
@@ -109,6 +114,7 @@ export default function ConducteurPage(){
       .on("postgres_changes",{event:"*",schema:"public",table:"absences_enfants"},load)
       .on("postgres_changes",{event:"*",schema:"public",table:"incidents"},load)
       .on("postgres_changes",{event:"*",schema:"public",table:"service_logs"},load)
+      .on("postgres_changes",{event:"*",schema:"public",table:"conges_demandes"},load)
       .subscribe();
     return()=>{sb.removeChannel(ch);};
   },[load,sb]);
@@ -218,6 +224,14 @@ export default function ConducteurPage(){
     setAbsConfirmed(p=>new Set([...p,id]));
   }
 
+  async function handleEnvoyerConge(form:{date_debut:string;date_fin:string;motif:string;justification:string}){
+    if(!driver)return;
+    await sb.from("conges_demandes").insert({
+      conducteur_id:driver.id,...form,statut:"en_attente",
+    });
+    await load();
+  }
+
   async function handleSaveTel(){
     if(!driver)return;
     setTelSaving(true);
@@ -252,6 +266,7 @@ export default function ConducteurPage(){
     signalements: <AlertCircle size={14} />,
     messages:     <Mail size={14} />,
     historique:   <History size={14} />,
+    conges:       <CalendarDays size={14} />,
   };
   const TABS:{id:Tab;label:string;badge?:number}[]=[
     {id:"dashboard",    label:"Dashboard"},
@@ -260,6 +275,7 @@ export default function ConducteurPage(){
     {id:"signalements", label:"Signalements",badge:pendingInc||undefined},
     {id:"messages",     label:"Messages",    badge:unreadMsg||undefined},
     {id:"historique",   label:"Historique"},
+    {id:"conges",       label:"Congés"},
   ];
 
   // ── Guards ────────────────────────────────────────────────────────────────────
@@ -365,6 +381,9 @@ export default function ConducteurPage(){
           histYear={histYear} setHistYear={setHistYear}
           histMonth={histMonth} setHistMonth={setHistMonth}
           logsForYear={logsForYear} logsForYearMonth={logsForYearMonth}/>
+      )}
+      {tab==="conges"&&(
+        <TabConges conges={conges} onSend={handleEnvoyerConge}/>
       )}
 
       {/* ── Modals ── */}

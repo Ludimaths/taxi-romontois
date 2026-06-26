@@ -4,8 +4,8 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, statusColor, statusLabel, fmtDate, fmtDateTime, conducteurEmail, isoToday } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal, TabBar } from "@/components/ui";
-import { CheckCircle2, AlertTriangle, Pen, Trash2, Key, RefreshCw, Link2, UserPlus, ClipboardCopy, Check, Bus, FileText, Users } from "lucide-react";
-import type { Conducteur, Circuit, Vehicule } from "@/lib/types";
+import { CheckCircle2, AlertTriangle, Pen, Trash2, Key, RefreshCw, Link2, UserPlus, ClipboardCopy, Check, Bus, FileText, Users, CalendarDays, XCircle, Send } from "lucide-react";
+import type { Conducteur, Circuit, Vehicule, CongesDemande } from "@/lib/types";
 
 
 function genPassword() {
@@ -158,6 +158,15 @@ export default function ConducteursPage() {
   // Email réel retourné par l'API après set-password
   const [actualEmail, setActualEmail] = useState("");
 
+  // Congés
+  const [congesCondu,    setCongesCondu]    = useState<CongesDemande[]>([]);
+  const [currentUserId,  setCurrentUserId]  = useState<string | null>(null);
+  const [congeRefusId,   setCongeRefusId]   = useState<number | null>(null);
+  const [congeRefusMotif,setCongeRefusMotif]= useState("");
+  const [congeTransId,   setCongeTransId]   = useState<number | null>(null);
+  const [congeTransNote, setCongeTransNote] = useState("");
+  const [congesBusy,     setCongesBusy]     = useState(false);
+
   // Création de compte
   const [createBusy,   setCreateBusy]   = useState(false);
   const [createResult, setCreateResult] = useState<{ email: string; password: string } | null>(null);
@@ -183,11 +192,17 @@ export default function ConducteursPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  useEffect(() => {
+    sb.auth.getUser().then(({ data }) => {
+      if (data.user) setCurrentUserId(data.user.id);
+    });
+  }, [sb]);
+
   const fetchHistory = useCallback(async (driverId: number) => {
     const year = histYear || new Date().getFullYear().toString();
     const since = `${year}-01-01`;
     const until = `${year}-12-31`;
-    const [sl, ac, prof] = await Promise.all([
+    const [sl, ac, prof, cng] = await Promise.all([
       sb.from("service_logs")
         .select("*,circuit:circuits(nom,emoji,num),vehicule:vehicules(plaque)")
         .eq("conducteur_id", driverId)
@@ -198,10 +213,14 @@ export default function ConducteursPage() {
         .eq("conducteur_id", driverId)
         .order("date_absence", { ascending: false }),
       sb.from("profiles").select("id,role").eq("conducteur_id", driverId).single(),
+      sb.from("conges_demandes").select("*")
+        .eq("conducteur_id", driverId)
+        .order("created_at", { ascending: false }),
     ]);
     setLogs(sl.data ?? []);
     setAbsences(ac.data ?? []);
     setProfile(prof.data ?? null);
+    setCongesCondu(cng.data ?? []);
   }, [sb, histYear]);
 
   useEffect(() => {
@@ -219,6 +238,9 @@ export default function ConducteursPage() {
     setLinkBusy(false);
     setLinkDone(false);
     setLinkError("");
+    setCongesCondu([]);
+    setCongeRefusId(null); setCongeRefusMotif("");
+    setCongeTransId(null); setCongeTransNote("");
   }, [sel]);
 
   const handleSave = async (form: Partial<Conducteur>) => {
@@ -331,6 +353,59 @@ export default function ConducteursPage() {
       setLinkError(json.error || "Erreur liaison inconnue");
     }
   };
+
+  // ── Congés handlers ───────────────────────────────────────────────────────
+  async function handleAccepterConge(conge: CongesDemande) {
+    if (!sel) return;
+    setCongesBusy(true);
+    await sb.from("conges_demandes").update({
+      statut: "accepte", transmis_par: currentUserId, updated_at: new Date().toISOString(),
+    }).eq("id", conge.id);
+    await sb.from("alertes").insert({
+      type: "conducteur", severity: "normale", driver_id: conge.conducteur_id, read: false,
+      message: `Votre congé du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)} (${conge.motif}) a été accepté.`,
+    });
+    await fetchHistory(sel);
+    setCongesBusy(false);
+  }
+
+  async function handleRefuserConge(conge: CongesDemande) {
+    if (!sel || !congeRefusMotif.trim()) return;
+    setCongesBusy(true);
+    await sb.from("conges_demandes").update({
+      statut: "refuse", motif_refus: congeRefusMotif.trim(),
+      transmis_par: currentUserId, updated_at: new Date().toISOString(),
+    }).eq("id", conge.id);
+    await sb.from("alertes").insert({
+      type: "conducteur", severity: "haute", driver_id: conge.conducteur_id, read: false,
+      message: `Votre demande de congé du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)} a été refusée. Motif : ${congeRefusMotif.trim()}`,
+    });
+    setCongeRefusId(null); setCongeRefusMotif("");
+    await fetchHistory(sel);
+    setCongesBusy(false);
+  }
+
+  async function handleTransmettreConge(conge: CongesDemande) {
+    if (!sel) return;
+    setCongesBusy(true);
+    const drv = drivers.find(x => x.id === sel);
+    await sb.from("conges_demandes").update({
+      statut: "transmis_admin", transmis_par: currentUserId,
+      note_gestionnaire: congeTransNote.trim() || null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", conge.id);
+    await sb.from("alertes").insert({
+      type: "rapport_admin", severity: "normale", read: false,
+      message: `Congé à valider — ${drv?.prenom} ${drv?.nom} — du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)} (${conge.motif})${congeTransNote.trim() ? ` — Note : ${congeTransNote.trim()}` : ""}`,
+    });
+    await sb.from("alertes").insert({
+      type: "conducteur", severity: "normale", driver_id: conge.conducteur_id, read: false,
+      message: `Votre demande de congé du ${fmtDate(conge.date_debut)} au ${fmtDate(conge.date_fin)} est transmise à la direction pour validation.`,
+    });
+    setCongeTransId(null); setCongeTransNote("");
+    await fetchHistory(sel);
+    setCongesBusy(false);
+  }
 
   // ── Filter ─────────────────────────────────────────────────────────────────
   const filtered = drivers.filter(d => {
@@ -552,7 +627,20 @@ export default function ConducteursPage() {
 
           {/* Right: tabs */}
           <Card style={{ padding: 22 }}>
-            <TabBar tabs={["infos","absences","remplacements","services","historique"]} active={tab} onChange={setTab} />
+            {congesCondu.filter(c => c.statut === "en_attente").length > 0 && tab !== "congés" && (
+              <div style={{ background: C.amberL, borderRadius: 10, padding: "9px 14px", marginBottom: 14,
+                fontSize: 13, color: C.amber, fontWeight: 700,
+                display: "flex", alignItems: "center", gap: 8, border: `1px solid #FDE68A` }}>
+                <AlertTriangle size={14} />
+                {congesCondu.filter(c => c.statut === "en_attente").length} demande(s) de congé en attente
+                <button onClick={() => setTab("congés")}
+                  style={{ marginLeft: "auto", padding: "4px 10px", borderRadius: 6, border: "none",
+                    background: C.amber, color: C.white, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                  Voir
+                </button>
+              </div>
+            )}
+            <TabBar tabs={["infos","absences","remplacements","services","historique","congés"]} active={tab} onChange={setTab} />
 
             {tab === "infos" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -733,6 +821,149 @@ export default function ConducteursPage() {
                     <p style={{ fontWeight: 700, marginTop: 0 }}>Aucun service enregistré en {curYear}</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {tab === "congés" && (
+              <div>
+                {congesCondu.filter(c => c.statut === "en_attente").length > 0 && (
+                  <div style={{ background: C.amberL, borderRadius: 10, padding: "9px 14px", marginBottom: 16,
+                    fontSize: 13, color: C.amber, fontWeight: 700,
+                    display: "flex", alignItems: "center", gap: 8, border: `1px solid #FDE68A` }}>
+                    <AlertTriangle size={14} />
+                    {congesCondu.filter(c => c.statut === "en_attente").length} demande(s) en attente de traitement
+                  </div>
+                )}
+                {congesCondu.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "40px 0", color: C.gray400 }}>
+                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+                      <CalendarDays size={36} color={C.gray400} />
+                    </div>
+                    <p style={{ fontWeight: 700, marginTop: 0 }}>Aucune demande de congé</p>
+                  </div>
+                ) : congesCondu.map(conge => {
+                  const isRefusing     = congeRefusId  === conge.id;
+                  const isTransmitting = congeTransId  === conge.id;
+                  const statut   = conge.statut;
+                  const statCol  = statut==="accepte"?C.green:statut==="refuse"?C.red:statut==="transmis_admin"?"#2563EB":C.amber;
+                  const statBg   = statut==="accepte"?C.greenL:statut==="refuse"?C.redL:statut==="transmis_admin"?"#EFF6FF":C.amberL;
+                  const statLbl  = statut==="accepte"?"Accepté":statut==="refuse"?"Refusé":statut==="transmis_admin"?"Transmis direction":"En attente";
+                  return (
+                    <div key={conge.id} style={{ background: C.white, borderRadius: 14, padding: 16,
+                      marginBottom: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                      borderLeft: `4px solid ${statCol}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between",
+                        alignItems: "flex-start", marginBottom: 8, gap: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: 14, color: C.navy, marginBottom: 2 }}>
+                            {fmtDate(conge.date_debut)} → {fmtDate(conge.date_fin)}
+                          </div>
+                          <div style={{ fontSize: 12, color: C.gray600 }}>{conge.motif}</div>
+                        </div>
+                        <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                          background: statBg, color: statCol, flexShrink: 0 }}>
+                          {statLbl}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 13, color: "#1E293B", lineHeight: 1.5, marginBottom: 8,
+                        borderLeft: `2px solid ${C.gray200}`, paddingLeft: 10 }}>
+                        {conge.justification}
+                      </div>
+                      {conge.motif_refus && (
+                        <div style={{ background: C.redL, borderRadius: 8, padding: "6px 10px", marginBottom: 8,
+                          fontSize: 12, color: C.red, fontWeight: 600 }}>
+                          Motif refus : {conge.motif_refus}
+                        </div>
+                      )}
+                      {conge.note_gestionnaire && (
+                        <div style={{ background: C.skyL, borderRadius: 8, padding: "6px 10px", marginBottom: 8,
+                          fontSize: 12, color: C.navyL, fontStyle: "italic" }}>
+                          Votre note : {conge.note_gestionnaire}
+                        </div>
+                      )}
+                      {statut === "en_attente" && !isRefusing && !isTransmitting && (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                          <button onClick={() => handleAccepterConge(conge)} disabled={congesBusy}
+                            style={{ flex: 1, minWidth: 90, padding: "9px 0", borderRadius: 9, border: "none",
+                              background: C.green, color: C.white, fontWeight: 700, fontSize: 13, cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                            <CheckCircle2 size={15} /> Accepter
+                          </button>
+                          <button onClick={() => { setCongeRefusId(conge.id); setCongeRefusMotif(""); }}
+                            style={{ flex: 1, minWidth: 90, padding: "9px 0", borderRadius: 9,
+                              border: `1.5px solid ${C.red}`, background: C.white, color: C.red,
+                              fontWeight: 700, fontSize: 13, cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                            <XCircle size={15} /> Refuser
+                          </button>
+                          <button onClick={() => { setCongeTransId(conge.id); setCongeTransNote(""); }}
+                            style={{ flex: 1, minWidth: 90, padding: "9px 0", borderRadius: 9,
+                              border: "1.5px solid #2563EB", background: C.white, color: "#2563EB",
+                              fontWeight: 700, fontSize: 13, cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                            <Send size={15} /> Direction
+                          </button>
+                        </div>
+                      )}
+                      {isRefusing && (
+                        <div style={{ marginTop: 10 }}>
+                          <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 6 }}>
+                            Motif du refus *
+                          </label>
+                          <textarea value={congeRefusMotif} onChange={e => setCongeRefusMotif(e.target.value)}
+                            rows={2} placeholder="Ex: Période de pointe, effectifs insuffisants…"
+                            style={{ width: "100%", padding: "9px 12px", borderRadius: 8, resize: "vertical",
+                              border: `1.5px solid ${C.red}`, fontSize: 13, color: C.gray800,
+                              background: C.white, boxSizing: "border-box" }} />
+                          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                            <button onClick={() => handleRefuserConge(conge)}
+                              disabled={congesBusy || !congeRefusMotif.trim()}
+                              style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: "none",
+                                background: congeRefusMotif.trim() ? C.red : C.gray200,
+                                color: congeRefusMotif.trim() ? C.white : C.gray400,
+                                fontWeight: 700, fontSize: 13,
+                                cursor: congeRefusMotif.trim() ? "pointer" : "not-allowed" }}>
+                              Confirmer le refus
+                            </button>
+                            <button onClick={() => setCongeRefusId(null)}
+                              style={{ padding: "9px 16px", borderRadius: 9, border: `1px solid ${C.gray200}`,
+                                background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                              Annuler
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {isTransmitting && (
+                        <div style={{ marginTop: 10 }}>
+                          <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#2563EB", marginBottom: 6 }}>
+                            Note pour la direction (optionnelle)
+                          </label>
+                          <textarea value={congeTransNote} onChange={e => setCongeTransNote(e.target.value)}
+                            rows={2} placeholder="Contexte, recommandation…"
+                            style={{ width: "100%", padding: "9px 12px", borderRadius: 8, resize: "vertical",
+                              border: "1.5px solid #2563EB", fontSize: 13, color: C.gray800,
+                              background: C.white, boxSizing: "border-box" }} />
+                          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                            <button onClick={() => handleTransmettreConge(conge)} disabled={congesBusy}
+                              style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: "none",
+                                background: "#2563EB", color: C.white, fontWeight: 700, fontSize: 13, cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                              <Send size={15} /> Transmettre à la direction
+                            </button>
+                            <button onClick={() => setCongeTransId(null)}
+                              style={{ padding: "9px 16px", borderRadius: 9, border: `1px solid ${C.gray200}`,
+                                background: C.white, color: C.gray600, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                              Annuler
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ fontSize: 11, color: C.gray400, marginTop: 8, textAlign: "right" }}>
+                        {new Date(conge.created_at).toLocaleDateString("fr-CH", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </Card>
