@@ -5,8 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { C, statusColor, statusLabel, todayStr, isoToday, fmtTime, fmtDateTime, fmtEnfant } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal } from "@/components/ui";
 import {
-  Bus, Users, UserX, AlertCircle, Bell, Route, Loader2, Menu,
-  Home, FileText, Zap, User, MapPin, BarChart2, CheckCircle2,
+  Bus, Users, UserX, AlertCircle, Bell, Route, Loader2,
+  MapPin, CheckCircle2,
   AlertTriangle, Wrench, Lightbulb, Clock, Baby, Phone, HelpCircle,
   ShieldAlert, Ban, RefreshCw, Repeat2, Settings,
 } from "lucide-react";
@@ -325,8 +325,8 @@ export default function GestionnaireDashboard() {
   const [alerts,      setAlerts]      = useState<Alerte[]>([]);
   const [reparations, setReparations] = useState<Reparation[]>([]);
   const [loading,     setLoading]     = useState(true);
+  const [isMobile,    setIsMobile]    = useState(false);
 
-  const [drawerOpen,  setDrawerOpen]  = useState(false);
   const [absentModal, setAbsentModal] = useState<Conducteur | null>(null);
   const [childAbsM,   setChildAbsM]   = useState<AbsenceEnfant | null>(null);
   const [incModal,    setIncModal]    = useState<Incident | null>(null);
@@ -394,6 +394,13 @@ export default function GestionnaireDashboard() {
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [fetchAll, sb]);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleAssign = async (absentId: number, replacerId: number, circuitId: string) => {
@@ -564,56 +571,6 @@ export default function GestionnaireDashboard() {
           onClose={() => setIncModal(null)} onAction={handleIncidentAction} />
       )}
 
-      {/* ── Mobile header ─────────────────────────────────────────────────── */}
-      <div className="tx-mobile-header" style={{
-        position: "sticky", top: 0, zIndex: 200, background: C.white,
-        borderBottom: `1px solid ${C.gray200}`, padding: "0 16px", height: 48,
-        alignItems: "center", justifyContent: "space-between",
-        marginBottom: 12, marginLeft: -16, marginRight: -16, width: "calc(100% + 32px)",
-      }}>
-        <span style={{ fontWeight: 800, fontSize: 14, color: C.navy }}>Tableau de bord</span>
-        <button onClick={() => setDrawerOpen(v => !v)}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: 8, color: C.navy, display: "flex" }}>
-          <Menu size={22} />
-        </button>
-      </div>
-
-      {/* Mobile drawer */}
-      {drawerOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 500, display: "flex" }}>
-          <div style={{ flex: 1, background: "rgba(0,0,0,0.4)" }} onClick={() => setDrawerOpen(false)} />
-          <div style={{ width: 260, background: C.white, height: "100%", overflowY: "auto",
-            boxShadow: "-4px 0 20px rgba(0,0,0,0.15)" }}>
-            <div style={{ padding: "16px 16px 10px", borderBottom: `1px solid ${C.gray100}`,
-              fontWeight: 800, fontSize: 15, color: C.navy }}>
-              Navigation
-            </div>
-            {([
-              { path: "/gestionnaire",               icon: <Home size={17} />,       label: "Tableau de bord" },
-              { path: "/gestionnaire/rapport",       icon: <FileText size={17} />,   label: "Rapport journalier" },
-              { path: "/gestionnaire/imprevus",      icon: <Zap size={17} />,        label: "Imprévus" },
-              { path: "/gestionnaire/conducteurs",   icon: <User size={17} />,       label: "Conducteurs" },
-              { path: "/gestionnaire/vehicules",     icon: <Bus size={17} />,        label: "Véhicules" },
-              { path: "/gestionnaire/circuits",      icon: <Route size={17} />,      label: "Circuits" },
-              { path: "/gestionnaire/incidents",     icon: <AlertCircle size={17} />,label: "Incidents" },
-              { path: "/gestionnaire/alertes",       icon: <Bell size={17} />,       label: "Alertes" },
-              { path: "/gestionnaire/reparations",   icon: <Wrench size={17} />,     label: "Réparations" },
-              { path: "/gestionnaire/parents",       icon: <Users size={17} />,      label: "Parents" },
-              { path: "/gestionnaire/export",        icon: <BarChart2 size={17} />,  label: "Exports" },
-            ] as { path: string; icon: React.ReactNode; label: string }[]).map(n => (
-              <button key={n.path} onClick={() => { router.push(n.path); setDrawerOpen(false); }}
-                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px",
-                  border: "none", background: C.white, color: C.gray800, fontSize: 14,
-                  cursor: "pointer", textAlign: "left", borderBottom: `1px solid ${C.gray100}`,
-                  width: "100%" }}>
-                <span style={{ color: C.gray600 }}>{n.icon}</span>
-                <span>{n.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* ── Welcome banner ────────────────────────────────────────────────── */}
       <div style={{
         background: `linear-gradient(135deg,${C.navy},${C.navyL})`,
@@ -645,7 +602,7 @@ export default function GestionnaireDashboard() {
       </div>
 
       {/* ── 6 Métriques (naviguent vers sous-pages) ───────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(3,1fr)", gap: 14, marginBottom: 20 }}>
         {stat(<Bus size={22} color={enServiceVeh.length > 0 ? C.green : C.gray400} />,
           "Véhicules en service", enServiceVeh.length,
           `${vehicles.length - enServiceVeh.length} en atelier / hors service`,

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
@@ -537,24 +538,17 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                 {QUICK_ACCESS.map(c => {
                   const Icon = c.icon;
                   return (
-                    <div key={c.path} onClick={() => router.push(c.path)}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.borderColor = "rgba(0,0,0,0.1)";
-                        e.currentTarget.style.background = "#F8FAFC";
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.borderColor = "rgba(0,0,0,0.05)";
-                        e.currentTarget.style.background = C.white;
-                      }}
+                    <Link key={c.path} href={c.path}
                       style={{ background: C.white, borderRadius: 8,
                         border: "0.5px solid rgba(0,0,0,0.05)", padding: "14px 10px",
                         cursor: "pointer", display: "flex", flexDirection: "column",
                         alignItems: "center", gap: 6, textAlign: "center",
-                        transition: "background .12s, border-color .12s" }}>
+                        transition: "background .12s, border-color .12s",
+                        textDecoration: "none" }}>
                       <Icon size={22} color={c.color} />
                       <div style={{ fontSize: 11, fontWeight: 500, color: "#0F172A" }}>{c.label}</div>
                       <div style={{ fontSize: 9, color: "#94A3B8" }}>{c.sub}</div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>
