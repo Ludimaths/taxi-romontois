@@ -8,21 +8,6 @@ import { CheckCircle2, AlertTriangle, Pen, Trash2, Key, RefreshCw, Link2, UserPl
 import type { Conducteur, Circuit, Vehicule, CongesDemande } from "@/lib/types";
 
 
-function genPassword() {
-  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const lower = "abcdefghjkmnpqrstuvwxyz";
-  const digits = "23456789";
-  const special = "@#$%!";
-  const all = upper + lower + digits + special;
-  let pwd = [
-    upper[Math.floor(Math.random() * upper.length)],
-    lower[Math.floor(Math.random() * lower.length)],
-    digits[Math.floor(Math.random() * digits.length)],
-    special[Math.floor(Math.random() * special.length)],
-  ];
-  for (let i = 0; i < 6; i++) pwd.push(all[Math.floor(Math.random() * all.length)]);
-  return pwd.sort(() => Math.random() - 0.5).join("");
-}
 
 const STATUTS = ["disponible","en_service","en_attente","absent","termine"] as const;
 
@@ -149,14 +134,9 @@ export default function ConducteursPage() {
   const [histYear,setHistYear]= useState("");
 
   // Profile + mot de passe
-  const [profile,   setProfile]   = useState<{ id: string; role: string } | null>(null);
-  const [genPwd,    setGenPwd]    = useState("");
-  const [pwdCopied, setPwdCopied] = useState(false);
-  const [pwdSet,    setPwdSet]    = useState(false);
-  const [pwdBusy,   setPwdBusy]   = useState(false);
-
-  // Email réel retourné par l'API après set-password
-  const [actualEmail, setActualEmail] = useState("");
+  const [profile,    setProfile]    = useState<{ id: string; role: string } | null>(null);
+  const [pwdBusy,    setPwdBusy]    = useState(false);
+  const [inviteSent, setInviteSent] = useState(false);
 
   // Congés
   const [congesCondu,    setCongesCondu]    = useState<CongesDemande[]>([]);
@@ -169,9 +149,8 @@ export default function ConducteursPage() {
 
   // Création de compte
   const [createBusy,   setCreateBusy]   = useState(false);
-  const [createResult, setCreateResult] = useState<{ email: string; password: string } | null>(null);
+  const [createResult, setCreateResult] = useState<{ email: string } | null>(null);
   const [createError,  setCreateError]  = useState("");
-  const [createCopied, setCreateCopied] = useState(false);
   const [linkBusy,     setLinkBusy]     = useState(false);
   const [linkDone,     setLinkDone]     = useState(false);
   const [linkError,    setLinkError]    = useState("");
@@ -231,10 +210,7 @@ export default function ConducteursPage() {
     setCreateBusy(false);
     setCreateResult(null);
     setCreateError("");
-    setCreateCopied(false);
-    setGenPwd("");
-    setPwdSet(false);
-    setActualEmail("");
+    setInviteSent(false);
     setLinkBusy(false);
     setLinkDone(false);
     setLinkError("");
@@ -284,31 +260,20 @@ export default function ConducteursPage() {
     fetchAll();
   };
 
-  const handleGenPassword = async () => {
+  const handleSendInvite = async () => {
     if (!profile) return;
-    const pwd = genPassword();
-    setGenPwd(pwd);
     setPwdBusy(true);
     const res = await fetch("/api/admin/set-password", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: profile.id, password: pwd }),
+      body: JSON.stringify({ userId: profile.id }),
     });
     const json = await res.json();
     setPwdBusy(false);
     if (res.ok) {
-      if (json.email) setActualEmail(json.email);
-      setPwdSet(true);
+      setInviteSent(true);
     } else {
-      setGenPwd("");
-      alert(`Erreur : ${json.error ?? "Impossible de définir le mot de passe"}`);
+      alert(`Erreur : ${json.error ?? "Impossible d'envoyer l'invitation"}`);
     }
-  };
-
-  const handleResetPassword = async () => {
-    if (!profile || !confirm("Générer un nouveau mot de passe ?")) return;
-    setPwdSet(false);
-    setGenPwd("");
-    await handleGenPassword();
   };
 
   const handleCreateAccount = async () => {
@@ -325,7 +290,7 @@ export default function ConducteursPage() {
     const json = await res.json();
     setCreateBusy(false);
     if (res.ok) {
-      setCreateResult({ email: json.email, password: json.password });
+      setCreateResult({ email: json.email });
       fetchHistory(drv.id);
     } else {
       setCreateError(json.error || "Erreur inconnue");
@@ -447,7 +412,7 @@ export default function ConducteursPage() {
         )}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <button onClick={() => { setSel(null); setTab("infos"); setGenPwd(""); setPwdSet(false); setCreateResult(null); setCreateError(""); }}
+          <button onClick={() => { setSel(null); setTab("infos"); setInviteSent(false); setCreateResult(null); setCreateError(""); }}
             style={{ background: "none", border: "none", color: C.navyL, cursor: "pointer",
               fontWeight: 700, fontSize: 14, padding: 0 }}>
             ← Tous les conducteurs
@@ -501,40 +466,17 @@ export default function ConducteursPage() {
                   </div>
                   <div style={{ fontSize: 12, color: C.gray600, marginBottom: 12, padding: "4px 10px",
                     background: C.gray50, borderRadius: 6, fontFamily: "monospace" }}>
-                    {actualEmail || conducteurEmail(d.prenom, d.nom)}
+                    {conducteurEmail(d.prenom, d.nom)}
                   </div>
-                  {genPwd && (
-                    <div style={{ background: C.amberL, borderRadius: 10, padding: 12, marginBottom: 12 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 8,
-                        display: "flex", alignItems: "center", gap: 5 }}>
-                        <AlertTriangle size={12} /> Mot de passe généré — copiez-le maintenant
-                      </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <input
-                          type="text"
-                          readOnly
-                          value={genPwd}
-                          style={{ flex: 1, fontFamily: "monospace", fontSize: 15, fontWeight: 700,
-                            letterSpacing: 2, padding: "8px 10px", borderRadius: 8,
-                            border: `1px solid ${C.amber}`, background: C.white, color: C.navy }}
-                        />
-                        <button onClick={() => { navigator.clipboard.writeText(genPwd); setPwdCopied(true); setTimeout(() => setPwdCopied(false), 2000); }}
-                          style={{ padding: "8px 12px", borderRadius: 8, border: "none",
-                            background: pwdCopied ? C.green : C.navyL, color: C.white,
-                            cursor: "pointer", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
-                          {pwdCopied ? "Copié" : "Copier"}
-                        </button>
-                      </div>
+                  {inviteSent ? (
+                    <div style={{ padding: "8px 12px", background: C.greenL, borderRadius: 8,
+                      fontSize: 12, color: C.green, fontWeight: 700,
+                      display: "flex", alignItems: "center", gap: 6 }}>
+                      <CheckCircle2 size={13} /> Invitation envoyée par email
                     </div>
-                  )}
-                  {!genPwd && (
-                    <Btn full onClick={handleGenPassword} disabled={pwdBusy} color={C.navyL}>
-                      {pwdBusy ? "Génération…" : "Générer mot de passe"}
-                    </Btn>
-                  )}
-                  {genPwd && (
-                    <Btn full outline onClick={handleResetPassword} disabled={pwdBusy} color={C.amber}>
-                      Nouveau mot de passe
+                  ) : (
+                    <Btn full onClick={handleSendInvite} disabled={pwdBusy} color={C.navyL}>
+                      {pwdBusy ? "Envoi…" : "Renvoyer l'invitation"}
                     </Btn>
                   )}
                 </div>
@@ -542,48 +484,16 @@ export default function ConducteursPage() {
                 <div>
                   {createResult ? (
                     <div>
-                      <div style={{ padding: "8px 12px", background: C.greenL, borderRadius: 8,
-                        fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 12,
-                        display: "flex", alignItems: "center", gap: 6 }}>
-                        <CheckCircle2 size={13} /> Compte créé avec succès
-                      </div>
-                      <div style={{ background: C.amberL, borderRadius: 10, padding: 14, marginBottom: 10,
-                        border: `1px solid #FDE68A` }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 12,
+                      <div style={{ padding: "10px 14px", background: C.greenL, borderRadius: 10,
+                        border: `1px solid ${C.green}40`, marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, color: C.green, fontWeight: 700, marginBottom: 6,
                           display: "flex", alignItems: "center", gap: 5 }}>
-                          <AlertTriangle size={12} /> Copiez ces identifiants maintenant — ils ne seront plus affichés
+                          <CheckCircle2 size={13} /> Invitation envoyée
                         </div>
-                        <div style={{ marginBottom: 10 }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: C.gray600,
-                            textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Email</div>
-                          <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700,
-                            color: C.navy, background: C.white, padding: "7px 10px",
-                            borderRadius: 6, border: `1px solid ${C.gray200}` }}>
-                            {createResult.email}
-                          </div>
+                        <div style={{ fontSize: 11, color: C.gray600, lineHeight: 1.5 }}>
+                          Email envoyé à <strong>{createResult.email}</strong>.<br/>
+                          Le conducteur recevra un lien valable 24h pour créer son mot de passe.
                         </div>
-                        <div style={{ marginBottom: 12 }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: C.gray600,
-                            textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Mot de passe</div>
-                          <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 900,
-                            color: C.navy, background: C.white, padding: "7px 10px",
-                            borderRadius: 6, border: `1px solid ${C.gray200}`, letterSpacing: 2 }}>
-                            {createResult.password}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(
-                              `Email : ${createResult.email}\nMot de passe : ${createResult.password}`
-                            );
-                            setCreateCopied(true);
-                            setTimeout(() => setCreateCopied(false), 2500);
-                          }}
-                          style={{ width: "100%", padding: "9px", borderRadius: 8, border: "none",
-                            background: createCopied ? C.green : C.navyL, color: C.white,
-                            cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "background .2s" }}>
-                          {createCopied ? "Copié !" : "Copier email + mot de passe"}
-                        </button>
                       </div>
                     </div>
                   ) : (
@@ -615,7 +525,7 @@ export default function ConducteursPage() {
                         </div>
                       ) : (
                         <Btn full onClick={handleCreateAccount} disabled={createBusy} color={C.green}>
-                          {createBusy ? "Création en cours…" : "Créer le compte conducteur"}
+                          {createBusy ? "Envoi en cours…" : "Envoyer une invitation"}
                         </Btn>
                       )}
                     </div>

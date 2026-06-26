@@ -18,6 +18,17 @@ const RS: Record<string, { l: string; c: string; bg: string }> = {
   remis_en_circulation:  { l: "Remis en circulation", c: C.green,   bg: C.greenL },
 };
 
+const PHOTO_ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const PHOTO_MAX = 10 * 1024 * 1024;
+function validatePhotos(files: File[]): string | null {
+  if (files.length > 5) return "Maximum 5 photos par upload";
+  for (const f of files) {
+    if (!PHOTO_ALLOWED.includes(f.type)) return `Type refusé : ${f.name} (JPEG/PNG/WebP uniquement)`;
+    if (f.size > PHOTO_MAX) return `Trop lourd : ${f.name} (max 10 Mo)`;
+  }
+  return null;
+}
+
 function nbJ(a: string, b: string) {
   return Math.round((+new Date(b) - +new Date(a)) / 86400000);
 }
@@ -154,8 +165,9 @@ export default function MecanicienPage() {
   // Suivi atelier form
   const [suiviRep,  setSuiviRep]  = useState<Reparation | null>(null);
   const [suiviF,    setSuiviF]    = useState({ statut: "", cout: "", notes: "", remarques: "", statut_libre: "" });
-  const [suiviPhotos, setSuiviPhotos] = useState<File[]>([]);
-  const [suiviBusy, setSuiviBusy] = useState(false);
+  const [suiviPhotos,    setSuiviPhotos]    = useState<File[]>([]);
+  const [suiviPhotoErr,  setSuiviPhotoErr]  = useState("");
+  const [suiviBusy,      setSuiviBusy]      = useState(false);
 
   // Sortie prêts form
   const [sortieRep,  setSortieRep]  = useState<Reparation | null>(null);
@@ -996,7 +1008,12 @@ export default function MecanicienPage() {
               Photos (optionnel)
             </label>
             <input type="file" accept="image/*" multiple
-              onChange={e => setRecepPhotos(Array.from(e.target.files || []))}
+              onChange={e => {
+                const files = Array.from(e.target.files || []);
+                const err = validatePhotos(files);
+                if (err) { setRecepErr(err); e.currentTarget.value = ""; return; }
+                setRecepErr(""); setRecepPhotos(files);
+              }}
               style={{ fontSize: 13, color: C.gray600 }} />
             {recepPhotos.length > 0 && (
               <div style={{ fontSize: 12, color: C.green, marginTop: 4 }}>
@@ -1122,8 +1139,14 @@ export default function MecanicienPage() {
                 Photos supplémentaires
               </label>
               <input type="file" accept="image/*" multiple
-                onChange={e => setSuiviPhotos(Array.from(e.target.files || []))}
+                onChange={e => {
+                  const files = Array.from(e.target.files || []);
+                  const err = validatePhotos(files);
+                  if (err) { setSuiviPhotoErr(err); e.currentTarget.value = ""; return; }
+                  setSuiviPhotoErr(""); setSuiviPhotos(files);
+                }}
                 style={{ fontSize: 13, color: C.gray600 }} />
+              {suiviPhotoErr && <div style={{ fontSize: 12, color: C.red, marginTop: 4 }}>{suiviPhotoErr}</div>}
               {suiviPhotos.length > 0 && (
                 <div style={{ fontSize: 12, color: C.green, marginTop: 4 }}>
                   {suiviPhotos.length} photo(s) sélectionnée(s)

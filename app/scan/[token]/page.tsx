@@ -17,7 +17,7 @@ const etatBg = (e: string) =>
 
 export default function ScanPage() {
   const params = useParams();
-  const vehicleId = decodeURIComponent(String(params.vehicleId));
+  const token = decodeURIComponent(String(params.token));
   const supabase = createClient();
 
   const [vehicle, setVehicle] = useState<Vehicule | null>(null);
@@ -34,7 +34,7 @@ export default function ScanPage() {
   useEffect(() => {
     async function findVehicle() {
       try {
-        const res = await fetch(`/api/vehicule/${encodeURIComponent(vehicleId)}`);
+        const res = await fetch(`/api/vehicule/${encodeURIComponent(token)}`);
         if (!res.ok) { setNotFound(true); setLoading(false); return; }
         const { vehicle: data } = await res.json();
         if (!data) setNotFound(true);
@@ -45,7 +45,7 @@ export default function ScanPage() {
       setLoading(false);
     }
     findVehicle();
-  }, [vehicleId]);
+  }, [token]);
 
   const handlePrise = async () => {
     if (!vehicle) return;
@@ -101,7 +101,7 @@ export default function ScanPage() {
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🚫</div>
         <div style={{ fontSize: 18, fontWeight: 800, color: C.gray800, marginBottom: 8 }}>Véhicule non trouvé</div>
-        <div style={{ fontSize: 13, color: C.gray400 }}>ID : {vehicleId}</div>
+        <div style={{ fontSize: 13, color: C.gray400 }}>Token : {token}</div>
       </div>
     </div>
   );

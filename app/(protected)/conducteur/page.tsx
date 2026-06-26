@@ -62,6 +62,13 @@ export default function ConducteurPage(){
   // ID conducteur (entier) — nécessaire pour le filtre Realtime alertes
   const [condId, setCondId] = useState<number|null>(null);
 
+  // Changement mot de passe (première connexion)
+  const [mustChangePwd,  setMustChangePwd]  = useState(false);
+  const [newPwd,         setNewPwd]         = useState("");
+  const [newPwdConfirm,  setNewPwdConfirm]  = useState("");
+  const [pwdChangeErr,   setPwdChangeErr]   = useState("");
+  const [pwdChangeBusy,  setPwdChangeBusy]  = useState(false);
+
   // Navigation historique
   const [histYear,  setHistYear]  = useState<number|null>(null);
   const [histMonth, setHistMonth] = useState<number|null>(null);
@@ -70,10 +77,11 @@ export default function ConducteurPage(){
   const load=useCallback(async()=>{
     const{data:{user}}=await sb.auth.getUser();
     if(!user)return;
-    const{data:prof}=await sb.from("profiles").select("conducteur_id").eq("id",user.id).single();
+    const{data:prof}=await sb.from("profiles").select("conducteur_id, must_change_password").eq("id",user.id).single();
     if(!prof?.conducteur_id){setLoading(false);return;}
     const cid=prof.conducteur_id;
     setCondId(cid);
+    setMustChangePwd(!!prof.must_change_password);
 
     const[drv,log,abs,enf,inc,msg,hist,cng]=await Promise.all([
       sb.from("conducteurs").select("*,circuit:circuits(*,cercle:cercles_scolaires(*)),vehicule:vehicules(*)")
@@ -131,6 +139,17 @@ export default function ConducteurPage(){
   },[condId,load,sb]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
+
+  async function handleChangePwd(){
+    if(newPwd.length<8){setPwdChangeErr("Minimum 8 caractères");return;}
+    if(newPwd!==newPwdConfirm){setPwdChangeErr("Les mots de passe ne correspondent pas");return;}
+    setPwdChangeBusy(true);setPwdChangeErr("");
+    const{error}=await sb.auth.updateUser({password:newPwd});
+    if(error){setPwdChangeErr(error.message);setPwdChangeBusy(false);return;}
+    const{data:{user}}=await sb.auth.getUser();
+    if(user) await sb.from("profiles").update({must_change_password:false}).eq("id",user.id);
+    setMustChangePwd(false);setNewPwd("");setNewPwdConfirm("");setPwdChangeBusy(false);
+  }
 
   async function handlePrendreService(){
     if(!driver)return;
@@ -384,6 +403,35 @@ export default function ConducteurPage(){
       )}
       {tab==="conges"&&(
         <TabConges conges={conges} onSend={handleEnvoyerConge}/>
+      )}
+
+      {mustChangePwd&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(13,59,122,0.75)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:C.white,borderRadius:12,padding:32,width:"100%",maxWidth:400,boxShadow:"0 8px 32px rgba(0,0,0,0.3)"}}>
+            <div style={{fontSize:22,marginBottom:8}}>🔐</div>
+            <h2 style={{margin:"0 0 8px",fontSize:18,color:C.navy,fontWeight:700}}>Changement de mot de passe requis</h2>
+            <p style={{margin:"0 0 20px",fontSize:14,color:C.gray600,lineHeight:1.5}}>
+              Pour des raisons de sécurité, définissez votre propre mot de passe avant d&apos;accéder à votre compte.
+            </p>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:12,color:C.gray600,marginBottom:4,fontWeight:600}}>Nouveau mot de passe</div>
+              <input type="password" value={newPwd} onChange={e=>setNewPwd(e.target.value)}
+                placeholder="Minimum 8 caractères"
+                style={{width:"100%",padding:"10px 12px",borderRadius:8,border:`1.5px solid ${C.gray200}`,fontSize:14,boxSizing:"border-box"}}/>
+            </div>
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:12,color:C.gray600,marginBottom:4,fontWeight:600}}>Confirmer le mot de passe</div>
+              <input type="password" value={newPwdConfirm} onChange={e=>setNewPwdConfirm(e.target.value)}
+                placeholder="Répétez le mot de passe"
+                style={{width:"100%",padding:"10px 12px",borderRadius:8,border:`1.5px solid ${C.gray200}`,fontSize:14,boxSizing:"border-box"}}/>
+            </div>
+            {pwdChangeErr&&<div style={{color:C.red,fontSize:13,marginBottom:12}}>{pwdChangeErr}</div>}
+            <button onClick={handleChangePwd} disabled={pwdChangeBusy}
+              style={{width:"100%",padding:"12px",background:C.navy,color:C.white,borderRadius:8,border:"none",fontSize:15,fontWeight:700,cursor:pwdChangeBusy?"not-allowed":"pointer",opacity:pwdChangeBusy?0.7:1}}>
+              {pwdChangeBusy?"Enregistrement...":"Confirmer le mot de passe"}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* ── Modals ── */}

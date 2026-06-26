@@ -194,6 +194,7 @@ export interface Profile {
   conducteur_id?: number;
   enfant_id?: number;
   civilite?: "mere" | "pere" | null;
+  must_change_password?: boolean;
 }
 
 export type CongesStatut = "en_attente" | "transmis_admin" | "accepte" | "refuse";

@@ -75,13 +75,13 @@ export default function QRCodesPage() {
         {vehicles.map(v => (
           <div key={v.id} style={{ background: C.white, borderRadius: 12, padding: 18,
             border: `1px solid ${C.gray200}`, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-            <QRCode value={`${DOMAIN}/scan/${v.id}`} size={100} level="M" />
+            <QRCode value={`${DOMAIN}/scan/${v.qr_token}`} size={100} level="M" />
             <div style={{ textAlign: "center" }}>
               <div style={{ fontWeight: 900, fontSize: 15, color: C.navy }}>{v.plaque}</div>
               <div style={{ fontSize: 12, color: C.gray600 }}>{v.marque} {v.modele}</div>
               {v.circuit && <div style={{ fontSize: 11, color: C.gray400, marginTop: 2 }}>{v.circuit.emoji} {v.circuit.nom}</div>}
               <div style={{ fontSize: 10, color: C.gray400, marginTop: 6, wordBreak: "break-all", maxWidth: "100%" }}>
-                {`${DOMAIN}/scan/${v.id}`}
+                {`${DOMAIN}/scan/${v.qr_token}`}
               </div>
             </div>
             <Btn small onClick={() => handlePrintOne(v.id)} color={C.navyL}>Imprimer</Btn>
@@ -116,7 +116,7 @@ export default function QRCodesPage() {
         <div className="qr-print-grid">
           {vehiclesToPrint.map(v => (
             <div key={v.id} className="qr-card">
-              <QRCode value={`${DOMAIN}/scan/${v.id}`} size={140} level="M" includeMargin />
+              <QRCode value={`${DOMAIN}/scan/${v.qr_token}`} size={140} level="M" includeMargin />
               <div style={{ textAlign: "center" }}>
                 <p className="plate">{v.plaque}</p>
                 <p className="model">{v.marque} {v.modele}</p>

@@ -21,7 +21,7 @@ const ROLE_ALLOWED: Record<string, string[]> = {
 
 const PROTECTED_PAGES: string[] = ["/gestionnaire", "/conducteur", "/mecanicien", "/admin", "/parent"];
 const PROTECTED_APIS: string[]  = ["/api/gestionnaire", "/api/admin", "/api/export", "/api/import"];
-const PUBLIC_PREFIXES: string[] = ["/login", "/scan/", "/api/vehicule/", "/_next/", "/favicon", "/logo.png"];
+const PUBLIC_PREFIXES: string[] = ["/login", "/scan/", "/api/vehicule/", "/auth/callback", "/_next/", "/favicon", "/logo.png"];
 
 function matchesAny(path: string, prefixes: string[]): boolean {
   return prefixes.some(p => path.startsWith(p));

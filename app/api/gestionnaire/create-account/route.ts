@@ -2,26 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth-guard";
 
+const CALLBACK_URL = "https://taxi-romontois.onrender.com/auth/callback";
+
 function buildEmail(prenom: string, nom: string): string {
   const clean = (s: string) =>
     s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/[^a-z0-9]/g, ".");
   return `${clean(prenom)}.${clean(nom)}@taxi-romontois.ch`;
-}
-
-function buildPassword(): string {
-  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const lower = "abcdefghjkmnpqrstuvwxyz";
-  const digits = "23456789";
-  const special = "@#$%!";
-  const all = upper + lower + digits + special;
-  const pwd = [
-    upper[Math.floor(Math.random() * upper.length)],
-    lower[Math.floor(Math.random() * lower.length)],
-    digits[Math.floor(Math.random() * digits.length)],
-    special[Math.floor(Math.random() * special.length)],
-  ];
-  for (let i = 0; i < 6; i++) pwd.push(all[Math.floor(Math.random() * all.length)]);
-  return pwd.sort(() => Math.random() - 0.5).join("");
 }
 
 export async function POST(req: NextRequest) {
@@ -45,49 +31,40 @@ export async function POST(req: NextRequest) {
     }
 
     const email = buildEmail(prenom, nom);
-    const password = buildPassword();
+    console.log("[create-account] invitation pour:", email, "conducteur_id:", conducteurId);
 
-    console.log("[create-account] Création compte pour:", email, "conducteur_id:", conducteurId);
-
-    // Création du compte Supabase Auth
-    const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
+    // Envoi invitation Supabase (crée le compte ou ré-invite si existant)
+    const { data: authData, error: authErr } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo: CALLBACK_URL,
     });
 
     if (authErr || !authData?.user) {
-      console.error("[create-account] Auth error:", authErr?.message);
-      if (authErr?.message?.toLowerCase().includes("already")) {
-        return NextResponse.json(
-          { error: `Un compte existe déjà avec l'email ${email}. Utilisez "Réinitialiser mot de passe" si le compte est déjà lié.` },
-          { status: 409 }
-        );
-      }
-      return NextResponse.json({ error: authErr?.message ?? "Erreur création compte Auth" }, { status: 500 });
+      console.error("[create-account] invite error:", authErr?.message);
+      return NextResponse.json({ error: authErr?.message ?? "Erreur envoi invitation" }, { status: 500 });
     }
 
     const uid = authData.user.id;
 
-    // Création du profil lié au conducteur
-    const { error: profErr } = await supabase.from("profiles").insert({
-      id: uid,
-      role: "conducteur",
-      conducteur_id: conducteurId,
-      nom,
-      prenom,
-    });
-
-    if (profErr) {
-      console.error("[create-account] Profile error:", profErr.message);
-      await supabase.auth.admin.deleteUser(uid);
-      return NextResponse.json({ error: `Erreur création profil : ${profErr.message}` }, { status: 500 });
+    // Créer ou mettre à jour le profil
+    const { data: existing } = await supabase.from("profiles").select("id").eq("id", uid).maybeSingle();
+    if (existing) {
+      await supabase.from("profiles").update({
+        role: "conducteur", conducteur_id: conducteurId, nom, prenom, must_change_password: true,
+      }).eq("id", uid);
+    } else {
+      const { error: profErr } = await supabase.from("profiles").insert({
+        id: uid, role: "conducteur", conducteur_id: conducteurId, nom, prenom, must_change_password: true,
+      });
+      if (profErr) {
+        console.error("[create-account] profile error:", profErr.message);
+        return NextResponse.json({ error: `Erreur profil : ${profErr.message}` }, { status: 500 });
+      }
     }
 
-    console.log("[create-account] Succès :", email, "uid:", uid);
-    return NextResponse.json({ ok: true, email, password });
+    console.log("[create-account] invitation envoyée:", email, "uid:", uid);
+    return NextResponse.json({ ok: true, email });
   } catch (e) {
-    console.error("[create-account] Exception:", e);
+    console.error("[create-account] exception:", e);
     return NextResponse.json({ error: "Erreur serveur inattendue" }, { status: 500 });
   }
 }
