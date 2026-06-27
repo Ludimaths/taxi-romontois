@@ -52,10 +52,11 @@ interface SidebarProps {
   alertesCount?: number;
   reparationsCount?: number;
   messagesCount?: number;
+  congesCount?: number;
   onNavClick?: () => void;
 }
 
-export default function Sidebar({ role, nom, prenom, onSignOut, onNavClick, incidentsCount = 0, alertesCount = 0, reparationsCount = 0, messagesCount = 0 }: SidebarProps) {
+export default function Sidebar({ role, nom, prenom, onSignOut, onNavClick, incidentsCount = 0, alertesCount = 0, reparationsCount = 0, messagesCount = 0, congesCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [logoError, setLogoError] = useState(false);
@@ -114,7 +115,8 @@ export default function Sidebar({ role, nom, prenom, onSignOut, onNavClick, inci
           const badge = item.path.includes("incidents") ? incidentsCount
             : item.path.includes("alertes") ? alertesCount
             : item.path.includes("reparations") ? reparationsCount
-            : item.path.includes("messages") ? messagesCount : 0;
+            : item.path.includes("messages") ? messagesCount
+            : item.path.endsWith("/conducteurs") ? congesCount : 0;
           const Icon = item.icon;
 
           return (

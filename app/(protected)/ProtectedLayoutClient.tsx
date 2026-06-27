@@ -20,21 +20,24 @@ export default function ProtectedLayoutClient({
   const [alertesCount,    setAlertesCount]    = useState(0);
   const [reparationsCount,setReparationsCount]= useState(0);
   const [messagesCount,   setMessagesCount]   = useState(0);
+  const [congesCount,     setCongesCount]     = useState(0);
   const [mobileNavOpen,   setMobileNavOpen]   = useState(false);
 
   const fetchCounts = useCallback(async () => {
-    const [{ count: ic }, { count: ac }, { count: rc }, { count: mc }] = await Promise.all([
+    const [{ count: ic }, { count: ac }, { count: rc }, { count: mc }, { count: cc }] = await Promise.all([
       sb.from("incidents").select("id", { count: "exact", head: true }).neq("status", "resolu"),
       sb.from("alertes").select("id", { count: "exact", head: true }).eq("read", false),
       sb.from("reparations").select("id", { count: "exact", head: true }).eq("statut", "en_attente_validation"),
       sb.from("messages_internes").select("id", { count: "exact", head: true })
         .eq("lu", false).neq("expediteur_id", profile.id)
         .or(`destinataire_id.eq.${profile.id},destinataire_role.eq.${profile.role}`),
+      sb.from("conges_demandes").select("id", { count: "exact", head: true }).eq("statut", "en_attente"),
     ]);
     setIncidentsCount(ic ?? 0);
     setAlertesCount(ac ?? 0);
     setReparationsCount(rc ?? 0);
     setMessagesCount(mc ?? 0);
+    setCongesCount(cc ?? 0);
   }, [sb, profile.id, profile.role]);
 
   useEffect(() => {
@@ -51,6 +54,7 @@ export default function ProtectedLayoutClient({
         })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "alertes" }, fetchCounts)
       .on("postgres_changes", { event: "*", schema: "public", table: "reparations" }, fetchCounts)
+      .on("postgres_changes", { event: "*", schema: "public", table: "conges_demandes" }, fetchCounts)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages_internes" },
         (payload) => {
           const n = payload.new as { lu?: boolean };
@@ -113,12 +117,12 @@ export default function ProtectedLayoutClient({
             color: C.white, cursor: "pointer", padding: 8, borderRadius: 8,
             display: "flex", alignItems: "center" }}>
           <Menu size={24} color={C.white} />
-          {(incidentsCount + alertesCount + reparationsCount + messagesCount) > 0 && (
+          {(incidentsCount + alertesCount + reparationsCount + messagesCount + congesCount) > 0 && (
             <span style={{ position: "absolute", top: 4, right: 4, background: C.red,
               color: C.white, borderRadius: 99, fontSize: 9, fontWeight: 900,
               minWidth: 14, height: 14, display: "flex", alignItems: "center",
               justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
-              {Math.min(incidentsCount + alertesCount + reparationsCount + messagesCount, 99)}
+              {Math.min(incidentsCount + alertesCount + reparationsCount + messagesCount + congesCount, 99)}
             </span>
           )}
         </button>
@@ -140,6 +144,7 @@ export default function ProtectedLayoutClient({
               alertesCount={alertesCount}
               reparationsCount={reparationsCount}
               messagesCount={messagesCount}
+              congesCount={congesCount}
             />
           </div>
         </div>
