@@ -373,16 +373,12 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
       badge: unreadMsgCount || undefined },
   ];
 
-  // ── Accès rapide ────────────────────────────────────────────────────────────
+  // ── Accès rapide (4 cards — grille 2×2) ────────────────────────────────────
   const QUICK_ACCESS = [
-    { icon: Bus,             color: "#1565C0", label: "Flotte",       sub: "24 véhicules",  path: "/gestionnaire/vehicules"  },
-    { icon: Users,           color: "#16A34A", label: "Conducteurs",  sub: "53 actifs",     path: "/gestionnaire/conducteurs"},
-    { icon: Wrench,          color: "#D97706", label: "Réparations",  sub: "Atelier",       path: "/gestionnaire/reparations"},
-    { icon: AlertTriangle,   color: "#DC2626", label: "Incidents",    sub: "Signalements",  path: "/gestionnaire/incidents"  },
-    { icon: QrCode,          color: "#7C3AED", label: "QR Codes",     sub: "Véhicules",     path: "/admin/qrcodes"           },
-    { icon: LayoutDashboard, color: "#0D3B7A", label: "Gestionnaire", sub: "Dashboard",     path: "/gestionnaire"            },
-    { icon: Settings,        color: "#EA580C", label: "Mécanicien",   sub: "Atelier",       path: "/mecanicien"              },
-    { icon: Download,        color: "#16A34A", label: "Exports",      sub: "CSV / PDF",     path: "/gestionnaire/export"     },
+    { icon: LayoutDashboard, color: "#0D3B7A", label: "Gestionnaire", sub: "Dashboard complet",     path: "/gestionnaire"            },
+    { icon: Settings,        color: "#EA580C", label: "Mécanicien",   sub: "Atelier & réparations", path: "/mecanicien"              },
+    { icon: Wrench,          color: "#D97706", label: "Réparations",  sub: "Suivi atelier",         path: "/gestionnaire/reparations"},
+    { icon: QrCode,          color: "#7C3AED", label: "QR Codes",     sub: "Véhicules",             path: "/admin/qrcodes"           },
   ];
 
   // ── Sidebar content (shared desktop + mobile drawer) ───────────────────────
@@ -539,13 +535,13 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                 ))}
               </div>
 
-              {/* Accès rapide — 2×4 sur mobile, 4×2 sur desktop */}
+              {/* Accès rapide — grille 2×2 */}
               <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8",
                 textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
                 Accès rapide
               </div>
               <div style={{ display: "grid",
-                gridTemplateColumns: isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(4,minmax(0,1fr))",
+                gridTemplateColumns: "repeat(2,minmax(0,1fr))",
                 gap: 8, marginBottom: 20 }}>
                 {QUICK_ACCESS.map(c => {
                   const Icon = c.icon;

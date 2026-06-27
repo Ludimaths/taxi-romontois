@@ -138,7 +138,7 @@ export default function ProtectedLayoutClient({
         <div style={{ position: "fixed", inset: 0, zIndex: 200 }}>
           <div onClick={() => setMobileNavOpen(false)}
             style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
-          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 260, zIndex: 1, boxShadow: "-4px 0 20px rgba(0,0,0,0.3)" }}>
+          <div style={{ position: "fixed", right: 0, top: 0, bottom: 0, width: 228, zIndex: 1000, boxShadow: "-4px 0 20px rgba(0,0,0,0.3)" }}>
             <Sidebar
               role={navRole}
               nom={profile.nom}
@@ -173,8 +173,28 @@ export default function ProtectedLayoutClient({
         </div>
 
         {/* Contenu principal */}
-        <div className="tx-main-padding" style={{ flex: 1, overflowY: "auto" }}>
-          {children}
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+          {/* Bannière mode consultation (admin visitant /gestionnaire ou /mecanicien) */}
+          {profile.role === "admin" && (
+            <div style={{ background: "#FEF3C7", borderBottom: "2px solid #D97706",
+              padding: "10px 20px", display: "flex", alignItems: "center",
+              justifyContent: "space-between", gap: 12, flexWrap: "wrap", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8,
+                fontSize: 13, fontWeight: 700, color: "#92400E" }}>
+                <span style={{ fontSize: 16 }}>👁</span>
+                <span>Mode consultation administrateur</span>
+              </div>
+              <button onClick={() => router.push("/admin")}
+                style={{ padding: "6px 16px", borderRadius: 8, border: "none",
+                  background: C.navy, color: C.white, fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", whiteSpace: "nowrap" }}>
+                ← Retour Admin
+              </button>
+            </div>
+          )}
+          <div className="tx-main-padding" style={{ flex: 1 }}>
+            {children}
+          </div>
         </div>
       </div>
     </div>
