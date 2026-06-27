@@ -83,6 +83,7 @@ export default function AdminPage() {
   const [congeAdminRefusId,    setCongeAdminRefusId]    = useState<number | null>(null);
   const [congeAdminRefusMotif, setCongeAdminRefusMotif] = useState("");
   const [congeAdminBusy,       setCongeAdminBusy]       = useState(false);
+  const [internalsUnread,      setInternalsUnread]      = useState(0);
 
   const [histYear,  setHistYear]  = useState(currentSchoolYear());
   const [histMonth, setHistMonth] = useState<number | null>(null);
@@ -115,7 +116,7 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     const yearAgo = addDays(isoToday(), -365);
-    const [c, v, inc, rep, abs, msgs, cng] = await Promise.all([
+    const [c, v, inc, rep, abs, msgs, cng, intMsgs] = await Promise.all([
       sb.from("conducteurs").select("*").order("nom"),
       sb.from("vehicules").select("*").order("plaque"),
       sb.from("incidents").select("*,vehicule:vehicules(id,plaque),conducteur:conducteurs(prenom,nom)")
@@ -130,6 +131,8 @@ export default function AdminPage() {
       sb.from("conges_demandes")
         .select("*,conducteur:conducteurs!conducteur_id(prenom,nom)")
         .eq("statut", "transmis_admin").order("created_at", { ascending: false }),
+      sb.from("messages_internes").select("id", { count: "exact", head: true })
+        .eq("lu", false).eq("destinataire_role", "admin"),
     ]);
     setConducteurs(c.data ?? []);
     setVehicules(v.data ?? []);
@@ -138,6 +141,7 @@ export default function AdminPage() {
     setAbsencesCond(abs.data ?? []);
     setAdminMsgs(msgs.data ?? []);
     setCongesAdmin(cng.data ?? []);
+    setInternalsUnread(intMsgs.count ?? 0);
     setLoading(false);
   }, [sb]);
 
@@ -150,6 +154,8 @@ export default function AdminPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "reparations" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "absences_conducteurs" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "conges_demandes" }, load)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages_internes" }, load)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages_internes" }, load)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [load, sb]);
@@ -213,7 +219,7 @@ export default function AdminPage() {
   const cPresents   = conducteurs.filter(d => ["en_service","disponible"].includes(d.status)).length;
   const incOuverts  = incidents.filter(i => i.status !== "resolu").length;
   const repAValider = reparations.filter(r => r.statut === "en_attente_validation");
-  const unreadMsgCount = adminMsgs.filter(m => !m.read).length;
+  const unreadMsgCount = adminMsgs.filter(m => !m.read).length + internalsUnread;
 
   // ── Données graphiques ──────────────────────────────────────────────────────
   const absencesByWeek = (() => {

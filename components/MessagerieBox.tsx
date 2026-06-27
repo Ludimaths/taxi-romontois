@@ -177,12 +177,19 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
     if (!text.trim() || !selectedPerson || !myId) return;
     setSending(true);
     const isFallback = selectedPerson.id.startsWith("role-");
+    let destId: string | null = isFallback ? null : selectedPerson.id;
+    // Si fallback (RLS bloque profiles), tenter de résoudre l'id réel par rôle
+    if (isFallback) {
+      const { data: prof } = await sb.from("profiles")
+        .select("id").eq("role", selectedPerson.role).limit(1).maybeSingle();
+      if (prof?.id) destId = prof.id as string;
+    }
     await sb.from("messages_internes").insert({
       expediteur_id:     myId,
       expediteur_nom:    myNom,
       expediteur_role:   myRole,
       destinataire_role: selectedPerson.role,
-      destinataire_id:   isFallback ? null : selectedPerson.id,
+      destinataire_id:   destId,
       message:           text.trim(),
     });
     setText("");
