@@ -122,6 +122,7 @@ export default function ParentsPage() {
   const [notifSev,  setNotifSev]    = useState<"normale"|"haute">("normale");
   const [sending,   setSending]     = useState(false);
   const [notifSent, setNotifSent]   = useState(false);
+  const [delConfirmParent, setDelConfirmParent] = useState<Parent | null>(null);
 
   const fetchAll = useCallback(async () => {
     const [par, enf, msg] = await Promise.all([
@@ -184,9 +185,11 @@ export default function ParentsPage() {
     setEditModal(false);
   };
 
-  const handleDelete = async (p: Parent) => {
-    if (!confirm(`Supprimer le profil de ${p.prenom} ${p.nom} ?`)) return;
-    await sb.from("profiles").delete().eq("id", p.id);
+  const handleDelete = (p: Parent) => setDelConfirmParent(p);
+  const confirmDeleteParent = async () => {
+    if (!delConfirmParent) return;
+    setDelConfirmParent(null);
+    await sb.from("profiles").delete().eq("id", delConfirmParent.id);
     setSel(null);
     fetchAll();
   };
@@ -377,6 +380,27 @@ export default function ParentsPage() {
         <Modal title="Ajouter un parent" onClose={() => setAddModal(false)}>
           <ParentForm init={{}} enfants={enfants}
             onSave={handleAdd} onCancel={() => setAddModal(false)} saving={saving} />
+        </Modal>
+      )}
+
+      {delConfirmParent && (
+        <Modal title="Confirmer la suppression" onClose={() => setDelConfirmParent(null)}>
+          <p style={{ fontSize: 14, color: C.gray800, marginBottom: 20 }}>
+            Supprimer définitivement le profil de <strong>{delConfirmParent.prenom} {delConfirmParent.nom}</strong> ?
+            Cette action est irréversible.
+          </p>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button onClick={() => setDelConfirmParent(null)}
+              style={{ padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.gray200}`,
+                background: C.white, color: C.gray800, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              Annuler
+            </button>
+            <button onClick={confirmDeleteParent}
+              style={{ padding: "9px 18px", borderRadius: 8, border: "none",
+                background: C.red, color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+              Supprimer
+            </button>
+          </div>
         </Modal>
       )}
 

@@ -163,6 +163,7 @@ export default function ConducteursPage() {
   const [linkBusy,     setLinkBusy]     = useState(false);
   const [linkDone,     setLinkDone]     = useState(false);
   const [linkError,    setLinkError]    = useState("");
+  const [delConfirm,   setDelConfirm]   = useState(false);
 
   const fetchAll = useCallback(async () => {
     const [drv, cir, veh] = await Promise.all([
@@ -264,8 +265,10 @@ export default function ConducteursPage() {
     setAddModal(false);
   };
 
-  const handleDelete = async () => {
-    if (!sel || !confirm("Supprimer ce conducteur ?")) return;
+  const handleDelete = () => { if (sel) setDelConfirm(true); };
+  const confirmDelete = async () => {
+    if (!sel) return;
+    setDelConfirm(false);
     await sb.from("conducteurs").delete().eq("id", sel);
     setSel(null);
     fetchAll();
@@ -432,6 +435,27 @@ export default function ConducteursPage() {
           <Modal title={`Modifier — ${d.prenom} ${d.nom}`} onClose={() => setEditModal(false)}>
             <DriverForm init={d} circuits={circuits} vehicules={vehicules}
               onSave={handleSave} onCancel={() => setEditModal(false)} saving={saving} />
+          </Modal>
+        )}
+
+        {delConfirm && (
+          <Modal title="Confirmer la suppression" onClose={() => setDelConfirm(false)}>
+            <p style={{ fontSize: 14, color: C.gray800, marginBottom: 20 }}>
+              Supprimer définitivement <strong>{d.prenom} {d.nom}</strong> ?
+              Cette action est irréversible.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={() => setDelConfirm(false)}
+                style={{ padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.gray200}`,
+                  background: C.white, color: C.gray800, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Annuler
+              </button>
+              <button onClick={confirmDelete}
+                style={{ padding: "9px 18px", borderRadius: 8, border: "none",
+                  background: C.red, color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                Supprimer
+              </button>
+            </div>
           </Modal>
         )}
 
