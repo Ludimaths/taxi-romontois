@@ -662,36 +662,8 @@ export default function GestionnaireDashboard() {
         </div>
       </div>
 
-      {/* ── 6 Métriques (naviguent vers sous-pages) ───────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(3,1fr)", gap: 14, marginBottom: 20 }}>
-        {stat(<Bus size={22} color={enServiceVeh.length > 0 ? C.green : C.gray400} />,
-          "Véhicules en service", enServiceVeh.length,
-          `${vehicles.length - enServiceVeh.length} en atelier / hors service`,
-          enServiceVeh.length > 0 ? C.green : C.gray400, "/gestionnaire/vehicules")}
-        {stat(<Users size={22} color={C.navyL} />,
-          "Conducteurs présents", enServiceDrv.length,
-          `${drivers.filter(d => d.status === "disponible").length} disponibles`,
-          C.navyL, "/gestionnaire/conducteurs?status=en_service")}
-        {stat(<UserX size={22} color={absents.length > 0 ? C.amber : C.gray400} />,
-          "Absents du jour", absents.length,
-          `${absents.filter(d => !!d.circuit_id).length} circuits à couvrir`,
-          absents.length > 0 ? C.amber : C.gray400, "/gestionnaire/conducteurs", absents.length > 0)}
-        {stat(<AlertCircle size={22} color={openInc.length > 0 ? C.red : C.green} />,
-          "Incidents ouverts", openInc.length,
-          "Temps réel · màj automatique",
-          openInc.length > 0 ? C.red : C.green, "/gestionnaire/incidents", openInc.length > 0)}
-        {stat(<Bell size={22} color={unreadAlerts.length > 0 ? C.amber : C.gray400} />,
-          "Alertes non lues", unreadAlerts.length,
-          `${newChildAbs.length} nouvelles absences enfants`,
-          unreadAlerts.length > 0 ? C.amber : C.gray400, "/gestionnaire/alertes")}
-        {stat(<Route size={22} color={uncoveredCirc.length > 0 ? C.red : C.green} />,
-          "Circuits couverts", coveredCirc.length,
-          `sur ${circuits.length} circuits · ${uncoveredCirc.length} non couverts`,
-          uncoveredCirc.length > 0 ? C.red : C.green, "/gestionnaire/circuits", uncoveredCirc.length > 0)}
-      </div>
-
       {/* ── Panels urgents ────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 20 }}>
 
         {/* Incidents ouverts */}
         {openInc.length > 0 && (
@@ -873,6 +845,34 @@ export default function GestionnaireDashboard() {
             <div style={{ fontSize: 13, marginTop: 4 }}>Aucun incident · Aucune absence · Tous les circuits couverts</div>
           </div>
         )}
+      </div>
+
+      {/* ── 6 Métriques (naviguent vers sous-pages) ───────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(3,1fr)", gap: 14, marginBottom: 20 }}>
+        {stat(<Bus size={22} color={enServiceVeh.length > 0 ? C.green : C.gray400} />,
+          "Véhicules en service", enServiceVeh.length,
+          `${vehicles.length - enServiceVeh.length} en atelier / hors service`,
+          enServiceVeh.length > 0 ? C.green : C.gray400, "/gestionnaire/vehicules")}
+        {stat(<Users size={22} color={C.navyL} />,
+          "Conducteurs présents", enServiceDrv.length,
+          `${drivers.filter(d => d.status === "disponible").length} disponibles`,
+          C.navyL, "/gestionnaire/conducteurs?status=en_service")}
+        {stat(<UserX size={22} color={absents.length > 0 ? C.amber : C.gray400} />,
+          "Absents du jour", absents.length,
+          `${absents.filter(d => !!d.circuit_id).length} circuits à couvrir`,
+          absents.length > 0 ? C.amber : C.gray400, "/gestionnaire/conducteurs", absents.length > 0)}
+        {stat(<AlertCircle size={22} color={openInc.length > 0 ? C.red : C.green} />,
+          "Incidents ouverts", openInc.length,
+          "Temps réel · màj automatique",
+          openInc.length > 0 ? C.red : C.green, "/gestionnaire/incidents", openInc.length > 0)}
+        {stat(<Bell size={22} color={unreadAlerts.length > 0 ? C.amber : C.gray400} />,
+          "Alertes non lues", unreadAlerts.length,
+          `${newChildAbs.length} nouvelles absences enfants`,
+          unreadAlerts.length > 0 ? C.amber : C.gray400, "/gestionnaire/alertes")}
+        {stat(<Route size={22} color={uncoveredCirc.length > 0 ? C.red : C.green} />,
+          "Circuits couverts", coveredCirc.length,
+          `sur ${circuits.length} circuits · ${uncoveredCirc.length} non couverts`,
+          uncoveredCirc.length > 0 ? C.red : C.green, "/gestionnaire/circuits", uncoveredCirc.length > 0)}
       </div>
     </div>
   );
