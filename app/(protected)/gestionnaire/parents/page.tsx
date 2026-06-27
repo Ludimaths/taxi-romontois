@@ -127,7 +127,7 @@ export default function ParentsPage() {
     const [par, enf, msg] = await Promise.all([
       sb.from("profiles")
         .select("id,prenom,nom,tel,civilite,enfant_id")
-        .not("civilite", "is", null)
+        .eq("role", "parent")
         .order("nom"),
       sb.from("enfants")
         .select("id,prenom,nom,circuit_id,circuit:circuits(nom,emoji,num),adresse_mere,adresse_pere,parent_tel")
