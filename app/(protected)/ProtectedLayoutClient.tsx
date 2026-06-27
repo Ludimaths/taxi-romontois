@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import Sidebar from "@/components/Sidebar";
@@ -14,7 +14,8 @@ export default function ProtectedLayoutClient({
   profile: Profile;
   children: React.ReactNode;
 }) {
-  const router = useRouter();
+  const router   = useRouter();
+  const pathname = usePathname();
   const sb = createClient();
   const [incidentsCount,  setIncidentsCount]  = useState(0);
   const [alertesCount,    setAlertesCount]    = useState(0);
@@ -73,8 +74,9 @@ export default function ProtectedLayoutClient({
     router.refresh();
   };
 
-  // Admin : layout sans sidebar — page /admin gère son propre header
-  if (profile.role === "admin") {
+  // Admin sur /admin/* : sa propre page gère le layout complet
+  // Sur /gestionnaire/*, /mecanicien/* etc. → fall through pour afficher la sidebar gestionnaire
+  if (profile.role === "admin" && (!pathname || pathname.startsWith("/admin"))) {
     return (
       <div style={{ minHeight: "100vh", background: C.gray50, color: C.gray800 }}>
         <div>{children}</div>
@@ -99,6 +101,9 @@ export default function ProtectedLayoutClient({
       </div>
     );
   }
+
+  // Admin visitant /gestionnaire/* ou /mecanicien/* → sidebar gestionnaire
+  const navRole = (profile.role === "admin" ? "gestionnaire" : profile.role) as import("@/lib/types").Role;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.gray50, color: C.gray800 }}>
@@ -135,7 +140,7 @@ export default function ProtectedLayoutClient({
             style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
           <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 260, zIndex: 1, boxShadow: "-4px 0 20px rgba(0,0,0,0.3)" }}>
             <Sidebar
-              role={profile.role}
+              role={navRole}
               nom={profile.nom}
               prenom={profile.prenom}
               onSignOut={handleSignOut}
@@ -155,7 +160,7 @@ export default function ProtectedLayoutClient({
         {/* Sidebar desktop */}
         <div className="tx-sidebar">
           <Sidebar
-            role={profile.role}
+            role={navRole}
             nom={profile.nom}
             prenom={profile.prenom}
             onSignOut={handleSignOut}
@@ -163,6 +168,7 @@ export default function ProtectedLayoutClient({
             alertesCount={alertesCount}
             reparationsCount={reparationsCount}
             messagesCount={messagesCount}
+            congesCount={congesCount}
           />
         </div>
 

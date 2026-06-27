@@ -470,7 +470,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#F7F8FC" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "#F7F8FC", overflowX: "hidden" }}>
 
       {/* ── Overlay mobile ─────────────────────────────────────────────────── */}
       {isMobile && mobileOpen && (
@@ -494,7 +494,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
       </aside>
 
       {/* ── Contenu principal ──────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflowY: "auto",
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", minWidth: 0,
         ...(isMobile ? { width: "100%" } : { maxHeight: "100vh" }) }}>
 
         {/* Header mobile fixe */}
@@ -523,7 +523,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
             <div>
               {/* 4 KPI — 2×2 sur mobile */}
               <div style={{ display: "grid",
-                gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",
+                gridTemplateColumns: isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(4,minmax(0,1fr))",
                 gap: 8, marginBottom: 20 }}>
                 {[
                   { label: "Véhicules en service", value: vEnService,         color: "#1565C0" },
@@ -545,7 +545,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                 Accès rapide
               </div>
               <div style={{ display: "grid",
-                gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)",
+                gridTemplateColumns: isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(4,minmax(0,1fr))",
                 gap: 8, marginBottom: 20 }}>
                 {QUICK_ACCESS.map(c => {
                   const Icon = c.icon;
@@ -553,15 +553,19 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                     <Link key={c.path} href={c.path}
                       onClick={() => { setMobileOpen(false); router.push(c.path); }}
                       style={{ background: C.white, borderRadius: 8,
-                        border: "0.5px solid rgba(0,0,0,0.05)", padding: "14px 10px",
+                        border: "0.5px solid rgba(0,0,0,0.05)", padding: "12px 8px",
                         cursor: "pointer", display: "flex", flexDirection: "column",
-                        alignItems: "center", gap: 6, textAlign: "center",
+                        alignItems: "center", gap: 5, textAlign: "center",
                         transition: "background .12s, border-color .12s",
-                        textDecoration: "none",
+                        textDecoration: "none", overflow: "hidden", minWidth: 0,
                         position: "relative", zIndex: 1, pointerEvents: "all" }}>
-                      <Icon size={22} color={c.color} />
-                      <div style={{ fontSize: 11, fontWeight: 500, color: "#0F172A" }}>{c.label}</div>
-                      <div style={{ fontSize: 9, color: "#94A3B8" }}>{c.sub}</div>
+                      <Icon size={20} color={c.color} style={{ flexShrink: 0 }} />
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#0F172A",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        width: "100%", maxWidth: "100%" }}>{c.label}</div>
+                      <div style={{ fontSize: 9, color: "#94A3B8",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        width: "100%", maxWidth: "100%" }}>{c.sub}</div>
                     </Link>
                   );
                 })}
