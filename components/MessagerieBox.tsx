@@ -51,7 +51,8 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
   const [isMobile,  setIsMobile]  = useState(false);
   const [showConvo, setShowConvo] = useState(false);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const bottomRef      = useRef<HTMLDivElement>(null);
+  const autoSelectedRef = useRef(false);
 
   // Détection mobile
   useEffect(() => {
@@ -153,6 +154,23 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
   useEffect(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
   }, [messages, selectedPerson]);
+
+  // Auto-sélection du contact le plus récent à l'ouverture (desktop seulement)
+  useEffect(() => {
+    if (autoSelectedRef.current || allPersons.length === 0 || isMobile) return;
+    autoSelectedRef.current = true;
+    const withLastMsg = allPersons.map(p => ({
+      person: p,
+      lastAt: messages
+        .filter(m =>
+          (m.expediteur_id === myId && m.destinataire_id === p.id) ||
+          (m.expediteur_id === p.id && (m.destinataire_id === myId || (m.destinataire_role === myRole && !m.destinataire_id)))
+        )
+        .slice(-1)[0]?.created_at ?? "",
+    }));
+    withLastMsg.sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+    setSelectedPerson(withLastMsg[0].person);
+  }, [allPersons, messages, myId, myRole, isMobile]);
 
   // Envoi — adapté fallback (tâche 4)
   async function send() {
