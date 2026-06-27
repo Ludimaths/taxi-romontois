@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   if ("guard" in auth) return auth.guard;
 
   try {
-    const { conducteurId, prenom, nom } = await req.json();
+    const { conducteurId, prenom, nom, password } = await req.json();
     if (!conducteurId || !prenom || !nom) {
       return NextResponse.json({ error: "conducteurId, prenom et nom sont requis" }, { status: 400 });
     }
@@ -51,12 +51,12 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (existingProfile) {
-      if (existingProfile.conducteur_id === conducteurId) {
+      if (existingProfile.conducteur_id === conducteurId && !password) {
         return NextResponse.json({ ok: true, email, already: true });
       }
       const { error: updateErr } = await supabase
         .from("profiles")
-        .update({ conducteur_id: conducteurId, nom, prenom })
+        .update({ conducteur_id: conducteurId, nom, prenom, must_change_password: password ? true : undefined })
         .eq("id", authUser.id);
       if (updateErr) {
         return NextResponse.json({ error: `Erreur mise à jour profil : ${updateErr.message}` }, { status: 500 });
@@ -68,9 +68,17 @@ export async function POST(req: NextRequest) {
         conducteur_id: conducteurId,
         nom,
         prenom,
+        must_change_password: password ? true : false,
       });
       if (insertErr) {
         return NextResponse.json({ error: `Erreur création profil : ${insertErr.message}` }, { status: 500 });
+      }
+    }
+
+    if (password) {
+      const { error: pwdErr } = await supabase.auth.admin.updateUserById(authUser.id, { password });
+      if (pwdErr) {
+        return NextResponse.json({ error: `Compte lié mais erreur mot de passe : ${pwdErr.message}` }, { status: 500 });
       }
     }
 

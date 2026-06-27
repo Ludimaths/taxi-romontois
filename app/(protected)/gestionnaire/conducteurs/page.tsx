@@ -351,16 +351,20 @@ export default function ConducteursPage() {
     if (!drv) return;
     setLinkBusy(true);
     setLinkError("");
+    setPwdCopied(false);
+    const pwd = genPassword();
     const res = await fetch("/api/gestionnaire/link-account", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conducteurId: drv.id, prenom: drv.prenom, nom: drv.nom }),
+      body: JSON.stringify({ conducteurId: drv.id, prenom: drv.prenom, nom: drv.nom, password: pwd }),
     });
     const json = await res.json();
     setLinkBusy(false);
     if (res.ok) {
       setCreateError("");
       setLinkDone(true);
+      setGeneratedPwd(pwd);
+      setCreateResult({ email: json.email });
       await fetchHistory(drv.id);
     } else {
       setLinkError(json.error || "Erreur liaison inconnue");
