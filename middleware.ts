@@ -15,7 +15,7 @@ const ROLE_ALLOWED: Record<string, string[]> = {
   gestionnaire: ["/gestionnaire", "/api/gestionnaire", "/api/admin", "/api/export", "/api/import"],
   conducteur:   ["/conducteur"],
   mecanicien:   ["/mecanicien"],
-  admin:        ["/admin", "/api/admin", "/api/gestionnaire", "/api/export", "/api/import"],
+  admin:        ["/admin", "/gestionnaire", "/mecanicien", "/parent", "/conducteur", "/api/admin", "/api/gestionnaire", "/api/export", "/api/import"],
   parent:       ["/parent"],
 };
 
