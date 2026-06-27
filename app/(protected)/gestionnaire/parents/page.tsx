@@ -126,7 +126,7 @@ export default function ParentsPage() {
   const fetchAll = useCallback(async () => {
     const [par, enf, msg] = await Promise.all([
       sb.from("profiles")
-        .select("id,prenom,nom,tel,civilite,enfant_id,enfant:enfants(id,prenom,nom,circuit_id,circuit:circuits(nom,emoji,num),adresse_mere,adresse_pere,parent_tel)")
+        .select("id,prenom,nom,tel,civilite,enfant_id")
         .eq("role", "parent")
         .order("nom"),
       sb.from("enfants")
@@ -138,8 +138,14 @@ export default function ParentsPage() {
         .order("created_at", { ascending: false })
         .limit(50),
     ]);
-    setParents((par.data ?? []) as unknown as Parent[]);
-    setEnfants((enf.data ?? []) as unknown as Enfant[]);
+    const enfData = (enf.data ?? []) as unknown as Enfant[];
+    const rawPar  = (par.data ?? []) as unknown as Parent[];
+    const parWithEnfants: Parent[] = rawPar.map(p => ({
+      ...p,
+      enfant: p.enfant_id != null ? enfData.filter(e => e.id === p.enfant_id) : null,
+    }));
+    setParents(parWithEnfants);
+    setEnfants(enfData);
     setMessages(msg.data ?? []);
     setLoading(false);
   }, [sb]);

@@ -571,7 +571,7 @@ export default function GestionnaireDashboard() {
   };
 
   // ── Computed ──────────────────────────────────────────────────────────────
-  const enServiceVeh  = vehicles.filter(v => (v.etat as string) === "bon");
+  const enServiceVeh  = vehicles.filter(v => ["bon","en_service"].includes(v.etat as string));
   const enServiceDrv  = drivers.filter(d => d.status === "en_service");
   const absents       = drivers.filter(d => d.status === "absent");
   const openInc       = incidents;
