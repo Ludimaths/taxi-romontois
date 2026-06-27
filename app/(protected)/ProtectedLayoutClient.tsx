@@ -74,12 +74,75 @@ export default function ProtectedLayoutClient({
     router.refresh();
   };
 
-  // Admin sur /admin/* : sa propre page gère le layout complet
-  // Sur /gestionnaire/*, /mecanicien/* etc. → fall through pour afficher la sidebar gestionnaire
-  if (profile.role === "admin" && (!pathname || pathname.startsWith("/admin"))) {
+  // Admin : layout dédié selon la route visitée
+  if (profile.role === "admin") {
+    // Sur /admin/* → la page admin gère son propre layout complet
+    if (!pathname || pathname.startsWith("/admin")) {
+      return (
+        <div style={{ minHeight: "100vh", background: C.gray50, color: C.gray800 }}>
+          <div>{children}</div>
+        </div>
+      );
+    }
+    // Sur /gestionnaire/* ou /mecanicien/* → header navy + drawer droite + contenu pleine largeur
+    const visitedRole = (pathname.startsWith("/mecanicien") ? "mecanicien" : "gestionnaire") as import("@/lib/types").Role;
     return (
-      <div style={{ minHeight: "100vh", background: C.gray50, color: C.gray800 }}>
-        <div>{children}</div>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh",
+        background: C.gray50, color: C.gray800 }}>
+        {/* Header fixe navy */}
+        <header style={{
+          position: "sticky", top: 0, zIndex: 200, background: C.navy,
+          height: 56, display: "flex", alignItems: "center",
+          justifyContent: "space-between", padding: "0 16px", gap: 12,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.2)", flexShrink: 0,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10,
+            minWidth: 0, overflow: "hidden" }}>
+            <span style={{ background: "#FEF3C7", color: "#92400E", borderRadius: 8,
+              padding: "4px 10px", fontSize: 11, fontWeight: 700,
+              whiteSpace: "nowrap", flexShrink: 0 }}>
+              Mode consultation administrateur
+            </span>
+            <button onClick={() => router.push("/admin")}
+              style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white,
+                cursor: "pointer", padding: "6px 12px", borderRadius: 8,
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>
+              ← Retour Admin
+            </button>
+          </div>
+          <button onClick={() => setMobileNavOpen(v => !v)}
+            style={{ background: "transparent", border: "none", color: C.white,
+              cursor: "pointer", padding: 8, borderRadius: 8,
+              display: "flex", alignItems: "center", flexShrink: 0 }}>
+            <Menu size={24} color={C.white} />
+          </button>
+        </header>
+        {/* Drawer droite — onglets du rôle visité */}
+        {mobileNavOpen && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 300 }}>
+            <div onClick={() => setMobileNavOpen(false)}
+              style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
+            <div style={{ position: "fixed", right: 0, top: 0, bottom: 0,
+              width: 228, zIndex: 1000, boxShadow: "-4px 0 20px rgba(0,0,0,0.3)" }}>
+              <Sidebar
+                role={visitedRole}
+                nom={profile.nom}
+                prenom={profile.prenom}
+                onSignOut={handleSignOut}
+                onNavClick={() => setMobileNavOpen(false)}
+                incidentsCount={incidentsCount}
+                alertesCount={alertesCount}
+                reparationsCount={reparationsCount}
+                messagesCount={messagesCount}
+                congesCount={congesCount}
+              />
+            </div>
+          </div>
+        )}
+        {/* Contenu pleine largeur */}
+        <div className="tx-main-padding" style={{ flex: 1, overflowY: "auto" }}>
+          {children}
+        </div>
       </div>
     );
   }
@@ -102,8 +165,7 @@ export default function ProtectedLayoutClient({
     );
   }
 
-  // Admin visitant /gestionnaire/* ou /mecanicien/* → sidebar gestionnaire
-  const navRole = (profile.role === "admin" ? "gestionnaire" : profile.role) as import("@/lib/types").Role;
+  const navRole = profile.role as import("@/lib/types").Role;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: C.gray50, color: C.gray800 }}>
@@ -173,28 +235,8 @@ export default function ProtectedLayoutClient({
         </div>
 
         {/* Contenu principal */}
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-          {/* Bannière mode consultation (admin visitant /gestionnaire ou /mecanicien) */}
-          {profile.role === "admin" && (
-            <div style={{ background: "#FEF3C7", borderBottom: "2px solid #D97706",
-              padding: "10px 20px", display: "flex", alignItems: "center",
-              justifyContent: "space-between", gap: 12, flexWrap: "wrap", flexShrink: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8,
-                fontSize: 13, fontWeight: 700, color: "#92400E" }}>
-                <span style={{ fontSize: 16 }}>👁</span>
-                <span>Mode consultation administrateur</span>
-              </div>
-              <button onClick={() => router.push("/admin")}
-                style={{ padding: "6px 16px", borderRadius: 8, border: "none",
-                  background: C.navy, color: C.white, fontSize: 12, fontWeight: 700,
-                  cursor: "pointer", whiteSpace: "nowrap" }}>
-                ← Retour Admin
-              </button>
-            </div>
-          )}
-          <div className="tx-main-padding" style={{ flex: 1 }}>
-            {children}
-          </div>
+        <div className="tx-main-padding" style={{ flex: 1, overflowY: "auto" }}>
+          {children}
         </div>
       </div>
     </div>
