@@ -417,6 +417,7 @@ export default function ConducteursPage() {
     const circ = circuits.find(c => c.id === d.circuit_id);
     const permisExpireSoon = d.permis_exp && new Date(d.permis_exp) < new Date(Date.now() + 90 * 864e5);
     const isIncomplete = !d.circuit_id || !d.vehicule_id || !d.permis;
+    const missingFields = [!d.circuit_id && "circuit", !d.vehicule_id && "véhicule", !d.permis && "permis"].filter(Boolean).join(", ");
     const years = [...new Set(logs.map(l => l.date_service.slice(0,4)))].sort().reverse();
     const curYear = histYear || new Date().getFullYear().toString();
 
@@ -484,7 +485,7 @@ export default function ConducteursPage() {
                   <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>{d.tel || "—"} · {d.affectation}</div>
                   <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>
-                    {isIncomplete && <Badge color="amber">Incomplet</Badge>}
+                    {isIncomplete && <span title={`Manque : ${missingFields}`}><Badge color="amber">Incomplet</Badge></span>}
                     {permisExpireSoon && <Badge color="red">Permis bientôt</Badge>}
                   </div>
                 </div>
@@ -1035,6 +1036,7 @@ export default function ConducteursPage() {
           const circ = circuits.find(c => c.id === d.circuit_id);
           const permisExpireSoon = d.permis_exp && new Date(d.permis_exp) < new Date(Date.now() + 90 * 864e5);
           const isIncomplete = !d.circuit_id || !d.vehicule_id || !d.permis;
+          const missingFields = [!d.circuit_id && "circuit", !d.vehicule_id && "véhicule", !d.permis && "permis"].filter(Boolean).join(", ");
           return (
             <Card key={d.id} onClick={() => setSel(d.id)} style={{ padding: 18 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
@@ -1050,7 +1052,7 @@ export default function ConducteursPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>
-                  {isIncomplete && <Badge color="amber">Incomplet</Badge>}
+                  {isIncomplete && <span title={`Manque : ${missingFields}`}><Badge color="amber">Incomplet</Badge></span>}
                 </div>
                 {permisExpireSoon && <Badge color="red">Permis exp.</Badge>}
               </div>
