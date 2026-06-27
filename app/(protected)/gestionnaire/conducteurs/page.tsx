@@ -141,9 +141,7 @@ export default function ConducteursPage() {
   const [histYear,setHistYear]= useState("");
 
   // Profile + mot de passe
-  const [profile,      setProfile]      = useState<{ id: string; role: string; photo_url?: string | null } | null>(null);
-  const [photoBusy,    setPhotoBusy]    = useState(false);
-  const [photoErr,     setPhotoErr]     = useState("");
+  const [profile,      setProfile]      = useState<{ id: string; role: string } | null>(null);
   const [pwdBusy,      setPwdBusy]      = useState(false);
   const [generatedPwd, setGeneratedPwd] = useState<string | null>(null);
   const [pwdError,     setPwdError]     = useState("");
@@ -202,7 +200,7 @@ export default function ConducteursPage() {
         .select("*,remplacant:conducteurs!remplacant_id(prenom,nom),circuit:circuits(nom,emoji)")
         .eq("conducteur_id", driverId)
         .order("date_absence", { ascending: false }),
-      sb.from("profiles").select("id,role,photo_url").eq("conducteur_id", driverId).single(),
+      sb.from("profiles").select("id,role").eq("conducteur_id", driverId).maybeSingle(),
       sb.from("conges_demandes").select("*")
         .eq("conducteur_id", driverId)
         .order("created_at", { ascending: false }),
@@ -227,7 +225,6 @@ export default function ConducteursPage() {
     setGeneratedPwd(null);
     setPwdError("");
     setPwdCopied(false);
-    setPhotoErr("");
     setCongesCondu([]);
     setCongeRefusId(null); setCongeRefusMotif("");
     setCongeTransId(null); setCongeTransNote("");
@@ -291,31 +288,6 @@ export default function ConducteursPage() {
     } else {
       setPwdError(json.error ?? "Impossible de générer le mot de passe");
     }
-  };
-
-  const handlePhotoUpload = async (file: File) => {
-    if (!sel || !profile) return;
-    setPhotoBusy(true);
-    setPhotoErr("");
-    const path = `conducteur-${sel}.jpg`;
-    const { error: upErr } = await sb.storage.from("avatars")
-      .upload(path, file, { upsert: true, contentType: file.type });
-    if (upErr) {
-      setPhotoErr(upErr.message);
-      setPhotoBusy(false);
-      return;
-    }
-    const { data: pub } = sb.storage.from("avatars").getPublicUrl(path);
-    const url = `${pub.publicUrl}?t=${Date.now()}`;
-    const { error: updErr } = await sb.from("profiles")
-      .update({ photo_url: url }).eq("conducteur_id", sel);
-    if (updErr) {
-      setPhotoErr(updErr.message);
-      setPhotoBusy(false);
-      return;
-    }
-    setProfile(p => p ? { ...p, photo_url: url } : p);
-    setPhotoBusy(false);
   };
 
   const handleCreateAccount = async () => {
@@ -482,7 +454,7 @@ export default function ConducteursPage() {
             <Card style={{ padding: 22, marginBottom: 14 }}>
               <div style={{ display: "flex", gap: 14, alignItems: "center", padding: 16,
                 background: C.skyL, borderRadius: 12, marginBottom: 14 }}>
-                <Avatar initials={d.photo_initials} size={80} photoUrl={profile?.photo_url} />
+                <Avatar initials={d.photo_initials} size={80} />
                 <div>
                   <div style={{ fontSize: 17, fontWeight: 900, color: C.navy }}>{d.prenom} {d.nom}</div>
                   <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>{d.tel || "—"} · {d.affectation}</div>
@@ -494,24 +466,6 @@ export default function ConducteursPage() {
                 </div>
               </div>
 
-              {/* Upload photo (compte requis pour stocker l'URL) */}
-              {profile && (
-                <div style={{ marginBottom: 18 }}>
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6,
-                    padding: "7px 14px", borderRadius: 8, border: `1px solid ${C.gray200}`,
-                    background: C.white, cursor: photoBusy ? "wait" : "pointer",
-                    fontSize: 12, fontWeight: 700, color: C.navyL }}>
-                    {photoBusy ? "Téléversement…" : (profile.photo_url ? "Changer la photo" : "Ajouter une photo")}
-                    <input type="file" accept="image/jpeg,image/png,image/webp"
-                      disabled={photoBusy}
-                      onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); e.target.value = ""; }}
-                      style={{ display: "none" }} />
-                  </label>
-                  {photoErr && (
-                    <div style={{ fontSize: 11, color: C.red, marginTop: 6, fontWeight: 600 }}>{photoErr}</div>
-                  )}
-                </div>
-              )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <InfoBox label="Véhicule"      value={d.vehicule?.plaque} />
                 <InfoBox label="Circuit"       value={circ ? `${circ.emoji} ${circ.nom}` : "—"} />
