@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { C, isoToday, fmtHHMM, nowTimeStr } from "@/lib/constants";
 import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant, CongesDemande } from "@/lib/types";
 import { Bus, Home, FileText, Activity, AlertCircle, Mail, History, CalendarDays, LogOut, Menu } from "lucide-react";
-import { BSheet, BigBtn, Inp, TA, Chip, StatusBadge, SIGN_LABELS, schoolYearStart } from "./tabs/shared";
+import { BSheet, BigBtn, Inp, TA, Chip, StatusBadge, SIGN_LABELS } from "./tabs/shared";
 import { TabDashboard } from "./tabs/Dashboard";
 import { TabFiche } from "./tabs/Fiche";
 import { TabService } from "./tabs/Service";
@@ -72,9 +72,6 @@ export default function ConducteurPage(){
   const [pwdChangeErr,   setPwdChangeErr]   = useState("");
   const [pwdChangeBusy,  setPwdChangeBusy]  = useState(false);
 
-  // Navigation historique
-  const [histYear,  setHistYear]  = useState<number|null>(null);
-  const [histMonth, setHistMonth] = useState<number|null>(null);
 
   // ── Chargement ───────────────────────────────────────────────────────────────
   const load=useCallback(async()=>{
@@ -276,15 +273,6 @@ export default function ConducteurPage(){
   const unreadMsg      = messages.filter(m=>!m.read).length;
   const pendingInc     = incidents.filter(i=>i.status==="en_attente").length;
 
-  const allYears=histLogs.length
-    ? Array.from(new Set(histLogs.map(l=>schoolYearStart(new Date(l.date_service))))).sort((a,b)=>b-a)
-    : [schoolYearStart(new Date())];
-
-  const logsForYear=(y:number)=>histLogs.filter(l=>{
-    const d=new Date(l.date_service);const m=d.getMonth()+1;const yr=d.getFullYear();
-    if(m>=9)return yr===y;return yr===y+1;
-  });
-  const logsForYearMonth=(y:number,mon:number)=>logsForYear(y).filter(l=>new Date(l.date_service).getMonth()+1===mon);
 
   const TAB_ICONS = {
     dashboard:    <Home size={14} />,
@@ -470,10 +458,7 @@ export default function ConducteurPage(){
           onMarquerLu={handleMarquerLu} onSetTab={t=>setTab(t as Tab)}/>
       )}
       {tab==="historique"&&(
-        <TabHistorique histLogs={histLogs} incidents={incidents} allYears={allYears}
-          histYear={histYear} setHistYear={setHistYear}
-          histMonth={histMonth} setHistMonth={setHistMonth}
-          logsForYear={logsForYear} logsForYearMonth={logsForYearMonth}/>
+        <TabHistorique histLogs={histLogs} incidents={incidents} />
       )}
       {tab==="conges"&&(
         <TabConges conges={conges} onSend={handleEnvoyerConge}/>

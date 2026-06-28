@@ -1,5 +1,6 @@
 "use client";
-import { Bell, Wrench, CheckCircle2, Archive, MessageSquare, Save, Bus, Package, AlertTriangle, Inbox, BarChart2, FileText, XCircle, LogOut, Menu, Home } from "lucide-react";
+import { Bell, Wrench, CheckCircle2, Archive, MessageSquare, Save, Bus, Package, AlertTriangle, Inbox, BarChart2, FileText, XCircle, LogOut, Menu, Home, Search } from "lucide-react";
+import HistoriqueCalendrier from "@/components/HistoriqueCalendrier";
 import MessagerieBox from "@/components/MessagerieBox";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -166,8 +167,12 @@ export default function MecanicienPage() {
   const [conducteurs, setConducteurs] = useState<{ id: number; prenom: string; nom: string }[]>([]);
 
   // Messages
-  const [msgDecisions,   setMsgDecisions]   = useState<Alerte[]>([]);
+  const [msgDecisions,    setMsgDecisions]    = useState<Alerte[]>([]);
+  const [unreadMsgsCount, setUnreadMsgsCount] = useState(0);
   const [msgExpandedDays, setMsgExpandedDays] = useState<Record<string, boolean>>({});
+
+  // Recherche flotte
+  const [flotteSearch, setFlotteSearch] = useState("");
 
   // Réception depuis alerte
   const [recepAlerte, setRecepAlerte] = useState<Alerte | null>(null);
@@ -205,7 +210,7 @@ export default function MecanicienPage() {
 
   // ── Load ────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
-    const [v, r, alt, cond, dec] = await Promise.all([
+    const [v, r, alt, cond, dec, msgs] = await Promise.all([
       sb.from("vehicules")
         .select("*,circuit:circuits(*),conducteur:conducteurs(prenom,nom)")
         .order("plaque"),
@@ -223,21 +228,28 @@ export default function MecanicienPage() {
         .eq("type", "decision_admin")
         .eq("read", false)
         .order("created_at", { ascending: false }),
+      sb.from("messages_internes")
+        .select("id", { count: "exact", head: true })
+        .eq("lu", false)
+        .eq("destinataire_role", "mecanicien"),
     ]);
     setVehicules(v.data ?? []);
     setReparations(r.data ?? []);
     setAlertesMeca(alt.data ?? []);
     setConducteurs(cond.data ?? []);
     setMsgDecisions(dec.data ?? []);
+    setUnreadMsgsCount(msgs.count ?? 0);
     setLoading(false);
   }, [sb]);
 
   useEffect(() => {
     load();
     const ch = sb.channel("meca-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "alertes" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "reparations" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "vehicules" }, load)
+      .on("postgres_changes", { event: "*",    schema: "public", table: "alertes" },     load)
+      .on("postgres_changes", { event: "*",    schema: "public", table: "reparations" }, load)
+      .on("postgres_changes", { event: "*",    schema: "public", table: "vehicules" },   load)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages_internes" }, load)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages_internes" }, load)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [load, sb]);
@@ -611,7 +623,22 @@ export default function MecanicienPage() {
     { id: "historique", label: "Historique" },
     { id: "messages",   label: "Messages",   badge: msgDecisions.length || undefined },
   ];
-  const mecaTotalBadge = alertesMeca.length + msgDecisions.length;
+  const mecaTotalBadge = alertesMeca.length + msgDecisions.length + unreadMsgsCount;
+
+  const filteredFlotte = useMemo(() => {
+    const q = flotteSearch.trim().toLowerCase();
+    if (!q) return vehicules;
+    return vehicules.filter(v => {
+      const etat = v.etat as string;
+      const etatLabel = etat === "bon" ? "en service" : etat === "atelier" ? "en atelier" : etat;
+      return (
+        v.plaque?.toLowerCase().includes(q) ||
+        v.marque?.toLowerCase().includes(q) ||
+        v.modele?.toLowerCase().includes(q) ||
+        etatLabel?.toLowerCase().includes(q)
+      );
+    });
+  }, [vehicules, flotteSearch]);
 
   if (loading) return (
     <div style={{ textAlign: "center", padding: 60, color: C.gray400, fontSize: 14 }}>Chargement…</div>
@@ -761,12 +788,27 @@ export default function MecanicienPage() {
       {/* ── TAB FLOTTE ────────────────────────────────────────────────────────── */}
       {tab === "flotte" && (
         <div>
-          {vehicules.length === 0 ? (
+          {/* Barre de recherche */}
+          <div style={{ position: "relative", marginBottom: 14 }}>
+            <Search size={16} color={C.gray400}
+              style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+            <input
+              type="text"
+              value={flotteSearch}
+              onChange={e => setFlotteSearch(e.target.value)}
+              placeholder="Rechercher par plaque, marque, statut…"
+              style={{ width: "100%", padding: "12px 14px 12px 40px", borderRadius: 12,
+                border: `1.5px solid ${C.gray200}`, fontSize: 14, color: C.gray800,
+                background: C.white, boxSizing: "border-box", outline: "none" }}
+            />
+          </div>
+
+          {filteredFlotte.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: C.gray400 }}>
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><Bus size={48} color={C.gray400} /></div>
-              <p style={{ fontWeight: 700 }}>Aucun véhicule</p>
+              <p style={{ fontWeight: 700 }}>{flotteSearch ? "Aucun résultat" : "Aucun véhicule"}</p>
             </div>
-          ) : vehicules.map(v => {
+          ) : filteredFlotte.map(v => {
             const etat = v.etat as string;
             const etatColor = etat === "bon" ? C.green : etat === "atelier" ? C.amber : C.gray400;
             const etatLabel = etat === "bon" ? "En service" : etat === "atelier" ? "En atelier" : etat;
@@ -982,12 +1024,12 @@ export default function MecanicienPage() {
       {/* ── TAB HISTORIQUE ────────────────────────────────────────────────────── */}
       {tab === "historique" && (
         <div>
-          {/* Totaux */}
+          {/* Totaux budget */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 20 }}>
             {[
-              { l: "Ce mois", v: totalMois, c: C.navy,   bg: "#EFF6FF" },
-              { l: "Cette année", v: totalAn, c: "#7C3AED", bg: "#EDE9FE" },
-              { l: "Total", v: totalGlob, c: C.green,  bg: C.greenL },
+              { l: "Ce mois",      v: totalMois, c: C.navy,    bg: "#EFF6FF" },
+              { l: "Cette année",  v: totalAn,   c: "#7C3AED", bg: "#EDE9FE" },
+              { l: "Total",        v: totalGlob, c: C.green,   bg: C.greenL  },
             ].map(x => (
               <div key={x.l} style={{ background: x.bg, borderRadius: 14, padding: "14px 16px" }}>
                 <div style={{ fontSize: 18, fontWeight: 900, color: x.c }}>
@@ -998,64 +1040,60 @@ export default function MecanicienPage() {
             ))}
           </div>
 
-          {histReps.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 20px", color: C.gray400 }}>
-              <div style={{ display:"flex",justifyContent:"center",marginBottom:12 }}><BarChart2 size={48} color={C.gray400} /></div>
-              <p style={{ fontWeight: 700, fontSize: 15 }}>Aucune réparation clôturée</p>
-            </div>
-          ) : histReps.map(r => {
-            type VM = { plaque?: string; marque?: string; modele?: string };
-            const vv = r.vehicule as VM | undefined;
-            const duree = r.date_debut_reparation && r.date_fin_reparation
-              ? nbJ(r.date_debut_reparation, r.date_fin_reparation) : null;
-            const recupPar = r.responsable?.startsWith("sortie|") ? r.responsable.slice(7) : null;
-            return (
-              <div key={r.id} style={{ background: C.white, borderRadius: 16, padding: 20,
-                marginBottom: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
-                borderLeft: `4px solid ${C.green}` }}>
-                {/* En-tête ticket */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-                  marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-                  <div>
-                    <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>
-                      {vv?.plaque || r.vehicule_id}
+          <HistoriqueCalendrier
+            emptyLabel="Aucune réparation clôturée"
+            items={histReps.map(r => ({
+              ...r,
+              date: r.date_remise_circulation?.slice(0, 10) || "",
+            }))}
+            renderItem={r => {
+              type VM = { plaque?: string; marque?: string; modele?: string };
+              const vv = r.vehicule as VM | undefined;
+              const duree = r.date_debut_reparation && r.date_fin_reparation
+                ? nbJ(r.date_debut_reparation, r.date_fin_reparation) : null;
+              const recupPar = r.responsable?.startsWith("sortie|") ? r.responsable.slice(7) : null;
+              return (
+                <div style={{ background: C.white, borderRadius: 16, padding: 20,
+                  marginBottom: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+                  borderLeft: `4px solid ${C.green}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+                    marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 900, fontSize: 17, color: C.navy }}>{vv?.plaque || r.vehicule_id}</div>
+                      <div style={{ fontSize: 12, color: C.gray400 }}>{vv?.marque} {vv?.modele}</div>
                     </div>
-                    <div style={{ fontSize: 12, color: C.gray400 }}>{vv?.marque} {vv?.modele}</div>
+                    <div style={{ textAlign: "right" }}>
+                      {r.cout != null
+                        ? <div style={{ fontWeight: 900, fontSize: 18, color: C.green }}>{r.cout.toLocaleString("fr-CH")} CHF</div>
+                        : r.cout_estime != null
+                          ? <div style={{ fontWeight: 700, fontSize: 15, color: C.amber }}>~{r.cout_estime.toLocaleString("fr-CH")} CHF</div>
+                          : null}
+                    </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    {r.cout != null
-                      ? <div style={{ fontWeight: 900, fontSize: 18, color: C.green }}>{r.cout.toLocaleString("fr-CH")} CHF</div>
-                      : r.cout_estime != null
-                        ? <div style={{ fontWeight: 700, fontSize: 15, color: C.amber }}>~{r.cout_estime.toLocaleString("fr-CH")} CHF</div>
-                        : null}
+                  <p style={{ fontSize: 14, color: "#1E293B", lineHeight: 1.6, margin: "0 0 12px",
+                    borderLeft: `3px solid ${C.gray200}`, paddingLeft: 10 }}>
+                    {r.description}
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                    {r.date_reception        && <DL l="Réceptionné"       v={fmtDate(r.date_reception)} />}
+                    {r.km_reception != null  && <DL l="Km réception"      v={`${r.km_reception.toLocaleString()} km`} />}
+                    {r.date_debut_reparation && <DL l="Début réparation"  v={fmtDate(r.date_debut_reparation)} />}
+                    {r.date_fin_reparation   && <DL l="Fin réparation"    v={fmtDate(r.date_fin_reparation)} />}
+                    {duree != null           && <DL l="Durée"             v={`${duree} jour${duree > 1 ? "s" : ""}`} />}
+                    {r.km_sortie != null     && <DL l="Km sortie"         v={`${r.km_sortie.toLocaleString()} km`} />}
+                    {r.date_remise_circulation && <DL l="Remis en service" v={fmtDate(r.date_remise_circulation)} />}
+                    {recupPar                && <DL l="Récupéré par"      v={recupPar} />}
                   </div>
+                  {r.commentaire_mecanicien && !r.commentaire_mecanicien.startsWith("Photos:") && (
+                    <div style={{ background: C.gray50, borderRadius: 10, padding: "10px 12px",
+                      marginTop: 10, fontSize: 13, color: C.gray600, fontStyle: "italic" }}>
+                      {r.commentaire_mecanicien.split(" | ").filter((s: string) => !s.startsWith("Photos:")).join(" | ")}
+                    </div>
+                  )}
                 </div>
-
-                <p style={{ fontSize: 14, color: "#1E293B", lineHeight: 1.6, margin: "0 0 12px",
-                  borderLeft: `3px solid ${C.gray200}`, paddingLeft: 10 }}>
-                  {r.description}
-                </p>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                  {r.date_reception       && <DL l="Réceptionné"         v={fmtDate(r.date_reception)} />}
-                  {r.km_reception != null && <DL l="Km réception"        v={`${r.km_reception.toLocaleString()} km`} />}
-                  {r.date_debut_reparation && <DL l="Début réparation"   v={fmtDate(r.date_debut_reparation)} />}
-                  {r.date_fin_reparation   && <DL l="Fin réparation"     v={fmtDate(r.date_fin_reparation)} />}
-                  {duree != null           && <DL l="Durée"              v={`${duree} jour${duree > 1 ? "s" : ""}`} />}
-                  {r.km_sortie != null     && <DL l="Km sortie"          v={`${r.km_sortie.toLocaleString()} km`} />}
-                  {r.date_remise_circulation && <DL l="Remis en service" v={fmtDate(r.date_remise_circulation)} />}
-                  {recupPar                && <DL l="Récupéré par"       v={recupPar} />}
-                </div>
-
-                {r.commentaire_mecanicien && !r.commentaire_mecanicien.startsWith("Photos:") && (
-                  <div style={{ background: C.gray50, borderRadius: 10, padding: "10px 12px",
-                    marginTop: 10, fontSize: 13, color: C.gray600, fontStyle: "italic" }}>
-                    {r.commentaire_mecanicien.split(" | ").filter(s => !s.startsWith("Photos:")).join(" | ")}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              );
+            }}
+          />
         </div>
       )}
 
