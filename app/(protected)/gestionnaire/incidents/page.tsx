@@ -48,51 +48,124 @@ const inp: React.CSSProperties = {
 function ActionModal({ inc, drivers, vehicles, circuits, onClose, onSave }: {
   inc: Incident; drivers: DrvMin[]; vehicles: VehMin[]; circuits: CirMin[];
   onClose: () => void;
-  onSave: (id: number, response: string, status: "en_cours"|"resolu", extra?: string) => Promise<void>;
+  onSave: (id: number, response: string, status: "en_cours"|"resolu") => Promise<void>;
 }) {
-  const [response, setResponse] = useState(inc.response || "");
-  const [status,   setStatus]   = useState<"en_cours"|"resolu">(inc.status === "resolu" ? "resolu" : "en_cours");
-  const [busy,     setBusy]     = useState(false);
+  const sb = createClient();
+  const [response,   setResponse]   = useState(inc.response || "");
+  const [status,     setStatus]     = useState<"en_cours"|"resolu">(inc.status === "resolu" ? "resolu" : "en_cours");
+  const [busy,       setBusy]       = useState(false);
+  const [checked,    setChecked]    = useState<Set<string>>(new Set());
+  const [replacerId, setReplacerId] = useState("");
 
   const drv  = inc.conducteur || drivers.find(d => d.id === inc.conducteur_id);
   const veh  = inc.vehicule   || vehicles.find(v => v.id === inc.vehicule_id);
   const circ = inc.circuit    || circuits.find(c => c.id === inc.circuit_id);
   const sev  = sevOf(inc.type);
-
-  const quick = async (msg: string, extra?: string) => {
-    setBusy(true);
-    await onSave(inc.id, msg, "en_cours", extra);
-    setBusy(false);
-    onClose();
-  };
-  const save = async () => {
-    setBusy(true);
-    await onSave(inc.id, response, status);
-    setBusy(false);
-    onClose();
-  };
-
-  const qBtn: React.CSSProperties = {
-    display: "flex", alignItems: "center", gap: 10, padding: "9px 14px",
-    borderRadius: 10, border: `1px solid ${C.gray200}`, background: C.white,
-    cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.gray800,
-    width: "100%", textAlign: "left", marginBottom: 8,
-  };
-
   const isPanne = ["panne","voyant","accident","degradation"].includes(inc.type);
-  const isRetard = inc.type === "retard";
-  const isPers  = ["enfant","parent"].includes(inc.type);
+
+  const toggle = (id: string) =>
+    setChecked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const ACTIONS: { id: string; label: string }[] = [
+    ...(isPanne ? [
+      { id: "meca",        label: "Envoyer au mécanicien"   },
+      { id: "immobiliser", label: "Immobiliser le véhicule" },
+    ] : []),
+    { id: "parents",    label: "Informer les parents du circuit"    },
+    { id: "ecole",      label: "Informer l'établissement scolaire"  },
+    { id: "remplacant", label: "Appeler un remplaçant"              },
+    ...(inc.type === "accident" ? [{ id: "assurance", label: "Signaler à l'assurance" }] : []),
+    { id: "sans_suite", label: "Classer sans suite"                 },
+  ];
+
+  const availableDrivers = drivers.filter(d => d.id !== inc.conducteur_id);
+
+  const envoyer = async () => {
+    setBusy(true);
+    const parts: string[] = [];
+
+    if (checked.has("meca")) {
+      parts.push(`Transmis au mécanicien — ${veh?.plaque || ""}`);
+      await sb.from("alertes").insert({
+        type: "transmis_meca", severity: "haute",
+        message: `Incident transmis au mécanicien : ${veh?.plaque || ""} — ${inc.description?.slice(0, 100) || ""}`,
+        read: false, vehicle_id: inc.vehicule_id,
+      });
+    }
+    if (checked.has("immobiliser") && inc.vehicule_id) {
+      parts.push(`Véhicule ${veh?.plaque || ""} immobilisé`);
+      await sb.from("vehicules").update({ etat: "atelier" }).eq("id", inc.vehicule_id);
+    }
+    if (checked.has("parents") && inc.circuit_id) {
+      parts.push("Parents du circuit informés");
+      const { data: children } = await sb.from("enfants")
+        .select("parent_user_id").eq("circuit_id", inc.circuit_id)
+        .not("parent_user_id", "is", null);
+      if (children?.length) {
+        const msgs = children.filter(e => e.parent_user_id).map(e => ({
+          expediteur_nom: "Taxi Romontois", expediteur_role: "gestionnaire",
+          destinataire_id: e.parent_user_id, destinataire_role: "parent",
+          message: `Incident circuit ${circ ? `${circ.emoji} ${circ.nom}` : inc.circuit_id} : ${inc.description?.slice(0, 200) || ""}`,
+          lu: false,
+        }));
+        if (msgs.length) await sb.from("messages_internes").insert(msgs);
+      }
+    }
+    if (checked.has("ecole")) {
+      parts.push("Établissement scolaire informé");
+    }
+    if (checked.has("remplacant") && replacerId) {
+      const rep = drivers.find(d => String(d.id) === replacerId);
+      if (rep) {
+        parts.push(`Remplaçant : ${rep.prenom} ${rep.nom}`);
+        const today = new Date().toISOString().slice(0, 10);
+        const now   = new Date().toTimeString().slice(0, 5);
+        await Promise.all([
+          sb.from("absences_conducteurs").insert({
+            conducteur_id: inc.conducteur_id, remplacant_id: Number(replacerId),
+            circuit_id: inc.circuit_id, date_absence: today,
+            motif: `Incident : ${inc.description?.slice(0, 80) || ""}`, status: "couvert",
+          }),
+          sb.from("service_logs").insert({
+            conducteur_id: inc.conducteur_id, vehicule_id: inc.vehicule_id,
+            circuit_id: inc.circuit_id, date_service: today, heure_debut: now,
+            status: "absent", notes: `Absent — Remplacé par ${rep.prenom} ${rep.nom}`,
+          }),
+          sb.from("service_logs").insert({
+            conducteur_id: Number(replacerId), vehicule_id: inc.vehicule_id,
+            circuit_id: inc.circuit_id, date_service: today, heure_debut: now,
+            status: "en_service", is_replacement: true,
+            replacement_name: `${drv?.prenom || ""} ${drv?.nom || ""} absent`,
+          }),
+          sb.from("alertes").insert({
+            type: "remplacement", severity: "haute",
+            message: `Vous remplacez ${drv?.prenom || ""} ${drv?.nom || ""} — Circuit ${circ ? `${circ.emoji} ${circ.nom}` : inc.circuit_id}`,
+            read: false, driver_id: Number(replacerId),
+          }),
+        ]);
+      }
+    }
+    if (checked.has("assurance")) parts.push("Signalé à l'assurance");
+    if (response.trim()) parts.push(response.trim());
+
+    const finalResponse = parts.join(" · ") || response;
+    const finalStatus   = checked.has("sans_suite") ? "resolu" : status;
+
+    await onSave(inc.id, finalResponse, finalStatus);
+    setBusy(false);
+    onClose();
+  };
 
   return (
     <Modal title="Traiter l'incident" onClose={onClose} wide>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
 
-        {/* Info */}
+        {/* ── Info ──────────────────────────────────────────────────────── */}
         <div>
           <div style={{ background: sev.bg, borderRadius: 12, padding: "12px 16px", marginBottom: 12,
             borderLeft: `4px solid ${sev.color}` }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: sev.color, textTransform: "uppercase", marginBottom: 4,
-              display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: sev.color, textTransform: "uppercase",
+              marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
               {sev.icon} {sev.label} — {TYPE_LABELS[inc.type] || inc.type}
             </div>
             <p style={{ fontSize: 13, color: C.gray800, margin: 0, lineHeight: 1.5 }}>{inc.description}</p>
@@ -113,58 +186,64 @@ function ActionModal({ inc, drivers, vehicles, circuits, onClose, onSave }: {
           )}
         </div>
 
-        {/* Actions */}
-        <div>
-          {isPanne && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase",
-                marginBottom: 8 }}>Actions rapides</div>
-              <button style={qBtn} onClick={() => quick(`Transmis au mécanicien — ${veh?.plaque || ""}`, "transmis_meca")}>
-                Envoyer au mécanicien
-              </button>
-              <button style={qBtn} onClick={() => quick(`Véhicule ${veh?.plaque || ""} immobilisé.`, "immobiliser")}>
-                Immobiliser le véhicule
-              </button>
-            </div>
-          )}
-          {isRetard && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 8 }}>
-                Actions rapides
+        {/* ── Actions ───────────────────────────────────────────────────── */}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600,
+            textTransform: "uppercase", marginBottom: 10 }}>Actions à mener</div>
+
+          <div style={{ marginBottom: 14 }}>
+            {ACTIONS.map(action => (
+              <div key={action.id} style={{ marginBottom: 6 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+                  padding: "9px 12px", borderRadius: 10,
+                  border: `1.5px solid ${checked.has(action.id) ? C.navyL : C.gray200}`,
+                  background: checked.has(action.id) ? C.skyL : C.white }}>
+                  <input type="checkbox" checked={checked.has(action.id)}
+                    onChange={() => toggle(action.id)}
+                    style={{ width: 15, height: 15, accentColor: C.navy, cursor: "pointer", flexShrink: 0 }} />
+                  <span style={{ fontSize: 13,
+                    fontWeight: checked.has(action.id) ? 700 : 500,
+                    color: checked.has(action.id) ? C.navy : C.gray800 }}>
+                    {action.label}
+                  </span>
+                </label>
+                {action.id === "remplacant" && checked.has("remplacant") && (
+                  <select value={replacerId} onChange={e => setReplacerId(e.target.value)}
+                    style={{ ...inp, width: "100%", marginTop: 4 }}>
+                    <option value="">— Choisir un conducteur —</option>
+                    {availableDrivers.map(d => (
+                      <option key={d.id} value={String(d.id)}>{d.prenom} {d.nom}</option>
+                    ))}
+                  </select>
+                )}
               </div>
-              <button style={qBtn} onClick={() => quick("École informée du retard.")}>Informer l'école</button>
-              <button style={qBtn} onClick={() => quick("Parents informés du retard.")}>Informer les parents</button>
-            </div>
-          )}
-          {isPers && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 8 }}>
-                Actions rapides
-              </div>
-              <button style={qBtn} onClick={() => quick("Parent contacté.")}>Contacter le parent</button>
-              <button style={qBtn} onClick={() => quick("École contactée.")}>Contacter l'école</button>
+            ))}
+          </div>
+
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600,
+              textTransform: "uppercase", marginBottom: 4 }}>Note interne (optionnel)</div>
+            <textarea value={response} onChange={e => setResponse(e.target.value)} rows={2}
+              placeholder="Informations complémentaires…"
+              style={{ ...inp, width: "100%", resize: "vertical" }} />
+          </div>
+
+          {!checked.has("sans_suite") && (
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              {(["en_cours","resolu"] as const).map(s => (
+                <button key={s} onClick={() => setStatus(s)} style={{ flex: 1, padding: "9px 0",
+                  borderRadius: 8, border: `2px solid ${status === s ? C.green : C.gray200}`,
+                  background: status === s ? C.greenL : C.white, cursor: "pointer",
+                  fontWeight: 700, fontSize: 12, color: status === s ? C.green : C.gray600 }}>
+                  {s === "resolu" ? "Résolu" : "En cours"}
+                </button>
+              ))}
             </div>
           )}
 
-          <div style={{ marginBottom: 10 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600,
-              textTransform: "uppercase", marginBottom: 4 }}>Note / Réponse</label>
-            <textarea value={response} onChange={e => setResponse(e.target.value)} rows={3}
-              placeholder="Action prise, note interne…"
-              style={{ ...inp, width: "100%", resize: "vertical" }} />
-          </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            {(["en_cours","resolu"] as const).map(s => (
-              <button key={s} onClick={() => setStatus(s)} style={{ flex: 1, padding: "9px 0", borderRadius: 8,
-                border: `2px solid ${status === s ? C.green : C.gray200}`,
-                background: status === s ? C.greenL : C.white, cursor: "pointer",
-                fontWeight: 700, fontSize: 12, color: status === s ? C.green : C.gray600 }}>
-                {s === "resolu" ? "Résolu" : "En cours"}
-              </button>
-            ))}
-          </div>
-          <Btn full onClick={save} disabled={busy} color={status === "resolu" ? C.green : C.navyL}>
-            {busy ? "Sauvegarde…" : status === "resolu" ? "Résoudre" : "Enregistrer"}
+          <Btn full onClick={envoyer} disabled={busy}
+            color={checked.has("sans_suite") || status === "resolu" ? C.green : C.navyL}>
+            {busy ? "Envoi…" : "Envoyer"}
           </Btn>
         </div>
       </div>
@@ -213,22 +292,10 @@ export default function IncidentsPage() {
     return () => { sb.removeChannel(ch); };
   }, [fetchAll, sb]);
 
-  const handleAction = async (id: number, response: string, status: "en_cours"|"resolu", extra?: string) => {
+  const handleAction = async (id: number, response: string, status: "en_cours"|"resolu") => {
     await sb.from("incidents")
       .update({ response, status, resolved_at: status === "resolu" ? new Date().toISOString() : null })
       .eq("id", id);
-    if (extra === "transmis_meca") {
-      const inc = incidents.find(i => i.id === id);
-      await sb.from("alertes").insert({
-        type: "transmis_meca", severity: "haute",
-        message: `Incident transmis au mécanicien : ${inc?.vehicule?.plaque || ""} — ${inc?.description?.slice(0,100) || ""}`,
-        read: false, vehicle_id: inc?.vehicule_id,
-      });
-    }
-    if (extra === "immobiliser") {
-      const inc = incidents.find(i => i.id === id);
-      if (inc?.vehicule_id) await sb.from("vehicules").update({ etat: "atelier" }).eq("id", inc.vehicule_id);
-    }
     fetchAll();
   };
 

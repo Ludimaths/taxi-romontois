@@ -32,7 +32,9 @@ export default function ProtectedLayoutClient({
       sb.from("messages_internes").select("id", { count: "exact", head: true })
         .eq("lu", false).neq("expediteur_id", profile.id)
         .or(`destinataire_id.eq.${profile.id},destinataire_role.eq.${profile.role}`),
-      sb.from("conges_demandes").select("id", { count: "exact", head: true }).eq("statut", "en_attente"),
+      sb.from("conges_demandes").select("id", { count: "exact", head: true })
+        .eq("statut", "en_attente")
+        .gte("date_fin", new Date().toISOString().slice(0, 10)),
     ]);
     setIncidentsCount(ic ?? 0);
     setAlertesCount(ac ?? 0);
