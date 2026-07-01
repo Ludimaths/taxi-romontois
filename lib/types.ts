@@ -8,6 +8,9 @@ export interface Ecole {
   nom_responsable_facturation?: string;
   email?: string;
   lot?: string;
+  telephone?: string;
+  numero_tva?: string;
+  iban?: string;
   created_at: string;
 }
 

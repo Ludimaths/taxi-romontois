@@ -155,8 +155,6 @@ export default function EcolePage() {
       const params: Record<string,string> = {};
       (paramRows ?? []).forEach((r: { cle: string; valeur: string }) => { params[r.cle] = r.valeur; });
 
-      const numFacture = `TR-${factureAnnee}${String(factureMois).padStart(2,"0")}-${String(ecole.id).padStart(3,"0")}`;
-
       const bytes = genererFactureDGEO({
         ecole,
         tournees,
@@ -164,7 +162,6 @@ export default function EcolePage() {
         eleves,
         mois: factureMois,
         annee: factureAnnee,
-        numFacture,
         params: {
           nom:       params.nom_entreprise,
           adresse:   params.adresse,

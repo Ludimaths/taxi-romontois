@@ -153,13 +153,12 @@ export default function CircuitsPage() {
       const params: Record<string,string> = {};
       (paramRows ?? []).forEach((r: { cle: string; valeur: string }) => { params[r.cle] = r.valeur; });
 
-      const numFacture = `TR-${facAnnee}${String(facMois).padStart(2,"0")}-${String(ecole.id).padStart(3,"0")}`;
       const tourneesCir = tournees.filter(t => t.circuit_id === facModal && t.ecole_id === facEcoleId);
 
       const { genererFactureDGEO: gen } = await import("@/lib/dgeo-export");
       const bytes = gen({
         ecole, tournees: tourneesCir, prises: prisesM ?? [],
-        eleves: elevesEcole, mois: facMois, annee: facAnnee, numFacture,
+        eleves: elevesEcole, mois: facMois, annee: facAnnee,
         params: { nom: params.nom_entreprise, adresse: params.adresse,
           telephone: params.telephone, tva: params.tva, iban: params.iban },
       });
