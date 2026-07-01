@@ -67,9 +67,10 @@ export default function EtablissementDetail() {
 
   // Factures
   const today = new Date();
-  const [facMois,    setFacMois]    = useState(today.getMonth() + 1);
-  const [facAnnee,   setFacAnnee]   = useState(today.getFullYear());
-  const [genLoading, setGenLoading] = useState(false);
+  const [facMois,      setFacMois]      = useState(today.getMonth() + 1);
+  const [facAnnee,     setFacAnnee]     = useState(today.getFullYear());
+  const [numFacture,   setNumFacture]   = useState("");
+  const [genLoading,   setGenLoading]   = useState(false);
 
   const load = useCallback(async () => {
     const today_ = isoToday();
@@ -218,6 +219,7 @@ export default function EtablissementDetail() {
         eleves,
         mois: facMois,
         annee: facAnnee,
+        numFacture,
         params: { nom: params.nom_entreprise, adresse: params.adresse,
           telephone: params.telephone, tva: params.tva, iban: params.iban },
       });
@@ -536,13 +538,24 @@ export default function EtablissementDetail() {
               </div>
             </div>
 
+            <div style={{ marginBottom:18 }}>
+              <label style={{ fontSize:13, color:C.gray600, fontWeight:600,
+                display:"block", marginBottom:4 }}>N° de facture *</label>
+              <input
+                value={numFacture}
+                onChange={e => setNumFacture(e.target.value)}
+                placeholder={`${facAnnee}-${String(facMois).padStart(2,"0")}-${ecole.nom.toUpperCase().replace(/\s+/g,"_")}`}
+                style={{ width:"100%", padding:"9px 12px", border:`1px solid ${C.gray200}`,
+                  borderRadius:8, fontSize:14, boxSizing:"border-box", fontFamily:"monospace" }}
+              />
+              <div style={{ fontSize:11, color:C.gray400, marginTop:4 }}>
+                Format recommandé : AAAA-MM-NOM_ECOLE — ex : 2026-06-MERINE
+              </div>
+            </div>
+
             <div style={{ background:C.gray50, borderRadius:8, padding:"12px 14px",
               fontSize:13, color:C.gray600, marginBottom:18 }}>
               <div><strong>Période :</strong> {MOIS_NOMS[facMois]} {facAnnee}</div>
-              <div style={{ marginTop:4 }}>
-                <strong>N° facture :</strong>{" "}
-                {facAnnee}-{String(facMois).padStart(2,"0")}-{ecole.nom.normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().replace(/[^A-Z0-9]/g,"_").replace(/_+/g,"_").replace(/^_|_$/g,"")}
-              </div>
               <div style={{ marginTop:4 }}>
                 <strong>Élèves actifs :</strong> {elevesActifs.length}
               </div>
@@ -559,9 +572,16 @@ export default function EtablissementDetail() {
               </div>
             )}
 
-            <Btn color="navy" full disabled={genLoading} onClick={handleGenererFacture}>
+            <Btn color="navy" full
+              disabled={genLoading || !numFacture.trim()}
+              onClick={handleGenererFacture}>
               {genLoading ? "Génération en cours…" : "Télécharger la facture DGEO (.xlsx)"}
             </Btn>
+            {!numFacture.trim() && (
+              <div style={{ fontSize:12, color:C.amber, marginTop:8, textAlign:"center" }}>
+                Saisir le numéro de facture avant de générer
+              </div>
+            )}
             <div style={{ fontSize:11, color:C.gray400, marginTop:10, textAlign:"center" }}>
               Format DGEO — Onglets : 6a Guide de lecture + 6b Données
             </div>

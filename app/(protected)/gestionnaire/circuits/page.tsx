@@ -72,6 +72,7 @@ export default function CircuitsPage() {
   const [facEcoleId,  setFacEcoleId]  = useState<number | null>(null);
   const [facMois,     setFacMois]     = useState(new Date().getMonth() + 1);
   const [facAnnee,    setFacAnnee]    = useState(new Date().getFullYear());
+  const [facNumFac,   setFacNumFac]   = useState("");
   const [facBusy,     setFacBusy]     = useState(false);
 
   // Élèves du circuit — drill-down
@@ -159,6 +160,7 @@ export default function CircuitsPage() {
       const bytes = gen({
         ecole, tournees: tourneesCir, prises: prisesM ?? [],
         eleves: elevesEcole, mois: facMois, annee: facAnnee,
+        numFacture: facNumFac,
         params: { nom: params.nom_entreprise, adresse: params.adresse,
           telephone: params.telephone, tva: params.tva, iban: params.iban },
       });
@@ -237,7 +239,7 @@ export default function CircuitsPage() {
               {ecoles.map(ec => <option key={ec.id} value={ec.id}>{ec.nom}</option>)}
             </select>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
             <div>
               <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600,
                 textTransform: "uppercase", marginBottom: 4 }}>Mois</label>
@@ -255,7 +257,22 @@ export default function CircuitsPage() {
               </select>
             </div>
           </div>
-          <Btn color={C.navy} disabled={!facEcoleId || facBusy} onClick={handleDownloadFacture} full>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600,
+              textTransform: "uppercase", marginBottom: 4 }}>N° de facture *</label>
+            <input
+              value={facNumFac}
+              onChange={e => setFacNumFac(e.target.value)}
+              placeholder={`${facAnnee}-${String(facMois).padStart(2,"0")}-NOM_ECOLE`}
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 8,
+                border: `1px solid ${C.gray200}`, fontSize: 13,
+                fontFamily: "monospace", boxSizing: "border-box" }}
+            />
+            <div style={{ fontSize: 11, color: C.gray400, marginTop: 3 }}>
+              Format : AAAA-MM-NOM_ECOLE — ex : 2026-06-MERINE
+            </div>
+          </div>
+          <Btn color={C.navy} disabled={!facEcoleId || !facNumFac.trim() || facBusy} onClick={handleDownloadFacture} full>
             <Download size={15} style={{ verticalAlign: "middle", marginRight: 6 }} />
             {facBusy ? "Génération…" : `Télécharger — ${MOIS[facMois]} ${facAnnee}`}
           </Btn>

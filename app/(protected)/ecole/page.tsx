@@ -36,8 +36,9 @@ export default function EcolePage() {
   const [tab,      setTab]      = useState<Tab>("aujourd_hui");
 
   // Facturation
-  const [factureMois, setFactureMois] = useState(new Date().getMonth() + 1);
+  const [factureMois,  setFactureMois]  = useState(new Date().getMonth() + 1);
   const [factureAnnee, setFactureAnnee] = useState(new Date().getFullYear());
+  const [numFacture,   setNumFacture]   = useState("");
   const [factureBusy,  setFactureBusy]  = useState(false);
 
   const load = useCallback(async () => {
@@ -162,6 +163,7 @@ export default function EcolePage() {
         eleves,
         mois: factureMois,
         annee: factureAnnee,
+        numFacture,
         params: {
           nom:       params.nom_entreprise,
           adresse:   params.adresse,
@@ -413,7 +415,7 @@ export default function EcolePage() {
                 Sélectionnez le mois et téléchargez la facture au format Excel officiel.
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
                 <div>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600,
                     textTransform: "uppercase", marginBottom: 4 }}>Mois</label>
@@ -434,6 +436,22 @@ export default function EcolePage() {
                 </div>
               </div>
 
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600,
+                  textTransform: "uppercase", marginBottom: 4 }}>N° de facture *</label>
+                <input
+                  value={numFacture}
+                  onChange={e => setNumFacture(e.target.value)}
+                  placeholder={`${factureAnnee}-${String(factureMois).padStart(2,"0")}-${(ecole?.nom ?? "ECOLE").toUpperCase().replace(/\s+/g,"_")}`}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8,
+                    border: `1px solid ${C.gray200}`, fontSize: 13, color: C.gray800,
+                    fontFamily: "monospace", boxSizing: "border-box" }}
+                />
+                <div style={{ fontSize: 11, color: C.gray400, marginTop: 3 }}>
+                  Format : AAAA-MM-NOM_ECOLE — ex : 2026-06-MERINE
+                </div>
+              </div>
+
               <div style={{ background: C.skyL, borderRadius: 10, padding: "12px 14px",
                 marginBottom: 20, fontSize: 13, color: C.navy }}>
                 <strong>{ecole.nom}</strong><br />
@@ -441,7 +459,7 @@ export default function EcolePage() {
                 {eleves.length} élève{eleves.length > 1 ? "s" : ""} actif{eleves.length > 1 ? "s" : ""}
               </div>
 
-              <button onClick={handleDownloadFacture} disabled={factureBusy}
+              <button onClick={handleDownloadFacture} disabled={factureBusy || !numFacture.trim()}
                 style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none",
                   background: factureBusy ? C.gray200 : C.navy, color: C.white, cursor: factureBusy ? "default" : "pointer",
                   fontWeight: 800, fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
