@@ -256,6 +256,17 @@ export interface Profile {
 
 export type CongesStatut = "en_attente" | "transmis_admin" | "accepte" | "refuse";
 
+export interface AdresseEleve {
+  id: number;
+  eleve_id: number;
+  type: "père" | "mère" | "grand-parent" | "autre";
+  nom_contact?: string;
+  telephone?: string;
+  adresse: string;
+  jours_application: string[];
+  created_at: string;
+}
+
 export interface CongesDemande {
   id: number;
   conducteur_id: number;

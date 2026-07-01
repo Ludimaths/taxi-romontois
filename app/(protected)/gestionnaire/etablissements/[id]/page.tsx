@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
 import { Btn, TabBar, Badge, Modal, SectionTitle } from "@/components/ui";
-import type { Ecole, Eleve, Circuit, Conducteur, PriseEnCharge, TourneeConfig } from "@/lib/types";
+import type { Ecole, Eleve, Circuit, Conducteur, PriseEnCharge, TourneeConfig, AdresseEleve } from "@/lib/types";
 
 type ConduPartial = Pick<Conducteur, "id" | "nom" | "prenom" | "circuit_id" | "status">;
 import { ArrowLeft, ChevronDown } from "lucide-react";
@@ -59,6 +59,13 @@ export default function EtablissementDetail() {
   const [eleveForm,  setEleveForm]  = useState<EleveForm>(EMPTY_EF);
   const [savingEl,   setSavingEl]   = useState(false);
   const [elErr,      setElErr]      = useState("");
+
+  // Adresses multiples
+  const EMPTY_ADDR = { type: "autre" as AdresseEleve["type"], nom_contact: "", telephone: "", adresse: "", jours: [] as string[] };
+  const [eleveAdresses,  setEleveAdresses]  = useState<AdresseEleve[]>([]);
+  const [showAddrAdd,    setShowAddrAdd]    = useState(false);
+  const [addrForm,       setAddrForm]       = useState(EMPTY_ADDR);
+  const [addrSaving,     setAddrSaving]     = useState(false);
 
   // Édition école
   const [showEdit,   setShowEdit]   = useState(false);
@@ -122,9 +129,12 @@ export default function EtablissementDetail() {
     setEditEleve(null);
     setEleveForm(EMPTY_EF);
     setElErr("");
+    setEleveAdresses([]);
+    setShowAddrAdd(false);
+    setAddrForm(EMPTY_ADDR);
     setShowModal(true);
   }
-  function openEdit(e: Eleve) {
+  async function openEdit(e: Eleve) {
     setEditEleve(e);
     setEleveForm({
       nom_famille: e.nom_famille,
@@ -135,7 +145,33 @@ export default function EtablissementDetail() {
       actif: e.actif,
     });
     setElErr("");
+    setShowAddrAdd(false);
+    setAddrForm(EMPTY_ADDR);
+    const { data: adrData } = await sb.from("adresses_eleves").select("*").eq("eleve_id", e.id);
+    setEleveAdresses(adrData ?? []);
     setShowModal(true);
+  }
+
+  async function handleAddAdresse() {
+    if (!addrForm.adresse.trim() || !editEleve) return;
+    setAddrSaving(true);
+    const { data } = await sb.from("adresses_eleves").insert({
+      eleve_id: editEleve.id,
+      type: addrForm.type,
+      nom_contact: addrForm.nom_contact.trim() || null,
+      telephone: addrForm.telephone.trim() || null,
+      adresse: addrForm.adresse.trim(),
+      jours_application: addrForm.jours,
+    }).select().single();
+    if (data) setEleveAdresses(prev => [...prev, data as AdresseEleve]);
+    setAddrForm(EMPTY_ADDR);
+    setShowAddrAdd(false);
+    setAddrSaving(false);
+  }
+
+  async function handleDeleteAdresse(id: number) {
+    await sb.from("adresses_eleves").delete().eq("id", id);
+    setEleveAdresses(prev => prev.filter(a => a.id !== id));
   }
 
   async function handleSaveEleve() {
@@ -325,12 +361,22 @@ export default function EtablissementDetail() {
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead>
                   <tr style={{ background:C.gray50 }}>
-                    {["Nom","Prénom","Circuit","Type","Statut","Actions"].map(h => (
+                    {["Nom","Prénom","Circuit","Type"].map(h => (
                       <th key={h} style={{ padding:"11px 14px", textAlign:"left",
                         fontWeight:700, color:C.gray600, borderBottom:`1px solid ${C.gray200}` }}>
                         {h}
                       </th>
                     ))}
+                    <th style={{ padding:"11px 14px", textAlign:"left",
+                      fontWeight:700, color:C.gray600, borderBottom:`1px solid ${C.gray200}`,
+                      cursor:"help" }}
+                      title="Indique si l'élève est inscrit et pris en charge cette année scolaire">
+                      Inscrit ℹ
+                    </th>
+                    <th style={{ padding:"11px 14px", textAlign:"left",
+                      fontWeight:700, color:C.gray600, borderBottom:`1px solid ${C.gray200}` }}>
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -350,14 +396,14 @@ export default function EtablissementDetail() {
                         </td>
                         <td style={{ padding:"10px 14px" }}>
                           <Badge color={e.actif ? "green" : "gray"}>
-                            {e.actif ? "Actif" : "Inactif"}
+                            {e.actif ? "Inscrit" : "Non inscrit"}
                           </Badge>
                         </td>
                         <td style={{ padding:"10px 14px" }}>
                           <div style={{ display:"flex", gap:6 }}>
                             <Btn small outline onClick={() => openEdit(e)}>Éditer</Btn>
                             <Btn small outline onClick={() => handleToggleActif(e)}>
-                              {e.actif ? "Désactiver" : "Réactiver"}
+                              {e.actif ? "Désinscrire" : "Réinscrire"}
                             </Btn>
                           </div>
                         </td>
@@ -567,8 +613,13 @@ export default function EtablissementDetail() {
             {tournees.filter(t=>t.actif).length === 0 && (
               <div style={{ background:C.amberL, borderRadius:8, padding:"10px 14px",
                 fontSize:13, color:C.amber, marginBottom:14 }}>
-                Aucune tournée configurée pour cet établissement.
-                Les tournées définissent les trajets et tarifs utilisés dans la facture.
+                Aucune tournée configurée — les prix/km et prix/heure sont définis dans les tournées.
+              </div>
+            )}
+            {tournees.filter(t=>t.actif && (t.prix_km === 0 || t.prix_heure === 0)).length > 0 && (
+              <div style={{ background:C.amberL, borderRadius:8, padding:"10px 14px",
+                fontSize:13, color:C.amber, marginBottom:14 }}>
+                Certaines tournées ont un prix/km ou prix/heure à 0. Vérifier la configuration des tournées.
               </div>
             )}
 
@@ -583,7 +634,7 @@ export default function EtablissementDetail() {
               </div>
             )}
             <div style={{ fontSize:11, color:C.gray400, marginTop:10, textAlign:"center" }}>
-              Format DGEO — Onglets : 6a Guide de lecture + 6b Données
+              Format DGEO — onglet unique avec en-têtes colorés
             </div>
           </div>
         </div>
@@ -653,7 +704,130 @@ export default function EtablissementDetail() {
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <input type="checkbox" id="actif" checked={eleveForm.actif}
                   onChange={e => setEleveForm(prev => ({ ...prev, actif: e.target.checked }))} />
-                <label htmlFor="actif" style={{ fontSize:14, color:C.gray600 }}>Élève actif</label>
+                <label htmlFor="actif"
+                  title="Indique si l'élève est inscrit et pris en charge cette année scolaire"
+                  style={{ fontSize:14, color:C.gray600, cursor:"help" }}>
+                  Inscrit cette année scolaire
+                </label>
+              </div>
+            )}
+
+            {editEleve && (
+              <div style={{ borderTop:`1px solid ${C.gray200}`, paddingTop:14, marginTop:4 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:C.gray800, marginBottom:10 }}>
+                  Adresses spécifiques par jour
+                </div>
+                <div style={{ fontSize:12, color:C.gray400, marginBottom:10 }}>
+                  Définissez des adresses de prise en charge selon le jour de la semaine (ex : chez la mère le lundi, chez le père le mercredi).
+                </div>
+
+                {eleveAdresses.length > 0 && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:12 }}>
+                    {eleveAdresses.map(a => (
+                      <div key={a.id} style={{ background:C.gray50, borderRadius:8,
+                        padding:"10px 12px", display:"flex", alignItems:"flex-start",
+                        justifyContent:"space-between", gap:10 }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:12, fontWeight:700, color:C.navy,
+                            textTransform:"capitalize" }}>{a.type}</div>
+                          {a.nom_contact && (
+                            <div style={{ fontSize:12, color:C.gray600 }}>{a.nom_contact}</div>
+                          )}
+                          <div style={{ fontSize:12, color:C.gray800 }}>{a.adresse}</div>
+                          {a.jours_application?.length > 0 && (
+                            <div style={{ fontSize:11, color:C.gray400, marginTop:3 }}>
+                              {a.jours_application.join(", ")}
+                            </div>
+                          )}
+                        </div>
+                        <button onClick={() => handleDeleteAdresse(a.id)}
+                          style={{ fontSize:11, color:C.red, background:"none", border:"none",
+                            cursor:"pointer", padding:"2px 6px", flexShrink:0, fontWeight:600 }}>
+                          Supprimer
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!showAddrAdd ? (
+                  <button onClick={() => setShowAddrAdd(true)}
+                    style={{ fontSize:12, color:C.navyL, background:C.skyL, border:"none",
+                      borderRadius:7, padding:"6px 12px", cursor:"pointer", fontWeight:600 }}>
+                    + Ajouter une adresse
+                  </button>
+                ) : (
+                  <div style={{ background:C.skyL, borderRadius:10, padding:"12px 14px" }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:C.navy, marginBottom:10 }}>
+                      Nouvelle adresse
+                    </div>
+                    <div style={{ display:"flex", gap:10, marginBottom:8, flexWrap:"wrap" }}>
+                      <div style={{ flex:1, minWidth:120 }}>
+                        <label style={{ fontSize:11, fontWeight:600, color:C.gray600,
+                          display:"block", marginBottom:3 }}>Relation</label>
+                        <select value={addrForm.type}
+                          onChange={e => setAddrForm(p => ({ ...p, type: e.target.value as AdresseEleve["type"] }))}
+                          style={{ width:"100%", padding:"7px 10px", border:`1px solid ${C.gray200}`,
+                            borderRadius:7, fontSize:13, background:C.white }}>
+                          {(["père","mère","grand-parent","autre"] as AdresseEleve["type"][]).map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={{ flex:1, minWidth:120 }}>
+                        <label style={{ fontSize:11, fontWeight:600, color:C.gray600,
+                          display:"block", marginBottom:3 }}>Nom contact</label>
+                        <input value={addrForm.nom_contact}
+                          onChange={e => setAddrForm(p => ({ ...p, nom_contact: e.target.value }))}
+                          placeholder="Ex : Marie Dupont"
+                          style={{ width:"100%", padding:"7px 10px", border:`1px solid ${C.gray200}`,
+                            borderRadius:7, fontSize:13, boxSizing:"border-box" }} />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom:8 }}>
+                      <label style={{ fontSize:11, fontWeight:600, color:C.gray600,
+                        display:"block", marginBottom:3 }}>Adresse *</label>
+                      <input value={addrForm.adresse}
+                        onChange={e => setAddrForm(p => ({ ...p, adresse: e.target.value }))}
+                        placeholder="Rue, NPA, ville"
+                        style={{ width:"100%", padding:"7px 10px", border:`1px solid ${C.gray200}`,
+                          borderRadius:7, fontSize:13, boxSizing:"border-box" }} />
+                    </div>
+                    <div style={{ marginBottom:10 }}>
+                      <label style={{ fontSize:11, fontWeight:600, color:C.gray600,
+                        display:"block", marginBottom:5 }}>Jours applicables</label>
+                      <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                        {["lundi","mardi","mercredi","jeudi","vendredi"].map(j => (
+                          <label key={j} style={{ display:"flex", alignItems:"center",
+                            gap:4, fontSize:12, cursor:"pointer" }}>
+                            <input type="checkbox" checked={addrForm.jours.includes(j)}
+                              onChange={e => setAddrForm(p => ({
+                                ...p,
+                                jours: e.target.checked ? [...p.jours, j] : p.jours.filter(d => d !== j),
+                              }))} />
+                            {j}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button onClick={handleAddAdresse}
+                        disabled={addrSaving || !addrForm.adresse.trim()}
+                        style={{ padding:"7px 16px", borderRadius:8, border:"none",
+                          background: addrForm.adresse.trim() ? C.navy : C.gray200,
+                          color:C.white, fontWeight:700, fontSize:12,
+                          cursor: addrForm.adresse.trim() ? "pointer" : "not-allowed" }}>
+                        {addrSaving ? "…" : "Ajouter"}
+                      </button>
+                      <button onClick={() => setShowAddrAdd(false)}
+                        style={{ padding:"7px 14px", borderRadius:8,
+                          border:`1px solid ${C.gray200}`, background:C.white,
+                          color:C.gray600, fontWeight:600, fontSize:12, cursor:"pointer" }}>
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

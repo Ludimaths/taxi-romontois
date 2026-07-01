@@ -15,7 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { C, fmtDate, fmtDateTime, isoToday } from "@/lib/constants";
 import type { Conducteur, Vehicule, Incident, Reparation, AbsenceConducteur, Alerte, CongesDemande } from "@/lib/types";
 
-type AdminTab = "dashboard" | "stats" | "validation" | "historique" | "messages";
+type AdminTab = "dashboard" | "stats" | "validation" | "historique" | "messages" | "parametres";
 type Period   = "week" | "month" | "annee";
 
 const inp: React.CSSProperties = {
@@ -85,6 +85,10 @@ export default function AdminPage() {
   const [congeAdminBusy,       setCongeAdminBusy]       = useState(false);
   const [internalsUnread,      setInternalsUnread]      = useState(0);
 
+  // Paramètres entreprise
+  const [entParams,    setEntParams]    = useState<Record<string,string>>({});
+  const [paramsSaving, setParamsSaving] = useState(false);
+
   const [histYear,  setHistYear]  = useState(currentSchoolYear());
   const [histMonth, setHistMonth] = useState<number | null>(null);
   const [histDay,   setHistDay]   = useState<string | null>(null);
@@ -96,6 +100,17 @@ export default function AdminPage() {
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
+  // Chargement paramètres entreprise
+  useEffect(() => {
+    sb.from("parametres").select("cle,valeur")
+      .in("cle", ["nom_entreprise","adresse","telephone","tva","iban"])
+      .then(({ data }) => {
+        const p: Record<string,string> = {};
+        (data ?? []).forEach((r: { cle: string; valeur: string }) => { p[r.cle] = r.valeur ?? ""; });
+        setEntParams(p);
+      });
+  }, [sb]);
 
   // Chargement seuil budget depuis parametres
   useEffect(() => {
@@ -164,6 +179,15 @@ export default function AdminPage() {
     await sb.auth.signOut();
     router.push("/login");
     router.refresh();
+  }
+
+  async function saveParams() {
+    setParamsSaving(true);
+    const rows = Object.entries(entParams).map(([cle, valeur]) => ({ cle, valeur }));
+    if (rows.length > 0) {
+      await sb.from("parametres").upsert(rows, { onConflict: "cle" });
+    }
+    setParamsSaving(false);
   }
 
   async function saveSeuil() {
@@ -371,6 +395,7 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
     { id: "historique", icon: <History size={16} />,         label: "Historique" },
     { id: "messages",   icon: <MessageSquare size={16} />,   label: "Messages",
       badge: unreadMsgCount || undefined },
+    { id: "parametres", icon: <Settings size={16} />,        label: "Paramètres" },
   ];
 
   // ── Accès rapide (4 cards — grille 2×2) ────────────────────────────────────
@@ -1381,6 +1406,50 @@ ${rep.commentaire_mecanicien ? `<div class="row"><span class="label">Notes méca
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ══ PARAMÈTRES ENTREPRISE ══════════════════════════════════════════ */}
+          {tab === "parametres" && (
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 18, color: C.navy, marginBottom: 20 }}>
+                Paramètres entreprise
+              </div>
+              <div style={{ background: C.white, borderRadius: 14, padding: "24px 26px",
+                maxWidth: 560, border: `1px solid ${C.gray200}`, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+                <p style={{ fontSize: 13, color: C.gray600, marginBottom: 20, lineHeight: 1.5 }}>
+                  Ces informations apparaissent automatiquement dans les factures DGEO générées.
+                </p>
+                {[
+                  { key: "nom_entreprise", label: "Nom de l'entreprise",    ph: "Ex : Taxi Romontois SA" },
+                  { key: "adresse",        label: "Adresse",                ph: "Ex : Route de Fribourg 1, 1700 Fribourg" },
+                  { key: "telephone",      label: "Téléphone",              ph: "Ex : 026 655 10 10" },
+                  { key: "tva",            label: "N° TVA",                 ph: "Ex : CHE-123.456.789 TVA" },
+                  { key: "iban",           label: "IBAN",                   ph: "Ex : CH00 1234 5678 9012 3456 7" },
+                ].map(f => (
+                  <div key={f.key} style={{ marginBottom: 16 }}>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 600,
+                      color: C.gray600, marginBottom: 4 }}>
+                      {f.label}
+                    </label>
+                    <input
+                      value={entParams[f.key] ?? ""}
+                      onChange={e => setEntParams(prev => ({ ...prev, [f.key]: e.target.value }))}
+                      placeholder={f.ph}
+                      style={{ ...inp, fontFamily: f.key === "iban" ? "monospace" : "inherit" }}
+                    />
+                  </div>
+                ))}
+                <div style={{ marginTop: 8 }}>
+                  <button onClick={saveParams} disabled={paramsSaving}
+                    style={{ padding: "11px 28px", borderRadius: 10, border: "none",
+                      background: paramsSaving ? C.gray200 : C.navy,
+                      color: C.white, fontWeight: 700, fontSize: 14,
+                      cursor: paramsSaving ? "not-allowed" : "pointer" }}>
+                    {paramsSaving ? "Enregistrement…" : "Sauvegarder"}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
