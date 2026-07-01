@@ -1,4 +1,57 @@
-export type Role = "gestionnaire" | "conducteur" | "mecanicien" | "parent" | "admin";
+export type Role = "gestionnaire" | "conducteur" | "mecanicien" | "parent" | "admin" | "ecole";
+
+// ── Facturation / Suivi élèves ────────────────────────────────────────────────
+export interface Ecole {
+  id: number;
+  nom: string;
+  adresse?: string;
+  nom_responsable_facturation?: string;
+  email?: string;
+  lot?: string;
+  created_at: string;
+}
+
+export interface Eleve {
+  id: number;
+  nom_famille: string;
+  prenom_initiale: string;
+  adresse?: string;
+  circuit_id?: string;
+  ecole_id?: number;
+  ecole?: Ecole;
+  type_transport: "standard" | "equipe";
+  actif: boolean;
+  created_at: string;
+}
+
+export interface PriseEnCharge {
+  id: number;
+  eleve_id: number;
+  eleve?: Eleve;
+  conducteur_id: number;
+  circuit_id?: string;
+  date: string;        // YYYY-MM-DD
+  heure_prise?: string;
+  sens: "aller" | "retour";
+  statut: "present" | "absent";
+  created_at: string;
+}
+
+export interface TourneeConfig {
+  id: number;
+  nom: string;
+  circuit_id?: string;
+  ecole_id?: number;
+  ecole?: Ecole;
+  sens: "aller" | "retour";
+  jour_semaine: number;  // 1=lundi … 7=dimanche
+  km: number;
+  duree_minutes: number;
+  prix_km: number;
+  prix_heure: number;
+  actif: boolean;
+  created_at: string;
+}
 
 export type DriverStatus = "en_service" | "en_attente" | "absent" | "disponible" | "termine";
 export type VehicleState = "en_service" | "bon" | "receptionne" | "atelier" | "en_attente_piece" | "en_reparation" | "repare" | "attention";

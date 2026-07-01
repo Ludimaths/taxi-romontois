@@ -149,6 +149,15 @@ export default function ProtectedLayoutClient({
     );
   }
 
+  // École : la page gère son propre layout
+  if (profile.role === "ecole") {
+    return (
+      <div style={{ minHeight: "100vh", background: C.gray50, color: C.gray800 }}>
+        {children}
+      </div>
+    );
+  }
+
   // Conducteur : la page gère son propre header et drawer mobile
   if (profile.role === "conducteur") {
     return (

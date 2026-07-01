@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, isoToday, fmtHHMM, nowTimeStr } from "@/lib/constants";
-import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant, CongesDemande } from "@/lib/types";
+import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant, CongesDemande, Eleve, PriseEnCharge } from "@/lib/types";
 import { Bus, Home, FileText, Activity, AlertCircle, Mail, History, CalendarDays, LogOut, Menu } from "lucide-react";
 import { BSheet, BigBtn, Inp, TA, Chip, StatusBadge, SIGN_LABELS } from "./tabs/shared";
 import { TabDashboard } from "./tabs/Dashboard";
@@ -28,6 +28,8 @@ export default function ConducteurPage(){
   const [messages,  setMessages]  = useState<Alerte[]>([]);
   const [histLogs,  setHistLogs]  = useState<ServiceLog[]>([]);
   const [conges,    setConges]    = useState<CongesDemande[]>([]);
+  const [elevesCircuit, setElevesCircuit] = useState<Eleve[]>([]);
+  const [prises,    setPrises]    = useState<PriseEnCharge[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState<Tab>("dashboard");
   const [drawerOpen,setDrawerOpen]= useState(false);
@@ -113,6 +115,18 @@ export default function ConducteurPage(){
     if(msg.data) setMessages(msg.data);
     if(hist.data)setHistLogs(hist.data);
     if(cng.data) setConges(cng.data);
+
+    // Élèves du circuit (table facturation) + prises en charge du jour
+    const circuitId = drv.data?.circuit_id;
+    if (circuitId) {
+      const [el, pr] = await Promise.all([
+        sb.from("eleves").select("*").eq("circuit_id", circuitId).eq("actif", true).order("nom_famille"),
+        sb.from("prises_en_charge").select("*").eq("conducteur_id", cid).eq("date", isoToday()),
+      ]);
+      setElevesCircuit(el.data ?? []);
+      setPrises(pr.data ?? []);
+    }
+
     setLoading(false);
   },[sb]);
 
@@ -123,6 +137,7 @@ export default function ConducteurPage(){
       .on("postgres_changes",{event:"*",schema:"public",table:"incidents"},load)
       .on("postgres_changes",{event:"*",schema:"public",table:"service_logs"},load)
       .on("postgres_changes",{event:"*",schema:"public",table:"conges_demandes"},load)
+      .on("postgres_changes",{event:"*",schema:"public",table:"prises_en_charge"},load)
       .subscribe();
     return()=>{sb.removeChannel(ch);};
   },[load,sb]);
@@ -241,6 +256,45 @@ export default function ConducteurPage(){
   async function handleConfirmerAbsence(id:number){
     await sb.from("absences_enfants").update({read_by_driver:true}).eq("id",id);
     setAbsConfirmed(p=>new Set([...p,id]));
+  }
+
+  async function handleMarquerEleve(eleveId: number, statut: "present" | "absent") {
+    if (!driver) return;
+    const now   = new Date().toTimeString().slice(0, 8);
+    const today = isoToday();
+
+    // Vérifie si une entrée existe déjà
+    const { data: existing } = await sb.from("prises_en_charge")
+      .select("id").eq("eleve_id", eleveId).eq("conducteur_id", driver.id)
+      .eq("date", today).eq("sens", "aller").maybeSingle();
+
+    if (existing) {
+      await sb.from("prises_en_charge").update({ statut }).eq("id", existing.id);
+    } else {
+      await sb.from("prises_en_charge").insert({
+        eleve_id: eleveId, conducteur_id: driver.id,
+        circuit_id: driver.circuit_id || null,
+        date: today, heure_prise: statut === "present" ? now : null,
+        sens: "aller", statut,
+      });
+    }
+
+    // Mise à jour locale immédiate
+    const { data: pr } = await sb.from("prises_en_charge").select("*")
+      .eq("conducteur_id", driver.id).eq("date", today);
+    setPrises(pr ?? []);
+
+    // Notification gestionnaire
+    const eleve = elevesCircuit.find(e => e.id === eleveId);
+    if (eleve) {
+      const txt = statut === "present"
+        ? `✓ ${eleve.nom_famille} ${eleve.prenom_initiale}. réceptionné à ${now.slice(0,5)} — ${driver.prenom} ${driver.nom}`
+        : `✗ ${eleve.nom_famille} ${eleve.prenom_initiale}. absent — ${driver.prenom} ${driver.nom}`;
+      await sb.from("alertes").insert({
+        type: "conducteur", severity: "normale", read: false,
+        driver_id: driver.id, message: txt,
+      });
+    }
   }
 
   async function handleEnvoyerConge(form:{date_debut:string;date_fin:string;motif:string;justification:string}){
@@ -439,11 +493,13 @@ export default function ConducteurPage(){
       )}
       {tab==="service"&&(
         <TabService driver={driver} todayLog={todayLog} circ={circ} veh={veh}
+          eleves={elevesCircuit} prises={prises}
           onShowConfirm={()=>setShowConfirm(true)}
           onShowReplace={()=>setShowReplace(true)}
           onShowAbsence={()=>setShowAbsence(true)}
           onShowFin={()=>setShowFin(true)}
-          onShowReprise={()=>setShowReprise(true)}/>
+          onShowReprise={()=>setShowReprise(true)}
+          onMarquerEleve={handleMarquerEleve}/>
       )}
       {tab==="signalements"&&(
         <TabSignalements driver={driver} incidents={incidents}
