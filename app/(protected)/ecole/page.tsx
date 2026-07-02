@@ -183,8 +183,14 @@ export default function EcolePage() {
       const a    = document.createElement("a");
       a.href     = url;
       a.download = `Facture_DGEO_${ecole.nom.replace(/\s+/g,"_")}_${fmtMoisAnnee(factureMois, factureAnnee).replace(" ","_")}.xlsx`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Erreur génération facture :\n${msg.slice(0, 300)}`);
+      console.error("[facture-dgeo]", err);
     } finally {
       setFactureBusy(false);
     }

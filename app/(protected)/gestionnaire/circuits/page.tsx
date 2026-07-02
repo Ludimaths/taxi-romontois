@@ -172,10 +172,16 @@ export default function CircuitsPage() {
       const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
-      a.href = url;
+      a.href     = url;
       a.download = `Facture_DGEO_${ecole.nom.replace(/\s+/g,"_")}_${MOIS[facMois]}_${facAnnee}.xlsx`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Erreur génération facture :\n${msg.slice(0, 300)}`);
+      console.error("[facture-dgeo]", err);
     } finally {
       setFacBusy(false);
     }
