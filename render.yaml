@@ -2,7 +2,7 @@ services:
   - type: web
     name: taxi-romontois
     runtime: node
-    buildCommand: npm install && npm run build
+    buildCommand: pip3 install openpyxl && npm install && npm run build
     startCommand: npm start
     plan: free
     envVars:

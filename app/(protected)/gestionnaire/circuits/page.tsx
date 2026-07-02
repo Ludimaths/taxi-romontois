@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
 import { Badge, Card, InfoBox, Btn, Modal } from "@/components/ui";
 import type { Circuit, Conducteur, CercleScolaire, Eleve, PriseEnCharge, Ecole, TourneeConfig } from "@/lib/types";
-import { genererFactureDGEO } from "@/lib/dgeo-export";
 
 const isoToday = () => new Date().toISOString().slice(0, 10);
 const MOIS = ["","Janvier","Février","Mars","Avril","Mai","Juin",
@@ -156,14 +155,19 @@ export default function CircuitsPage() {
 
       const tourneesCir = tournees.filter(t => t.circuit_id === facModal && t.ecole_id === facEcoleId);
 
-      const { genererFactureDGEO: gen } = await import("@/lib/dgeo-export");
-      const bytes = gen({
-        ecole, tournees: tourneesCir, prises: prisesM ?? [],
-        eleves: elevesEcole, mois: facMois, annee: facAnnee,
-        numFacture: facNumFac,
-        params: { nom: params.nom_entreprise, adresse: params.adresse,
-          telephone: params.telephone, tva: params.tva, iban: params.iban },
+      const resp = await fetch("/api/gestionnaire/facture-dgeo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ecole, tournees: tourneesCir, prises: prisesM ?? [],
+          eleves: elevesEcole, mois: facMois, annee: facAnnee,
+          numFacture: facNumFac,
+          params: { nom: params.nom_entreprise, adresse: params.adresse,
+            telephone: params.telephone, tva: params.tva, iban: params.iban },
+        }),
       });
+      if (!resp.ok) throw new Error(await resp.text());
+      const bytes = await resp.arrayBuffer();
 
       const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url  = URL.createObjectURL(blob);

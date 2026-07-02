@@ -5,7 +5,6 @@ import { LogOut, Download, RefreshCw, CheckCircle2, XCircle, Users, Bus } from "
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
 import type { Eleve, PriseEnCharge, TourneeConfig, Ecole } from "@/lib/types";
-import { genererFactureDGEO } from "@/lib/dgeo-export";
 
 const isoToday = () => new Date().toISOString().slice(0, 10);
 const MOIS = ["","Janvier","Février","Mars","Avril","Mai","Juin",
@@ -156,22 +155,28 @@ export default function EcolePage() {
       const params: Record<string,string> = {};
       (paramRows ?? []).forEach((r: { cle: string; valeur: string }) => { params[r.cle] = r.valeur; });
 
-      const bytes = genererFactureDGEO({
-        ecole,
-        tournees,
-        prises: prisesM ?? [],
-        eleves,
-        mois: factureMois,
-        annee: factureAnnee,
-        numFacture,
-        params: {
-          nom:       params.nom_entreprise,
-          adresse:   params.adresse,
-          telephone: params.telephone,
-          tva:       params.tva,
-          iban:      params.iban,
-        },
+      const resp = await fetch("/api/gestionnaire/facture-dgeo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ecole,
+          tournees,
+          prises: prisesM ?? [],
+          eleves,
+          mois: factureMois,
+          annee: factureAnnee,
+          numFacture,
+          params: {
+            nom:       params.nom_entreprise,
+            adresse:   params.adresse,
+            telephone: params.telephone,
+            tva:       params.tva,
+            iban:      params.iban,
+          },
+        }),
       });
+      if (!resp.ok) throw new Error(await resp.text());
+      const bytes = await resp.arrayBuffer();
 
       const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url  = URL.createObjectURL(blob);

@@ -247,18 +247,23 @@ export default function EtablissementDetail() {
       const params: Record<string,string> = {};
       (paramRows ?? []).forEach((r: { cle: string; valeur: string }) => { params[r.cle] = r.valeur; });
 
-      const { genererFactureDGEO } = await import("@/lib/dgeo-export");
-      const bytes = genererFactureDGEO({
-        ecole,
-        tournees,
-        prises: prisesM ?? [],
-        eleves,
-        mois: facMois,
-        annee: facAnnee,
-        numFacture,
-        params: { nom: params.nom_entreprise, adresse: params.adresse,
-          telephone: params.telephone, tva: params.tva, iban: params.iban },
+      const resp = await fetch("/api/gestionnaire/facture-dgeo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ecole,
+          tournees,
+          prises: prisesM ?? [],
+          eleves,
+          mois: facMois,
+          annee: facAnnee,
+          numFacture,
+          params: { nom: params.nom_entreprise, adresse: params.adresse,
+            telephone: params.telephone, tva: params.tva, iban: params.iban },
+        }),
       });
+      if (!resp.ok) throw new Error(await resp.text());
+      const bytes = await resp.arrayBuffer();
 
       const nomEcole = ecole.nom.replace(/\s+/g,"_");
       const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
