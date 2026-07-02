@@ -1,1 +1,1 @@
-openpyxl==3.1.2
+# openpyxl removed — invoice generation uses ExcelJS (Node.js)
