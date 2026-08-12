@@ -1,15 +1,17 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Navigation, Phone, CheckCircle2, XCircle, School } from "lucide-react";
+import { Navigation, School, ArrowRight } from "lucide-react";
 import { C } from "@/lib/constants";
 import { circuitImage } from "@/lib/circuit-images";
 import type { Conducteur, Eleve, PriseEnCharge } from "@/lib/types";
 
 type CircType = { nom?: string; emoji?: string; id?: string };
 
-// École de destination (Fondation Mérine). Fallback tant que les écoles
-// n'ont pas de coordonnées propres en base.
-const ECOLE_MERINE = { nom: "Fondation Mérine", lat: 46.6692349, lon: 6.7932469 };
+// Destination (Fondation Mérine) — fallback tant que les écoles n'ont pas
+// leurs propres coordonnées en base.
+const ECOLE = { nom: "Fondation Mérine", adr: "Rue du Château 47, 1510 Moudon", lat: 46.6692349, lon: 6.7932469, tel: "021 905 30 30" };
+const CENTRAL_TEL = "024 455 44 80";
+const ARRIVEE = "08:25";
 
 interface TourneeProps {
   driver: Conducteur;
@@ -23,33 +25,26 @@ interface TourneeProps {
   onShowReprise: () => void;
 }
 
-const gmaps = (la: number, lo: number) => `https://www.google.com/maps/dir/?api=1&destination=${la},${lo}`;
 const gmapsAddr = (adr: string) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(adr)}`;
+const gmapsLL = (la: number, lo: number) => `https://www.google.com/maps/dir/?api=1&destination=${la},${lo}`;
 const cleanTel = (t?: string) => (t || "").replace(/\s/g, "");
+const initials = (e: Eleve) => ((e.prenom_initiale?.[0] || "") + (e.nom_famille?.[0] || "")).toUpperCase();
 
-// Charge Leaflet (CSS + JS) une seule fois côté client.
 function loadLeaflet(): Promise<any> {
   return new Promise((resolve, reject) => {
     const w = window as any;
     if (w.L) return resolve(w.L);
     if (!document.getElementById("leaflet-css")) {
       const link = document.createElement("link");
-      link.id = "leaflet-css";
-      link.rel = "stylesheet";
+      link.id = "leaflet-css"; link.rel = "stylesheet";
       link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
       document.head.appendChild(link);
     }
     const existing = document.getElementById("leaflet-js") as HTMLScriptElement | null;
-    if (existing) {
-      existing.addEventListener("load", () => resolve((window as any).L));
-      existing.addEventListener("error", reject);
-      return;
-    }
+    if (existing) { existing.addEventListener("load", () => resolve((window as any).L)); existing.addEventListener("error", reject); return; }
     const s = document.createElement("script");
-    s.id = "leaflet-js";
-    s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-    s.onload = () => resolve((window as any).L);
-    s.onerror = reject;
+    s.id = "leaflet-js"; s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    s.onload = () => resolve((window as any).L); s.onerror = reject;
     document.head.appendChild(s);
   });
 }
@@ -58,16 +53,22 @@ export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerE
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const [mapError, setMapError] = useState(false);
+  const [arrived, setArrived] = useState(false);          // arrivé sur place à l'arrêt courant
+  const [schoolPhase, setSchoolPhase] = useState<"go" | "at" | "done">("go");
 
-  const tournee = [...eleves].sort((a, b) =>
-    (a.heure_ramassage || "~~").localeCompare(b.heure_ramassage || "~~"));
-  const withCoords = tournee.filter(e => e.lat != null && e.lon != null);
+  const tournee = [...eleves].sort((a, b) => (a.heure_ramassage || "~~").localeCompare(b.heure_ramassage || "~~"));
   const prisByEleve = new Map(prises.map(p => [p.eleve_id, p]));
+  const isDone = (e: Eleve) => prisByEleve.has(e.id);
+  const currentIndex = tournee.findIndex(e => !isDone(e));
+  const allPickedUp = tournee.length > 0 && currentIndex === -1;
+  const presents = prises.filter(p => p.statut === "present").length;
   const img = circuitImage(driver.circuit_id);
+  const withCoords = tournee.filter(e => e.lat != null && e.lon != null);
 
+  // Carte (visible en service)
   useEffect(() => {
     let cancelled = false;
-    if (!mapDiv.current || withCoords.length === 0) return;
+    if (!enService || !mapDiv.current || withCoords.length === 0) return;
     loadLeaflet().then((L) => {
       if (cancelled || !mapDiv.current) return;
       try {
@@ -76,186 +77,240 @@ export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerE
         mapRef.current = map;
         L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(map);
         const pts: [number, number][] = [];
-        withCoords.forEach((e, k) => {
-          const done = prisByEleve.get(e.id)?.statut === "present";
-          const col = done ? "#0E9F6E" : "#0D3B7A";
-          L.marker([e.lat as number, e.lon as number], {
-            icon: L.divIcon({
-              className: "", iconSize: [26, 26], iconAnchor: [13, 13],
-              html: `<div style="background:${col};color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font:700 12px sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)">${k + 1}</div>`,
-            }),
-          }).addTo(map).bindPopup(`<b>${e.prenom_initiale} ${e.nom_famille}</b><br>${e.adresse || ""}`);
-          pts.push([e.lat as number, e.lon as number]);
+        tournee.forEach((e, k) => {
+          if (e.lat == null || e.lon == null) return;
+          const done = isDone(e);
+          const cur = k === currentIndex;
+          const col = done ? "#0E9F6E" : cur ? "#E02424" : "#0D3B7A";
+          L.marker([e.lat, e.lon], { icon: L.divIcon({ className: "", iconSize: [26, 26], iconAnchor: [13, 13],
+            html: `<div style="background:${col};color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font:700 12px sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)">${done ? "✓" : k + 1}</div>` }) })
+            .addTo(map).bindPopup(`<b>${e.prenom_initiale} ${e.nom_famille}</b><br>${e.adresse || ""}`);
+          pts.push([e.lat, e.lon]);
         });
-        L.polyline([...pts, [ECOLE_MERINE.lat, ECOLE_MERINE.lon]], { color: "#0D3B7A", weight: 3, opacity: .45, dashArray: "6,6" }).addTo(map);
-        L.marker([ECOLE_MERINE.lat, ECOLE_MERINE.lon], {
-          icon: L.divIcon({ className: "", iconSize: [28, 28], iconAnchor: [14, 14],
-            html: `<div style="background:#fff;border-radius:8px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid #0D3B7A;box-shadow:0 1px 4px rgba(0,0,0,.3)">🏫</div>` }),
-        }).addTo(map);
-        pts.push([ECOLE_MERINE.lat, ECOLE_MERINE.lon]);
+        L.polyline([...pts, [ECOLE.lat, ECOLE.lon]], { color: "#0D3B7A", weight: 3, opacity: .45, dashArray: "6,6" }).addTo(map);
+        L.marker([ECOLE.lat, ECOLE.lon], { icon: L.divIcon({ className: "", iconSize: [28, 28], iconAnchor: [14, 14],
+          html: `<div style="background:#fff;border-radius:8px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid #0D3B7A;box-shadow:0 1px 4px rgba(0,0,0,.3)">🏫</div>` }) }).addTo(map);
+        pts.push([ECOLE.lat, ECOLE.lon]);
         map.fitBounds(pts, { padding: [30, 30] });
         setTimeout(() => { try { map.invalidateSize(); } catch { /* noop */ } }, 200);
-      } catch {
-        setMapError(true);
-      }
+      } catch { setMapError(true); }
     }).catch(() => setMapError(true));
     return () => { cancelled = true; if (mapRef.current) { try { mapRef.current.remove(); } catch { /* noop */ } mapRef.current = null; } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver.circuit_id, eleves.length, prises.length]);
+  }, [enService, driver.circuit_id, eleves.length, prises.length, currentIndex]);
 
-  const presents = prises.filter(p => p.statut === "present").length;
-
-  return (
-    <div>
-      {/* En-tête circuit — étiquette de présentation avec le panneau en grand */}
-      <div style={{ background: "linear-gradient(160deg,#12498f,#0D3B7A)", borderRadius: 20, padding: "18px 20px",
-        color: "#fff", marginBottom: 14, display: "flex", alignItems: "center", gap: 16,
-        boxShadow: "0 6px 20px rgba(13,59,122,.25)" }}>
-        {img
-          ? <div style={{ width: 84, height: 84, borderRadius: 18, background: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-              boxShadow: "0 2px 8px rgba(0,0,0,.15)" }}>
-              <img src={img} alt={circ?.nom || ""} style={{ width: 72, height: 72, objectFit: "contain" }} />
-            </div>
-          : <div style={{ fontSize: 56 }}>{circ?.emoji || "🚌"}</div>}
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 12, opacity: .85, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>Ma tournée du jour</div>
-          <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-.4px", marginTop: 1 }}>{circ?.nom || "Circuit"}</div>
-          <div style={{ fontSize: 12.5, opacity: .85, marginTop: 3 }}>
-            {tournee.length} élève{tournee.length > 1 ? "s" : ""} · arrivée Mérine ~08:25
+  // ── En-tête (étiquette de présentation) ────────────────────────────────────
+  const header = (
+    <div style={{ background: "linear-gradient(160deg,#12498f,#0D3B7A)", borderRadius: 20, padding: "18px 20px",
+      color: "#fff", marginBottom: 14, display: "flex", alignItems: "center", gap: 16, boxShadow: "0 6px 20px rgba(13,59,122,.25)" }}>
+      {img
+        ? <div style={{ width: 84, height: 84, borderRadius: 18, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,.15)" }}>
+            <img src={img} alt={circ?.nom || ""} style={{ width: 72, height: 72, objectFit: "contain" }} />
           </div>
+        : <div style={{ fontSize: 56 }}>{circ?.emoji || "🚌"}</div>}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, opacity: .85, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>Ma tournée du jour</div>
+        <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-.4px", marginTop: 1 }}>{circ?.nom || "Circuit"}</div>
+        <div style={{ fontSize: 12.5, opacity: .85, marginTop: 3 }}>
+          {tournee.length} élève{tournee.length > 1 ? "s" : ""} · arrivée Mérine ~{ARRIVEE}
         </div>
       </div>
+    </div>
+  );
 
-      {/* Actions de service — prise / fin / reprise selon le statut */}
-      {driver.status === "disponible" && (
-        <button onClick={onShowConfirm}
-          style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", marginBottom: 14,
-            background: "linear-gradient(160deg,#12b981,#0E9F6E)", color: "#fff", fontWeight: 800, fontSize: 16,
-            cursor: "pointer", boxShadow: "0 4px 14px rgba(14,159,110,.3)" }}>
-          Je prends mon service — {circ?.nom || "circuit"}
-        </button>
-      )}
-      {driver.status === "en_service" && (
-        <button onClick={onShowFin}
-          style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", marginBottom: 14,
-            background: C.navy, color: "#fff", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
-          Je termine mon service
-        </button>
-      )}
-      {driver.status === "absent" && (
-        <button onClick={onShowReprise}
-          style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", marginBottom: 14,
-            background: "linear-gradient(160deg,#12b981,#0E9F6E)", color: "#fff", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
-          Je reprends le service
-        </button>
-      )}
+  const bigBtn = (label: string, onClick: () => void, kind: "go" | "ok" | "navy" = "go") => (
+    <button onClick={onClick} style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", marginBottom: 12,
+      background: kind === "navy" ? C.navy : kind === "ok" ? "linear-gradient(160deg,#12b981,#0E9F6E)" : "linear-gradient(160deg,#12498f,#0D3B7A)",
+      color: "#fff", fontWeight: 800, fontSize: 16, cursor: "pointer", boxShadow: "0 4px 14px rgba(13,59,122,.22)",
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{label}</button>
+  );
 
-      {/* Carte */}
-      {withCoords.length > 0 && !mapError && (
-        <div ref={mapDiv} style={{ height: 220, borderRadius: 16, overflow: "hidden",
-          border: `1px solid ${C.gray200}`, marginBottom: 14, background: "#dce6f2" }} />
-      )}
-      {mapError && (
-        <div style={{ height: 80, borderRadius: 16, border: `1px solid ${C.gray200}`, marginBottom: 14,
-          display: "flex", alignItems: "center", justifyContent: "center", color: C.gray, fontSize: 13, background: "#f8fafc" }}>
-          Carte indisponible (connexion) — les itinéraires restent accessibles ci-dessous.
-        </div>
-      )}
+  const navBtn = (href: string, label: string) => (
+    <a href={href} target="_blank" rel="noreferrer" style={{ width: "100%", padding: "14px", borderRadius: 14, marginBottom: 10,
+      background: "#EFF6FF", color: C.navy, fontWeight: 800, fontSize: 15, textDecoration: "none",
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+      <Navigation size={17} /> {label}
+    </a>
+  );
 
-      {/* Progression */}
-      {enService && tournee.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <div style={{ flex: 1, height: 7, background: C.gray200, borderRadius: 99, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${Math.round(presents / tournee.length * 100)}%`,
-              background: C.green, borderRadius: 99, transition: "width .3s" }} />
-          </div>
-          <span style={{ fontSize: 12, fontWeight: 800, color: C.green }}>{presents}/{tournee.length}</span>
-        </div>
-      )}
+  const contacts = (e: Eleve) => (
+    <div style={{ display: "flex", gap: 7, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.gray100}`, flexWrap: "wrap" }}>
+      {e.tel_mere && <a href={`tel:${cleanTel(e.tel_mere)}`} style={cbtn("p")}>📞 Mère</a>}
+      {e.tel_pere && <a href={`tel:${cleanTel(e.tel_pere)}`} style={cbtn("p")}>📞 Père</a>}
+      <a href={`tel:${cleanTel(ECOLE.tel)}`} style={cbtn("s")}>🏫 École</a>
+      <a href={`tel:${cleanTel(CENTRAL_TEL)}`} style={cbtn()}>🏢 Central</a>
+    </div>
+  );
+  function cbtn(kind?: "p" | "s"): React.CSSProperties {
+    return { flex: 1, minWidth: "calc(50% - 4px)", textAlign: "center", textDecoration: "none", fontSize: 12.5, fontWeight: 700,
+      padding: "10px 8px", borderRadius: 11, border: `1px solid ${C.gray200}`,
+      color: kind === "p" ? "#b42323" : C.navy, background: kind === "p" ? "#FDECEC" : kind === "s" ? "#EFF6FF" : "#fff" };
+  }
 
-      {/* Liste des arrêts */}
-      <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-        {tournee.map((el, i) => {
-          const prise = prisByEleve.get(el.id);
-          return (
-            <div key={el.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
-              borderBottom: i < tournee.length - 1 ? `1px solid ${C.gray100}` : "none" }}>
-              <div style={{ minWidth: 26, height: 26, borderRadius: 8, background: prise?.statut === "present" ? C.green : C.navy,
-                color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12, flexShrink: 0 }}>
-                {prise?.statut === "present" ? "✓" : i + 1}
-              </div>
-              <div style={{ minWidth: 42 }}>
-                <div style={{ fontWeight: 800, fontSize: 13, color: C.navy }}>{el.heure_ramassage || "—"}</div>
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: "#1E293B" }}>
-                  {el.prenom_initiale} {el.nom_famille}
-                  {!el.heure_ramassage && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, background: C.amberL,
-                      borderRadius: 6, padding: "1px 6px", marginLeft: 6, whiteSpace: "nowrap" }}>
-                      amené par les parents
-                    </span>
-                  )}
-                </div>
-                {el.adresse && (
-                  <div style={{ fontSize: 11, color: C.gray, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{el.adresse}</div>
-                )}
-              </div>
-              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                {/* Navigation TOUJOURS basée sur l'adresse exacte (source fiable),
-                    jamais sur des coordonnées approximatives. */}
-                {el.adresse ? (
-                  <a href={gmapsAddr(el.adresse)} target="_blank" rel="noreferrer" title="Itinéraire"
-                    style={{ width: 32, height: 32, borderRadius: 9, background: "#EFF6FF", color: C.navy, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
-                    <Navigation size={15} />
-                  </a>
-                ) : (el.lat != null && el.lon != null) ? (
-                  <a href={gmaps(el.lat as number, el.lon as number)} target="_blank" rel="noreferrer" title="Itinéraire"
-                    style={{ width: 32, height: 32, borderRadius: 9, background: "#EFF6FF", color: C.navy, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
-                    <Navigation size={15} />
-                  </a>
-                ) : null}
-                {(el.tel_mere || el.tel_pere) && (
-                  <a href={`tel:${cleanTel(el.tel_mere || el.tel_pere)}`} title="Appeler le parent"
-                    style={{ width: 32, height: 32, borderRadius: 9, background: C.greenL, color: C.greenD, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
-                    <Phone size={15} />
-                  </a>
-                )}
-              </div>
-              {/* Présent / absent (uniquement en service) */}
-              {enService && (
-                <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                  {prise ? (
-                    <span style={{ color: prise.statut === "present" ? C.green : C.red, display: "flex", alignItems: "center" }}>
-                      {prise.statut === "present" ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
-                    </span>
-                  ) : (
-                    <>
-                      <button onClick={() => onMarquerEleve(el.id, "present")} title="Présent"
-                        style={{ width: 32, height: 32, borderRadius: 9, border: "none", background: C.green, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <CheckCircle2 size={16} />
-                      </button>
-                      <button onClick={() => onMarquerEleve(el.id, "absent")} title="Absent"
-                        style={{ width: 32, height: 32, borderRadius: 9, border: `1px solid ${C.red}`, background: "#fff", color: C.red, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <XCircle size={16} />
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
+  // ── 1) Pas encore en service → BRIEFING ─────────────────────────────────────
+  if (!enService) {
+    const first = tournee[0];
+    return (
+      <div>
+        {header}
+        {driver.status === "absent" ? (
+          <>
+            <div style={{ background: C.redL, borderRadius: 14, padding: 14, marginBottom: 12, color: C.red, fontWeight: 700 }}>
+              Absence en cours{driver.absence_motif ? ` — ${driver.absence_motif}` : ""}
             </div>
-          );
-        })}
-        {/* Arrivée école */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "#F8FAFC" }}>
-          <div style={{ minWidth: 26, height: 26, borderRadius: 8, background: "#fff", border: `1px solid ${C.gray200}`,
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <School size={14} color={C.navy} />
+            {bigBtn("Je reprends le service", onShowReprise, "ok")}
+          </>
+        ) : (
+          <>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 18, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: C.navy, marginBottom: 6 }}>Voici votre tournée</div>
+              <div style={{ fontSize: 14, color: "#475569", lineHeight: 1.5 }}>
+                Vous récupérez <b>{tournee.length} enfant{tournee.length > 1 ? "s" : ""}</b> et les déposez à la <b>Fondation Mérine</b> pour <b>{ARRIVEE}</b>.
+                {first?.heure_ramassage ? <> Premier ramassage à <b>{first.heure_ramassage}</b>.</> : null}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 }}>
+                {[["Enfants", String(tournee.length)], ["Premier", first?.heure_ramassage || "—"], ["Arrivée école", ARRIVEE], ["Véhicule", (driver.vehicule_id as string) || "—"]].map(([l, v]) => (
+                  <div key={l} style={{ background: "#F8FAFC", border: `1px solid ${C.gray200}`, borderRadius: 12, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: C.navy }}>{v}</div>
+                    <div style={{ fontSize: 11.5, color: C.gray, marginTop: 1 }}>{l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {bigBtn("Démarrer la tournée", onShowConfirm, "ok")}
+          </>
+        )}
+        {/* Aperçu liste */}
+        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} />
+      </div>
+    );
+  }
+
+  // ── 2) En service, dépose à l'école (tous récupérés) ────────────────────────
+  if (allPickedUp) {
+    if (schoolPhase === "done") {
+      return (
+        <div>
+          {header}
+          <div style={{ textAlign: "center", padding: "22px 16px" }}>
+            <div style={{ width: 84, height: 84, borderRadius: "50%", background: C.greenL, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontSize: 42 }}>🎉</div>
+            <div style={{ color: C.green, fontSize: 22, fontWeight: 900 }}>Tournée terminée !</div>
+            <p style={{ color: "#475569", fontSize: 14, marginTop: 6 }}>Les {tournee.length} enfants sont arrivés à Mérine. Les parents sont prévenus dans leur espace.</p>
           </div>
-          <div style={{ minWidth: 42, fontWeight: 800, fontSize: 13, color: C.navy }}>08:25</div>
-          <div style={{ flex: 1, fontWeight: 700, fontSize: 14, color: "#1E293B" }}>Fondation Mérine — dépose</div>
+          {bigBtn("Je termine mon service", onShowFin, "navy")}
         </div>
+      );
+    }
+    return (
+      <div>
+        {header}
+        {!mapError && withCoords.length > 0 && <div ref={mapDiv} style={{ height: 200, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.gray200}`, marginBottom: 14, background: "#dce6f2" }} />}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 18, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: C.navy, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>🏫 Destination finale</div>
+          <div style={{ fontSize: 19, fontWeight: 800, color: "#1E293B" }}>{ECOLE.nom}</div>
+          <div style={{ fontSize: 13, color: C.gray, marginTop: 2 }}>{ECOLE.adr}</div>
+          <div style={{ marginTop: 14 }}>
+            {schoolPhase === "go" ? (<>
+              {navBtn(gmapsLL(ECOLE.lat, ECOLE.lon), "Itinéraire vers l'école")}
+              {bigBtn("Arrivé à l'école", () => setSchoolPhase("at"))}
+            </>) : (
+              bigBtn(`Déposer les ${tournee.length} enfants`, () => setSchoolPhase("done"), "ok")
+            )}
+          </div>
+        </div>
+        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} />
+      </div>
+    );
+  }
+
+  // ── 3) En service, arrêt courant ────────────────────────────────────────────
+  const cur = tournee[currentIndex];
+  return (
+    <div>
+      {header}
+      {!mapError && withCoords.length > 0 && <div ref={mapDiv} style={{ height: 200, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.gray200}`, marginBottom: 12, background: "#dce6f2" }} />}
+      {/* Progression */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#475569" }}>Arrêt {currentIndex + 1}/{tournee.length}</span>
+        <div style={{ flex: 1, height: 7, background: C.gray200, borderRadius: 99, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${Math.round(presents / tournee.length * 100)}%`, background: C.green, borderRadius: 99, transition: "width .3s" }} />
+        </div>
+        <span style={{ fontSize: 12, fontWeight: 800, color: C.green }}>{presents}/{tournee.length}</span>
+      </div>
+      {/* Carte arrêt courant */}
+      {cur && (
+        <div style={{ background: "#fff", borderRadius: 16, padding: 18, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: arrived ? C.amber : C.navy, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 10 }}>
+            {arrived ? "📍 Sur place — récupérez l'enfant" : currentIndex === 0 ? "🚸 Premier enfant à récupérer" : "🚸 Prochain enfant"}
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 13 }}>
+            <div style={{ width: 50, height: 50, borderRadius: 15, background: "linear-gradient(160deg,#12498f,#0D3B7A)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, flexShrink: 0 }}>{initials(cur)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 19, fontWeight: 800, color: "#1E293B" }}>{cur.prenom_initiale} {cur.nom_famille}</div>
+              <div style={{ fontSize: 13.5, color: "#475569", marginTop: 2 }}>📍 {cur.adresse || "Adresse non renseignée"}</div>
+            </div>
+            {cur.heure_ramassage && (
+              <div style={{ background: "#EFF6FF", color: C.navy, borderRadius: 12, padding: "6px 11px", textAlign: "center", flexShrink: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 900 }}>{cur.heure_ramassage}</div>
+                <div style={{ fontSize: 9.5, fontWeight: 700, opacity: .7 }}>PRÉVU</div>
+              </div>
+            )}
+          </div>
+          <div style={{ marginTop: 13 }}>
+            {!arrived ? (<>
+              {cur.adresse ? navBtn(gmapsAddr(cur.adresse), "Ouvrir l'itinéraire") : (cur.lat != null && cur.lon != null ? navBtn(gmapsLL(cur.lat, cur.lon), "Ouvrir l'itinéraire") : null)}
+              {bigBtn("Arrivé sur place", () => setArrived(true))}
+            </>) : (<>
+              {bigBtn(`✓ ${cur.prenom_initiale} est monté(e)`, async () => { await onMarquerEleve(cur.id, "present"); setArrived(false); }, "ok")}
+              <button onClick={async () => { await onMarquerEleve(cur.id, "absent"); setArrived(false); }}
+                style={{ width: "100%", padding: "13px", borderRadius: 14, border: "1.5px solid #f3d0d0", background: "#fff", color: "#b42323", fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
+                Absent aujourd'hui
+              </button>
+            </>)}
+          </div>
+          {contacts(cur)}
+        </div>
+      )}
+      <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={currentIndex} />
+    </div>
+  );
+}
+
+// ── Liste des arrêts (fait / courant / à venir) ───────────────────────────────
+function StopList({ tournee, prisByEleve, currentIndex }: { tournee: Eleve[]; prisByEleve: Map<number, PriseEnCharge>; currentIndex: number }) {
+  return (
+    <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,.06)", overflow: "hidden", marginTop: 4 }}>
+      {tournee.map((el, i) => {
+        const prise = prisByEleve.get(el.id);
+        const done = !!prise;
+        const cur = i === currentIndex;
+        return (
+          <div key={el.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px",
+            borderBottom: i < tournee.length - 1 ? `1px solid ${C.gray100}` : "none",
+            opacity: done ? .6 : cur ? 1 : currentIndex >= 0 && i > currentIndex ? .5 : 1,
+            background: cur ? "#F8FBFF" : "#fff" }}>
+            <div style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, color: "#fff", fontWeight: 800, fontSize: 12,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: done ? (prise?.statut === "present" ? C.green : C.red) : cur ? C.navy : "#c3ccd8" }}>
+              {done ? (prise?.statut === "present" ? "✓" : "✗") : i + 1}
+            </div>
+            <div style={{ minWidth: 40, fontSize: 12.5, fontWeight: 800, color: C.navy }}>{el.heure_ramassage || "—"}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 13.5, color: "#1E293B" }}>
+                {el.prenom_initiale} {el.nom_famille}
+                {!el.heure_ramassage && <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, background: C.amberL, borderRadius: 6, padding: "1px 6px", marginLeft: 6 }}>amené par les parents</span>}
+              </div>
+              {el.adresse && <div style={{ fontSize: 11, color: C.gray, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{el.adresse}</div>}
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: "#F8FAFC" }}>
+        <div style={{ width: 26, height: 26, borderRadius: 8, background: "#fff", border: `1px solid ${C.gray200}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <School size={14} color={C.navy} />
+        </div>
+        <div style={{ minWidth: 40, fontSize: 12.5, fontWeight: 800, color: C.navy }}>{ARRIVEE}</div>
+        <div style={{ flex: 1, fontWeight: 700, fontSize: 13.5, color: "#1E293B" }}>Fondation Mérine — dépose <ArrowRight size={12} style={{ verticalAlign: "middle" }} /></div>
       </div>
     </div>
   );

@@ -4,18 +4,17 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, isoToday, fmtHHMM, nowTimeStr } from "@/lib/constants";
 import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant, CongesDemande, Eleve, PriseEnCharge } from "@/lib/types";
-import { Bus, Home, FileText, Activity, AlertCircle, Mail, History, CalendarDays, LogOut, Menu, MapPin } from "lucide-react";
-import { BSheet, BigBtn, Inp, TA, Chip, StatusBadge, SIGN_LABELS } from "./tabs/shared";
+import { Bus, Home, FileText, AlertCircle, Mail, History, CalendarDays, LogOut, MoreHorizontal, MapPin, X } from "lucide-react";
+import { BSheet, BigBtn, TA, Chip, StatusBadge } from "./tabs/shared";
 import { TabDashboard } from "./tabs/Dashboard";
 import { TabFiche } from "./tabs/Fiche";
-import { TabService } from "./tabs/Service";
 import { TabSignalements } from "./tabs/Signalements";
 import { TabMessages } from "./tabs/Messages";
 import { TabHistorique } from "./tabs/Historique";
 import { TabConges } from "./tabs/Conges";
 import { TabTournee } from "./tabs/Tournee";
 
-type Tab = "dashboard" | "tournee" | "fiche" | "service" | "signalements" | "messages" | "historique" | "conges";
+type Tab = "dashboard" | "tournee" | "fiche" | "signalements" | "messages" | "historique" | "conges";
 
 export default function ConducteurPage(){
   const sb=createClient();
@@ -37,15 +36,9 @@ export default function ConducteurPage(){
 
   // Modals service
   const [showConfirm,  setShowConfirm]  = useState(false);
-  const [showReplace,  setShowReplace]  = useState(false);
   const [showAbsence,  setShowAbsence]  = useState(false);
   const [showReprise,  setShowReprise]  = useState(false);
   const [showFin,      setShowFin]      = useState(false);
-
-  // Formulaire remplacement
-  const [replCircuit,  setReplCircuit]  = useState("");
-  const [replVehicle,  setReplVehicle]  = useState("");
-  const [replRemplace, setReplRemplace] = useState("");
 
   // Formulaire absence
   const [absMotif, setAbsMotif] = useState("");
@@ -181,21 +174,6 @@ export default function ConducteurPage(){
     setShowConfirm(false);
   }
 
-  async function handleRemplacerService(){
-    if(!driver)return;
-    const{data}=await sb.from("service_logs").insert({
-      conducteur_id:driver.id,vehicule_id:replVehicle||driver.vehicule_id||null,
-      circuit_id:replCircuit||null,date_service:isoToday(),
-      heure_debut:nowTimeStr(),status:"en_service",is_replacement:true,replacement_name:replRemplace,
-    }).select().single();
-    await sb.from("conducteurs").update({status:"en_service"}).eq("id",driver.id);
-    // Pas de notification de prise de service (remplacement) — bruit inutile.
-    if(data)setTodayLog(data);
-    setDriver(p=>p?{...p,status:"en_service"}:p);
-    setShowReplace(false);
-    setReplCircuit("");setReplVehicle("");setReplRemplace("");
-  }
-
   async function handleTerminerService(){
     if(!driver)return;
     if(todayLog){
@@ -312,26 +290,32 @@ export default function ConducteurPage(){
   const pendingInc     = incidents.filter(i=>i.status==="en_attente").length;
 
 
-  const TAB_ICONS = {
-    dashboard:    <Home size={14} />,
-    tournee:      <MapPin size={14} />,
-    fiche:        <FileText size={14} />,
-    service:      <Activity size={14} />,
-    signalements: <AlertCircle size={14} />,
-    messages:     <Mail size={14} />,
-    historique:   <History size={14} />,
-    conges:       <CalendarDays size={14} />,
-  };
-  const TABS:{id:Tab;label:string;badge?:number}[]=[
-    {id:"dashboard",    label:"Tableau de bord"},
+  const tabIcon=(id:Tab,size:number)=>({
+    dashboard:    <Home size={size} />,
+    tournee:      <MapPin size={size} />,
+    fiche:        <FileText size={size} />,
+    signalements: <AlertCircle size={size} />,
+    messages:     <Mail size={size} />,
+    historique:   <History size={size} />,
+    conges:       <CalendarDays size={size} />,
+  }[id]);
+  // Barre du bas (accès rapide) — la tournée est au centre, mise en avant.
+  const BOTTOM:{id:Tab;label:string;badge?:number}[]=[
+    {id:"dashboard",    label:"Accueil"},
     {id:"tournee",      label:"Ma tournée"},
-    {id:"fiche",        label:"Ma fiche"},
-    {id:"service",      label:"Mon service"},
-    {id:"signalements", label:"Signalements",badge:pendingInc||undefined},
-    {id:"messages",     label:"Messages",    badge:unreadMsg||undefined},
-    {id:"historique",   label:"Historique"},
-    {id:"conges",       label:"Congés"},
+    {id:"signalements", label:"Signaler",badge:pendingInc||undefined},
+    {id:"messages",     label:"Messages",badge:unreadMsg||undefined},
   ];
+  // Menu « Plus » (tiroir) — le reste des onglets.
+  const MORE:{id:Tab;label:string;badge?:number}[]=[
+    {id:"fiche",        label:"Ma fiche"},
+    {id:"historique",   label:"Historique"},
+    {id:"conges",       label:"Mes congés"},
+  ];
+  const TAB_LABELS:Record<Tab,string>={
+    dashboard:"Tableau de bord",tournee:"Ma tournée",fiche:"Ma fiche",
+    signalements:"Signalements",messages:"Messages",historique:"Historique",conges:"Congés",
+  };
 
   // ── Guards ────────────────────────────────────────────────────────────────────
   if(loading)return(
@@ -348,32 +332,31 @@ export default function ConducteurPage(){
 
   // ── Render ────────────────────────────────────────────────────────────────────
   const initials=((driver.prenom[0]??"").toUpperCase()+(driver.nom[0]??"").toUpperCase());
-  const totalBadge=unreadMsg+pendingInc;
+  const inMore=MORE.some(m=>m.id===tab);
   return(
     <div style={{minHeight:"100vh",background:C.gray50}}>
 
-      {/* ── Header sticky ── */}
+      {/* ── Header sticky : logo + identité + statut ── */}
       <header style={{position:"sticky",top:0,zIndex:100,background:C.navy,
-        height:56,display:"flex",alignItems:"center",justifyContent:"space-between",
-        padding:"0 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.2)"}}>
-        <img src="/logo.png" alt="Taxi Romontois" style={{height:32,width:"auto",display:"block"}} />
-        <button onClick={()=>setDrawerOpen(true)}
-          style={{position:"relative",background:"transparent",border:"none",
-            color:C.white,cursor:"pointer",padding:8,borderRadius:8,
-            display:"flex",alignItems:"center"}}>
-          <Menu size={24} color={C.white} />
-          {totalBadge>0&&(
-            <span style={{position:"absolute",top:4,right:4,background:C.red,
-              color:C.white,borderRadius:99,fontSize:9,fontWeight:900,
-              minWidth:14,height:14,display:"flex",alignItems:"center",
-              justifyContent:"center",padding:"0 3px",lineHeight:1}}>
-              {Math.min(totalBadge,99)}
-            </span>
-          )}
-        </button>
+        height:58,display:"flex",alignItems:"center",justifyContent:"space-between",
+        padding:"0 14px",boxShadow:"0 2px 8px rgba(0,0,0,0.2)",gap:10}}>
+        <img src="/logo.png" alt="Taxi Romontois" style={{height:30,width:"auto",display:"block",flexShrink:0}} />
+        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+          <div style={{textAlign:"right",minWidth:0}}>
+            <div style={{color:C.white,fontWeight:800,fontSize:13.5,lineHeight:1.15,
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {driver.prenom} {driver.nom}
+            </div>
+            {circ&&<div style={{color:C.sky,fontWeight:600,fontSize:11,lineHeight:1.2,
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {circ.emoji} {circ.nom}
+            </div>}
+          </div>
+          <StatusBadge status={driver.status}/>
+        </div>
       </header>
 
-      {/* ── Drawer depuis la droite ── */}
+      {/* ── Tiroir « Plus » depuis la droite ── */}
       {drawerOpen&&(
         <div style={{position:"fixed",inset:0,zIndex:200}}>
           <div onClick={()=>setDrawerOpen(false)}
@@ -381,13 +364,6 @@ export default function ConducteurPage(){
           <div style={{position:"absolute",right:0,top:0,bottom:0,width:260,
             background:C.navy,display:"flex",flexDirection:"column",
             boxShadow:"-4px 0 20px rgba(0,0,0,0.3)",zIndex:1}}>
-            <div style={{padding:"20px 16px 14px",borderBottom:"1px solid rgba(255,255,255,0.1)",
-              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <img src="/logo.png" alt="Taxi Romontois" style={{height:28,width:"auto"}} />
-              <button onClick={()=>setDrawerOpen(false)}
-                style={{background:"none",border:"none",color:"rgba(255,255,255,0.7)",
-                  fontSize:22,cursor:"pointer",lineHeight:1,padding:4}}>✕</button>
-            </div>
             <div style={{padding:"16px 18px",borderBottom:"1px solid rgba(255,255,255,0.1)",
               display:"flex",alignItems:"center",gap:12}}>
               <div style={{width:42,height:42,borderRadius:"50%",background:C.white,
@@ -395,26 +371,26 @@ export default function ConducteurPage(){
                 fontWeight:900,fontSize:16,flexShrink:0}}>
                 {initials||"??"}
               </div>
-              <div>
+              <div style={{flex:1,minWidth:0}}>
                 <div style={{color:C.white,fontWeight:700,fontSize:14}}>{driver.prenom} {driver.nom}</div>
                 <div style={{color:C.sky,fontWeight:600,fontSize:12}}>Conducteur</div>
               </div>
+              <button onClick={()=>setDrawerOpen(false)}
+                style={{background:"none",border:"none",color:"rgba(255,255,255,0.7)",
+                  cursor:"pointer",lineHeight:1,padding:4,display:"flex"}}>
+                <X size={20} color="rgba(255,255,255,0.7)"/>
+              </button>
             </div>
             <nav style={{flex:1,padding:10,overflowY:"auto"}}>
-              {TABS.map(t=>(
+              {MORE.map(t=>(
                 <button key={t.id} onClick={()=>{setTab(t.id);setDrawerOpen(false);}}
                   style={{width:"100%",display:"flex",alignItems:"center",gap:10,
-                    padding:"10px 12px",borderRadius:8,border:"none",cursor:"pointer",
+                    padding:"12px 12px",borderRadius:8,border:"none",cursor:"pointer",
                     background:tab===t.id?C.white:"transparent",
                     color:tab===t.id?C.navy:C.white,
-                    fontWeight:tab===t.id?800:600,fontSize:13,textAlign:"left",marginBottom:2}}>
-                  <span style={{display:"flex",alignItems:"center"}}>{TAB_ICONS[t.id]}</span>
+                    fontWeight:tab===t.id?800:600,fontSize:14,textAlign:"left",marginBottom:2}}>
+                  <span style={{display:"flex",alignItems:"center"}}>{tabIcon(t.id,16)}</span>
                   <span style={{flex:1}}>{t.label}</span>
-                  {t.badge!=null&&t.badge>0&&(
-                    <span style={{background:tab===t.id?"rgba(13,59,122,0.15)":C.red,
-                      color:tab===t.id?C.navy:C.white,borderRadius:20,
-                      fontSize:10,fontWeight:800,padding:"1px 7px"}}>{t.badge}</span>
-                  )}
                 </button>
               ))}
             </nav>
@@ -432,31 +408,10 @@ export default function ConducteurPage(){
       )}
 
       {/* ── Contenu ── */}
-      <div style={{maxWidth:860,margin:"0 auto",padding:"16px 16px 80px"}}>
+      <div style={{maxWidth:860,margin:"0 auto",padding:"16px 16px 92px"}}>
 
-      {/* Bannière d'accueil */}
-      <div style={{background:`linear-gradient(135deg,${C.navy},${C.navyL})`,
-        borderRadius:18,padding:"20px 22px",color:"#fff",marginBottom:20}}>
-        <div style={{display:"flex",gap:16,alignItems:"center",marginBottom:14}}>
-          <div style={{width:56,height:56,borderRadius:28,background:"rgba(255,255,255,0.2)",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            fontSize:20,fontWeight:900,color:"#fff",flexShrink:0,letterSpacing:1}}>
-            {(driver.prenom[0]??"").toUpperCase()}{(driver.nom[0]??"").toUpperCase()}
-          </div>
-          <div>
-            <p style={{fontSize:12,opacity:0.7,margin:"0 0 2px"}}>Bonjour,</p>
-            <h1 style={{fontSize:20,fontWeight:900,margin:0}}>{driver.prenom} {driver.nom}</h1>
-          </div>
-        </div>
-        <p style={{fontSize:13,opacity:0.85,lineHeight:1.5,margin:"0 0 14px"}}>
-          Pensez à pointer votre prise de service et votre fin de service chaque jour.
-        </p>
-        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-          <StatusBadge status={driver.status}/>
-          {circ&&<span style={{fontSize:13,opacity:0.85,fontWeight:600}}>{circ.emoji} Circuit {circ.nom}</span>}
-          {veh&&<span style={{fontSize:13,opacity:0.75,display:"flex",alignItems:"center",gap:4}}><Bus size={13} /> {veh.plaque}</span>}
-        </div>
-      </div>
+      {/* Titre de la vue courante */}
+      <h1 style={{fontSize:19,fontWeight:900,color:C.navy,margin:"2px 2px 14px"}}>{TAB_LABELS[tab]}</h1>
 
       {/* Contenu des onglets */}
       {tab==="dashboard"&&(
@@ -478,16 +433,6 @@ export default function ConducteurPage(){
         <TabFiche driver={driver} circ={circ} veh={veh} enfantsCircuit={enfantsCircuit}
           editTel={editTel} telValue={telValue} telSaving={telSaving}
           onSetEditTel={setEditTel} onSetTelValue={setTelValue} onSaveTel={handleSaveTel}/>
-      )}
-      {tab==="service"&&(
-        <TabService driver={driver} todayLog={todayLog} circ={circ} veh={veh}
-          eleves={elevesCircuit} prises={prises}
-          onShowConfirm={()=>setShowConfirm(true)}
-          onShowReplace={()=>setShowReplace(true)}
-          onShowAbsence={()=>setShowAbsence(true)}
-          onShowFin={()=>setShowFin(true)}
-          onShowReprise={()=>setShowReprise(true)}
-          onMarquerEleve={handleMarquerEleve}/>
       )}
       {tab==="signalements"&&(
         <TabSignalements driver={driver} incidents={incidents}
@@ -553,17 +498,6 @@ export default function ConducteurPage(){
         </BSheet>
       )}
 
-      {showReplace&&(
-        <BSheet title="Je remplace un collègue" onClose={()=>setShowReplace(false)}>
-          <Inp label="Nom du conducteur remplacé" value={replRemplace} onChange={setReplRemplace} placeholder="ex: Jean Dupont"/>
-          <Inp label="Circuit effectué"            value={replCircuit}  onChange={setReplCircuit}  placeholder="ex: C007 / Chat"/>
-          <Inp label="Plaque du véhicule utilisé" value={replVehicle}  onChange={setReplVehicle}  placeholder="ex: FR 80058"/>
-          <BigBtn label="Confirmer le remplacement" onClick={handleRemplacerService}
-            disabled={!replRemplace.trim()||!replCircuit.trim()}/>
-          <BigBtn label="Annuler" onClick={()=>setShowReplace(false)} color={C.gray} outline/>
-        </BSheet>
-      )}
-
       {showFin&&(
         <BSheet title="Terminer le service" onClose={()=>setShowFin(false)}>
           <div style={{background:"#EFF6FF",borderRadius:14,padding:16,marginBottom:20}}>
@@ -610,6 +544,39 @@ export default function ConducteurPage(){
       )}
 
       </div>
+
+      {/* ── Barre de navigation du bas (mobile) ── */}
+      <nav style={{position:"fixed",left:0,right:0,bottom:0,zIndex:150,background:C.white,
+        borderTop:`1px solid ${C.gray200}`,boxShadow:"0 -2px 12px rgba(0,0,0,0.06)",
+        display:"flex",paddingBottom:"env(safe-area-inset-bottom)"}}>
+        {BOTTOM.map(t=>{
+          const active=tab===t.id;
+          return(
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",
+                gap:3,padding:"9px 2px 8px",border:"none",background:"transparent",
+                cursor:"pointer",color:active?C.navy:C.gray}}>
+              <span style={{position:"relative",display:"flex"}}>
+                {tabIcon(t.id,active?23:22)}
+                {t.badge!=null&&t.badge>0&&(
+                  <span style={{position:"absolute",top:-5,right:-8,background:C.red,color:C.white,
+                    borderRadius:99,fontSize:9,fontWeight:900,minWidth:15,height:15,
+                    display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",
+                    lineHeight:1,border:`1.5px solid ${C.white}`}}>{Math.min(t.badge,99)}</span>
+                )}
+              </span>
+              <span style={{fontSize:10.5,fontWeight:active?800:600,letterSpacing:"-.2px"}}>{t.label}</span>
+            </button>
+          );
+        })}
+        <button onClick={()=>setDrawerOpen(true)}
+          style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",
+            gap:3,padding:"9px 2px 8px",border:"none",background:"transparent",
+            cursor:"pointer",color:inMore?C.navy:C.gray}}>
+          <MoreHorizontal size={inMore?23:22}/>
+          <span style={{fontSize:10.5,fontWeight:inMore?800:600,letterSpacing:"-.2px"}}>Plus</span>
+        </button>
+      </nav>
     </div>
   );
 }
