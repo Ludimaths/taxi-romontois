@@ -30,6 +30,8 @@ export interface Eleve {
   heure_ramassage?: string;
   heure_depose?: string;
   heure_mercredi?: string;
+  lat?: number;
+  lon?: number;
   created_at: string;
 }
 

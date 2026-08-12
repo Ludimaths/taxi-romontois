@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, isoToday, fmtHHMM, nowTimeStr } from "@/lib/constants";
 import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant, CongesDemande, Eleve, PriseEnCharge } from "@/lib/types";
-import { Bus, Home, FileText, Activity, AlertCircle, Mail, History, CalendarDays, LogOut, Menu } from "lucide-react";
+import { Bus, Home, FileText, Activity, AlertCircle, Mail, History, CalendarDays, LogOut, Menu, MapPin } from "lucide-react";
 import { BSheet, BigBtn, Inp, TA, Chip, StatusBadge, SIGN_LABELS } from "./tabs/shared";
 import { TabDashboard } from "./tabs/Dashboard";
 import { TabFiche } from "./tabs/Fiche";
@@ -13,8 +13,9 @@ import { TabSignalements } from "./tabs/Signalements";
 import { TabMessages } from "./tabs/Messages";
 import { TabHistorique } from "./tabs/Historique";
 import { TabConges } from "./tabs/Conges";
+import { TabTournee } from "./tabs/Tournee";
 
-type Tab = "dashboard" | "fiche" | "service" | "signalements" | "messages" | "historique" | "conges";
+type Tab = "dashboard" | "tournee" | "fiche" | "service" | "signalements" | "messages" | "historique" | "conges";
 
 export default function ConducteurPage(){
   const sb=createClient();
@@ -313,6 +314,7 @@ export default function ConducteurPage(){
 
   const TAB_ICONS = {
     dashboard:    <Home size={14} />,
+    tournee:      <MapPin size={14} />,
     fiche:        <FileText size={14} />,
     service:      <Activity size={14} />,
     signalements: <AlertCircle size={14} />,
@@ -322,6 +324,7 @@ export default function ConducteurPage(){
   };
   const TABS:{id:Tab;label:string;badge?:number}[]=[
     {id:"dashboard",    label:"Tableau de bord"},
+    {id:"tournee",      label:"Ma tournée"},
     {id:"fiche",        label:"Ma fiche"},
     {id:"service",      label:"Mon service"},
     {id:"signalements", label:"Signalements",badge:pendingInc||undefined},
@@ -459,7 +462,6 @@ export default function ConducteurPage(){
       {tab==="dashboard"&&(
         <TabDashboard driver={driver} todayLog={todayLog} todayAbsences={todayAbsences}
           enfants={enfants} messages={messages} unreadMsg={unreadMsg} absConfirmed={absConfirmed}
-          eleves={elevesCircuit}
           circ={circ} veh={veh}
           onSetTab={t=>setTab(t as Tab)}
           onConfirmerAbsence={handleConfirmerAbsence}
@@ -469,6 +471,10 @@ export default function ConducteurPage(){
           onShowAbsence={()=>setShowAbsence(true)}
           onShowFin={()=>setShowFin(true)}
           onShowReprise={()=>setShowReprise(true)}/>
+      )}
+      {tab==="tournee"&&(
+        <TabTournee driver={driver} circ={circ} eleves={elevesCircuit} prises={prises}
+          enService={driver.status==="en_service"} onMarquerEleve={handleMarquerEleve}/>
       )}
       {tab==="fiche"&&(
         <TabFiche driver={driver} circ={circ} veh={veh} enfantsCircuit={enfantsCircuit}

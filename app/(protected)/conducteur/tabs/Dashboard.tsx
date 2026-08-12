@@ -1,7 +1,7 @@
 "use client";
-import { CheckCircle2, XCircle, Circle, MapPin, Bus, Baby, RefreshCw, Navigation, Phone } from "lucide-react";
+import { CheckCircle2, XCircle, Circle, MapPin, Bus, Baby, RefreshCw } from "lucide-react";
 import { C, fmtHHMM, fmtDateTime, isoToday, fmtEnfant } from "@/lib/constants";
-import type { Conducteur, ServiceLog, AbsenceEnfant, Enfant, Alerte, Eleve } from "@/lib/types";
+import type { Conducteur, ServiceLog, AbsenceEnfant, Enfant, Alerte } from "@/lib/types";
 import { StatusBadge, BigBtn, calcDuration } from "./shared";
 
 type CircType = { nom?: string; emoji?: string; enfants_count?: number; id?: string; cercle?: { nom?: string } };
@@ -15,7 +15,6 @@ export interface DashboardProps {
   messages: Alerte[];
   unreadMsg: number;
   absConfirmed: Set<number>;
-  eleves: Eleve[];
   circ?: CircType;
   veh?: VehType;
   onSetTab: (t: string) => void;
@@ -29,12 +28,10 @@ export interface DashboardProps {
 }
 
 export function TabDashboard({
-  driver,todayLog,todayAbsences,enfants,messages,unreadMsg,absConfirmed,eleves,
+  driver,todayLog,todayAbsences,enfants,messages,unreadMsg,absConfirmed,
   circ,veh,onSetTab,onConfirmerAbsence,onMarquerLu,
   onShowConfirm,onShowReplace,onShowAbsence,onShowFin,onShowReprise,
 }:DashboardProps){
-  const tournee = [...(eleves ?? [])].sort((a,b)=>
-    (a.heure_ramassage||"~~").localeCompare(b.heure_ramassage||"~~"));
   return(
     <div>
       {/* Stats rapides */}
@@ -68,57 +65,6 @@ export function TabDashboard({
               <span style={{color:C.green}}>Durée : <strong>{calcDuration(todayLog.heure_debut,todayLog.heure_fin)}</strong></span>
             )}
             {todayLog.is_replacement&&<span style={{color:C.amber}}>Remplacement</span>}
-          </div>
-        </div>
-      )}
-
-      {/* Ma tournée du jour — élèves du circuit */}
-      {circ && tournee.length>0 && (
-        <div style={{background:"#fff",borderRadius:16,padding:16,marginBottom:16,
-          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <div style={{fontWeight:800,color:C.navy,fontSize:15}}>Ma tournée — {circ.emoji} {circ.nom}</div>
-            <span style={{fontSize:12,color:C.gray}}>{tournee.length} élève{tournee.length>1?"s":""}</span>
-          </div>
-          {tournee.map((el,i)=>(
-            <div key={el.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",
-              borderBottom:i<tournee.length-1?`1px solid ${C.gray100}`:"none"}}>
-              <div style={{minWidth:26,height:26,borderRadius:8,background:C.navy,color:"#fff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:12,flexShrink:0}}>
-                {i+1}
-              </div>
-              <div style={{minWidth:44}}>
-                <div style={{fontWeight:800,fontSize:13,color:C.navy}}>{el.heure_ramassage||"—"}</div>
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:700,fontSize:14,color:"#1E293B"}}>{el.prenom_initiale} {el.nom_famille}</div>
-                {el.adresse&&(
-                  <div style={{fontSize:11,color:C.gray,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                    {el.adresse}
-                  </div>
-                )}
-              </div>
-              <div style={{display:"flex",gap:6,flexShrink:0}}>
-                {el.adresse&&(
-                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(el.adresse)}`}
-                    target="_blank" rel="noreferrer" title="Itinéraire"
-                    style={{width:32,height:32,borderRadius:9,background:"#EFF6FF",color:C.navy,
-                      display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none"}}>
-                    <Navigation size={15}/>
-                  </a>
-                )}
-                {(el.tel_mere||el.tel_pere)&&(
-                  <a href={`tel:${(el.tel_mere||el.tel_pere||"").replace(/\s/g,"")}`} title="Appeler le parent"
-                    style={{width:32,height:32,borderRadius:9,background:C.greenL,color:C.greenD,
-                      display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none"}}>
-                    <Phone size={15}/>
-                  </a>
-                )}
-              </div>
-            </div>
-          ))}
-          <div style={{fontSize:11,color:C.gray,marginTop:10}}>
-            Arrivée école prévue ~08:25 · appuie sur l’itinéraire pour lancer la navigation.
           </div>
         </div>
       )}
