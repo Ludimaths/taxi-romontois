@@ -112,9 +112,10 @@ export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerE
         color: "#fff", marginBottom: 14, display: "flex", alignItems: "center", gap: 16,
         boxShadow: "0 6px 20px rgba(13,59,122,.25)" }}>
         {img
-          ? <div style={{ width: 84, height: 84, borderRadius: 18, background: "rgba(255,255,255,.12)",
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <img src={img} alt={circ?.nom || ""} style={{ width: 74, height: 74, objectFit: "contain" }} />
+          ? <div style={{ width: 84, height: 84, borderRadius: 18, background: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              boxShadow: "0 2px 8px rgba(0,0,0,.15)" }}>
+              <img src={img} alt={circ?.nom || ""} style={{ width: 72, height: 72, objectFit: "contain" }} />
             </div>
           : <div style={{ fontSize: 56 }}>{circ?.emoji || "🚌"}</div>}
         <div style={{ minWidth: 0 }}>
@@ -188,7 +189,15 @@ export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerE
                 <div style={{ fontWeight: 800, fontSize: 13, color: C.navy }}>{el.heure_ramassage || "—"}</div>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: "#1E293B" }}>{el.prenom_initiale} {el.nom_famille}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "#1E293B" }}>
+                  {el.prenom_initiale} {el.nom_famille}
+                  {!el.heure_ramassage && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, background: C.amberL,
+                      borderRadius: 6, padding: "1px 6px", marginLeft: 6, whiteSpace: "nowrap" }}>
+                      amené par les parents
+                    </span>
+                  )}
+                </div>
                 {el.adresse && (
                   <div style={{ fontSize: 11, color: C.gray, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{el.adresse}</div>
                 )}
