@@ -174,9 +174,7 @@ export default function ConducteurPage(){
       heure_debut:nowTimeStr(),status:"en_service",is_replacement:false,
     }).select().single();
     await sb.from("conducteurs").update({status:"en_service"}).eq("id",driver.id);
-    await sb.from("alertes").insert({type:"conducteur",severity:"normale",
-      message:`${driver.prenom} ${driver.nom} a pris son service à ${fmtHHMM(nowTimeStr())} — Circuit ${(driver.circuit as{nom?:string}|undefined)?.nom||"—"}`,
-      read:false});
+    // Pas de notification de prise de service (bruit inutile côté gestionnaire).
     if(data)setTodayLog(data);
     setDriver(p=>p?{...p,status:"en_service"}:p);
     setShowConfirm(false);
@@ -190,9 +188,7 @@ export default function ConducteurPage(){
       heure_debut:nowTimeStr(),status:"en_service",is_replacement:true,replacement_name:replRemplace,
     }).select().single();
     await sb.from("conducteurs").update({status:"en_service"}).eq("id",driver.id);
-    await sb.from("alertes").insert({type:"conducteur",severity:"normale",
-      message:`${driver.prenom} ${driver.nom} remplace ${replRemplace||"—"} sur circuit ${replCircuit} à ${fmtHHMM(nowTimeStr())}`,
-      read:false});
+    // Pas de notification de prise de service (remplacement) — bruit inutile.
     if(data)setTodayLog(data);
     setDriver(p=>p?{...p,status:"en_service"}:p);
     setShowReplace(false);
@@ -205,9 +201,7 @@ export default function ConducteurPage(){
       await sb.from("service_logs").update({heure_fin:nowTimeStr(),status:"termine"}).eq("id",todayLog.id);
     }
     await sb.from("conducteurs").update({status:"disponible"}).eq("id",driver.id);
-    await sb.from("alertes").insert({type:"conducteur",severity:"normale",
-      message:`${driver.prenom} ${driver.nom} a terminé son service à ${fmtHHMM(nowTimeStr())}`,
-      read:false});
+    // Pas de notification de fin de service — bruit inutile.
     setDriver(p=>p?{...p,status:"disponible"}:p);
     setTodayLog(p=>p?{...p,heure_fin:nowTimeStr(),status:"termine"}:p);
     setShowFin(false);
@@ -231,8 +225,7 @@ export default function ConducteurPage(){
   async function handleRepriseService(){
     if(!driver)return;
     await sb.from("conducteurs").update({status:"disponible",absence_motif:null}).eq("id",driver.id);
-    await sb.from("alertes").insert({type:"conducteur",severity:"normale",
-      message:`${driver.prenom} ${driver.nom} reprend le service aujourd'hui`,read:false});
+    // Pas de notification de reprise — bruit inutile.
     setDriver(p=>p?{...p,status:"disponible",absence_motif:undefined}:p);
     setShowReprise(false);
   }
@@ -476,6 +469,7 @@ export default function ConducteurPage(){
       {tab==="dashboard"&&(
         <TabDashboard driver={driver} todayLog={todayLog} todayAbsences={todayAbsences}
           enfants={enfants} messages={messages} unreadMsg={unreadMsg} absConfirmed={absConfirmed}
+          eleves={elevesCircuit}
           circ={circ} veh={veh}
           onSetTab={t=>setTab(t as Tab)}
           onConfirmerAbsence={handleConfirmerAbsence}

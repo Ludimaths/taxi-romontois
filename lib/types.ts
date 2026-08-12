@@ -24,6 +24,12 @@ export interface Eleve {
   ecole?: Ecole;
   type_transport: "standard" | "equipe";
   actif: boolean;
+  tel_mere?: string;
+  tel_pere?: string;
+  email?: string;
+  heure_ramassage?: string;
+  heure_depose?: string;
+  heure_mercredi?: string;
   created_at: string;
 }
 
