@@ -163,13 +163,15 @@ export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerE
                 )}
               </div>
               <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                {(el.lat != null && el.lon != null) ? (
-                  <a href={gmaps(el.lat as number, el.lon as number)} target="_blank" rel="noreferrer" title="Itinéraire"
+                {/* Navigation TOUJOURS basée sur l'adresse exacte (source fiable),
+                    jamais sur des coordonnées approximatives. */}
+                {el.adresse ? (
+                  <a href={gmapsAddr(el.adresse)} target="_blank" rel="noreferrer" title="Itinéraire"
                     style={{ width: 32, height: 32, borderRadius: 9, background: "#EFF6FF", color: C.navy, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
                     <Navigation size={15} />
                   </a>
-                ) : el.adresse ? (
-                  <a href={gmapsAddr(el.adresse)} target="_blank" rel="noreferrer" title="Itinéraire"
+                ) : (el.lat != null && el.lon != null) ? (
+                  <a href={gmaps(el.lat as number, el.lon as number)} target="_blank" rel="noreferrer" title="Itinéraire"
                     style={{ width: 32, height: 32, borderRadius: 9, background: "#EFF6FF", color: C.navy, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
                     <Navigation size={15} />
                   </a>
