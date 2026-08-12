@@ -14,7 +14,8 @@ function CircuitForm({ init, cercles, conducteurs, onSave, onCancel, saving, isN
   init: Partial<Circuit>; cercles: CercleScolaire[]; conducteurs: Conducteur[];
   onSave: (d: any) => void; onCancel: () => void; saving: boolean; isNew?: boolean;
 }) {
-  const [f, setF] = useState<any>({ enfants_count: 0, km_aller: 0, ...init });
+  const currentDrv = conducteurs.find(d => d.circuit_id === init.id);
+  const [f, setF] = useState<any>({ enfants_count: 0, km_aller: 0, ...init, conducteur_id: currentDrv?.id ?? "" });
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
   const field = (label: string, key: string, type = "text", ph = "") => (
     <div style={{ marginBottom: 12 }}>
@@ -41,6 +42,18 @@ function CircuitForm({ init, cercles, conducteurs, onSave, onCancel, saving, isN
           style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 13 }}>
           <option value="">— Sans cercle —</option>
           {cercles.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+        </select>
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 4 }}>Conducteur affecté</label>
+        <select value={f.conducteur_id ?? ""} onChange={e => set("conducteur_id", e.target.value ? Number(e.target.value) : "")}
+          style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.gray200}`, fontSize: 13 }}>
+          <option value="">— Non affecté —</option>
+          {conducteurs.map(d => (
+            <option key={d.id} value={d.id}>
+              {d.prenom} {d.nom}{(d as any).est_responsable ? " (Responsable)" : ""}
+            </option>
+          ))}
         </select>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
@@ -106,6 +119,15 @@ export default function CircuitsPage() {
 
   const editCircuit = editId ? circuits.find(c => c.id === editId) : null;
 
+  // Affecte / retire un conducteur sur un circuit (met à jour conducteurs.circuit_id)
+  const assignConducteur = async (circuitId: string, newDriverId: number | "") => {
+    const newId = newDriverId === "" ? null : Number(newDriverId);
+    const prev = drivers.find(d => d.circuit_id === circuitId);
+    if ((prev?.id ?? null) === newId) return;
+    if (prev) await supabase.from("conducteurs").update({ circuit_id: null }).eq("id", prev.id);
+    if (newId) await supabase.from("conducteurs").update({ circuit_id: circuitId }).eq("id", newId);
+  };
+
   const handleSave = async (form: any) => {
     setSaving(true);
     await supabase.from("circuits").update({
@@ -113,6 +135,7 @@ export default function CircuitsPage() {
       km_aller: form.km_aller,
       cercle_id: form.cercle_id || null,
     }).eq("id", editId!);
+    await assignConducteur(editId!, form.conducteur_id ?? "");
     await fetchAll();
     setSaving(false);
     setEditId(null);
@@ -127,6 +150,7 @@ export default function CircuitsPage() {
       km_aller: form.km_aller ?? 0,
       cercle_id: form.cercle_id || null,
     });
+    if (form.conducteur_id) await assignConducteur(form.id, form.conducteur_id);
     await fetchAll();
     setSaving(false);
     setAddModal(false);

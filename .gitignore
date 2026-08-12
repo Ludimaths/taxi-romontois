@@ -48,3 +48,8 @@ next-env.d.ts
 *.png
 *.jpeg
 *.jpg
+
+# dossiers de travail (hors application) — ne pas versionner
+/etablissements/
+/Dossier anes 2/
+dev.log
