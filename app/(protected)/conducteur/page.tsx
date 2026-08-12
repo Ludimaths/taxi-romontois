@@ -276,18 +276,8 @@ export default function ConducteurPage(){
     const { data: pr } = await sb.from("prises_en_charge").select("*")
       .eq("conducteur_id", driver.id).eq("date", today);
     setPrises(pr ?? []);
-
-    // Notification gestionnaire
-    const eleve = elevesCircuit.find(e => e.id === eleveId);
-    if (eleve) {
-      const txt = statut === "present"
-        ? `✓ ${eleve.nom_famille} ${eleve.prenom_initiale}. réceptionné à ${now.slice(0,5)} — ${driver.prenom} ${driver.nom}`
-        : `✗ ${eleve.nom_famille} ${eleve.prenom_initiale}. absent — ${driver.prenom} ${driver.nom}`;
-      await sb.from("alertes").insert({
-        type: "conducteur", severity: "normale", read: false,
-        driver_id: driver.id, message: txt,
-      });
-    }
+    // Pas de notification par élève pris/déposé (ingérable côté gestionnaire).
+    // Le suivi se lit en temps réel via la table prises_en_charge.
   }
 
   async function handleEnvoyerConge(form:{date_debut:string;date_fin:string;motif:string;justification:string}){
