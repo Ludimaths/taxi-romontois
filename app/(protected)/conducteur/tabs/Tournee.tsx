@@ -18,6 +18,9 @@ interface TourneeProps {
   prises: PriseEnCharge[];
   enService: boolean;
   onMarquerEleve: (eleveId: number, statut: "present" | "absent") => Promise<void>;
+  onShowConfirm: () => void;
+  onShowFin: () => void;
+  onShowReprise: () => void;
 }
 
 const gmaps = (la: number, lo: number) => `https://www.google.com/maps/dir/?api=1&destination=${la},${lo}`;
@@ -51,7 +54,7 @@ function loadLeaflet(): Promise<any> {
   });
 }
 
-export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerEleve }: TourneeProps) {
+export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerEleve, onShowConfirm, onShowFin, onShowReprise }: TourneeProps) {
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const [mapError, setMapError] = useState(false);
@@ -104,20 +107,48 @@ export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerE
 
   return (
     <div>
-      {/* En-tête circuit avec panneau */}
-      <div style={{ background: "linear-gradient(160deg,#12498f,#0D3B7A)", borderRadius: 18, padding: "16px 18px",
-        color: "#fff", marginBottom: 14, display: "flex", alignItems: "center", gap: 14 }}>
+      {/* En-tête circuit — étiquette de présentation avec le panneau en grand */}
+      <div style={{ background: "linear-gradient(160deg,#12498f,#0D3B7A)", borderRadius: 20, padding: "18px 20px",
+        color: "#fff", marginBottom: 14, display: "flex", alignItems: "center", gap: 16,
+        boxShadow: "0 6px 20px rgba(13,59,122,.25)" }}>
         {img
-          ? <img src={img} alt={circ?.nom || ""} style={{ width: 54, height: 54, objectFit: "contain", flexShrink: 0 }} />
-          : <div style={{ fontSize: 40 }}>{circ?.emoji || "🚌"}</div>}
+          ? <div style={{ width: 84, height: 84, borderRadius: 18, background: "rgba(255,255,255,.12)",
+              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <img src={img} alt={circ?.nom || ""} style={{ width: 74, height: 74, objectFit: "contain" }} />
+            </div>
+          : <div style={{ fontSize: 56 }}>{circ?.emoji || "🚌"}</div>}
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 12, opacity: .85, fontWeight: 600 }}>Ma tournée du jour</div>
-          <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: "-.3px" }}>{circ?.nom || "Circuit"}</div>
-          <div style={{ fontSize: 12, opacity: .85, marginTop: 2 }}>
+          <div style={{ fontSize: 12, opacity: .85, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>Ma tournée du jour</div>
+          <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-.4px", marginTop: 1 }}>{circ?.nom || "Circuit"}</div>
+          <div style={{ fontSize: 12.5, opacity: .85, marginTop: 3 }}>
             {tournee.length} élève{tournee.length > 1 ? "s" : ""} · arrivée Mérine ~08:25
           </div>
         </div>
       </div>
+
+      {/* Actions de service — prise / fin / reprise selon le statut */}
+      {driver.status === "disponible" && (
+        <button onClick={onShowConfirm}
+          style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", marginBottom: 14,
+            background: "linear-gradient(160deg,#12b981,#0E9F6E)", color: "#fff", fontWeight: 800, fontSize: 16,
+            cursor: "pointer", boxShadow: "0 4px 14px rgba(14,159,110,.3)" }}>
+          Je prends mon service — {circ?.nom || "circuit"}
+        </button>
+      )}
+      {driver.status === "en_service" && (
+        <button onClick={onShowFin}
+          style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", marginBottom: 14,
+            background: C.navy, color: "#fff", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
+          Je termine mon service
+        </button>
+      )}
+      {driver.status === "absent" && (
+        <button onClick={onShowReprise}
+          style={{ width: "100%", padding: "15px", borderRadius: 14, border: "none", marginBottom: 14,
+            background: "linear-gradient(160deg,#12b981,#0E9F6E)", color: "#fff", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
+          Je reprends le service
+        </button>
+      )}
 
       {/* Carte */}
       {withCoords.length > 0 && !mapError && (

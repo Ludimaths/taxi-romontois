@@ -14,11 +14,12 @@ export interface SignalementsProps {
   onSetSignDesc: (v: string) => void;
   onSetSignUrgence: (v: string) => void;
   onEnvoyer: () => void;
+  onShowAbsence: () => void;
 }
 
 export function TabSignalements({
   driver,incidents,signType,signDesc,signUrgence,signSent,
-  onSetSignType,onSetSignDesc,onSetSignUrgence,onEnvoyer,
+  onSetSignType,onSetSignDesc,onSetSignUrgence,onEnvoyer,onShowAbsence,
 }:SignalementsProps){
   const statusMap:{[k:string]:{l:string;c:string;bg:string}}={
     en_attente:{l:"En attente de réponse",c:C.amber,bg:C.amberL},
@@ -28,6 +29,20 @@ export function TabSignalements({
 
   return(
     <div>
+      {/* Signaler une absence */}
+      <div style={{background:"#fff",borderRadius:18,padding:18,marginBottom:16,
+        boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        <h2 style={{fontWeight:800,color:C.navy,fontSize:15,marginBottom:6}}>Mon absence</h2>
+        <p style={{fontSize:13,color:C.gray,marginBottom:driver.status==="absent"?10:12,lineHeight:1.4}}>
+          Si vous ne pouvez pas assurer votre service, signalez-le avec le motif — le gestionnaire est prévenu (circuit non couvert).
+        </p>
+        {driver.status==="absent"
+          ? <div style={{background:C.redL,borderRadius:10,padding:"10px 12px",color:C.red,fontWeight:700,fontSize:13}}>
+              Absence en cours{driver.absence_motif?` — ${driver.absence_motif}`:""}
+            </div>
+          : <BigBtn label="Je suis absent aujourd'hui" onClick={onShowAbsence} color={C.red}/>}
+      </div>
+
       {signSent&&(
         <div style={{background:C.greenL,borderRadius:14,padding:14,marginBottom:16,
           border:`1px solid #86EFAC`,fontWeight:700,color:C.greenD}}>

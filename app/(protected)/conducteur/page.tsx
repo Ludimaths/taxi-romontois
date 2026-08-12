@@ -465,16 +465,14 @@ export default function ConducteurPage(){
           circ={circ} veh={veh}
           onSetTab={t=>setTab(t as Tab)}
           onConfirmerAbsence={handleConfirmerAbsence}
-          onMarquerLu={handleMarquerLu}
-          onShowConfirm={()=>setShowConfirm(true)}
-          onShowReplace={()=>setShowReplace(true)}
-          onShowAbsence={()=>setShowAbsence(true)}
-          onShowFin={()=>setShowFin(true)}
-          onShowReprise={()=>setShowReprise(true)}/>
+          onMarquerLu={handleMarquerLu}/>
       )}
       {tab==="tournee"&&(
         <TabTournee driver={driver} circ={circ} eleves={elevesCircuit} prises={prises}
-          enService={driver.status==="en_service"} onMarquerEleve={handleMarquerEleve}/>
+          enService={driver.status==="en_service"} onMarquerEleve={handleMarquerEleve}
+          onShowConfirm={()=>setShowConfirm(true)}
+          onShowFin={()=>setShowFin(true)}
+          onShowReprise={()=>setShowReprise(true)}/>
       )}
       {tab==="fiche"&&(
         <TabFiche driver={driver} circ={circ} veh={veh} enfantsCircuit={enfantsCircuit}
@@ -495,7 +493,7 @@ export default function ConducteurPage(){
         <TabSignalements driver={driver} incidents={incidents}
           signType={signType} signDesc={signDesc} signUrgence={signUrgence} signSent={signSent}
           onSetSignType={setSignType} onSetSignDesc={setSignDesc} onSetSignUrgence={setSignUrgence}
-          onEnvoyer={handleEnvoyerSignalement}/>
+          onEnvoyer={handleEnvoyerSignalement} onShowAbsence={()=>setShowAbsence(true)}/>
       )}
       {tab==="messages"&&(
         <TabMessages messages={messages} incidents={incidents} absences={absences} enfants={enfants}

@@ -2,7 +2,7 @@
 import { CheckCircle2, XCircle, Circle, MapPin, Bus, Baby, RefreshCw } from "lucide-react";
 import { C, fmtHHMM, fmtDateTime, isoToday, fmtEnfant } from "@/lib/constants";
 import type { Conducteur, ServiceLog, AbsenceEnfant, Enfant, Alerte } from "@/lib/types";
-import { StatusBadge, BigBtn, calcDuration } from "./shared";
+import { StatusBadge, calcDuration } from "./shared";
 
 type CircType = { nom?: string; emoji?: string; enfants_count?: number; id?: string; cercle?: { nom?: string } };
 type VehType  = { plaque?: string; marque?: string; modele?: string };
@@ -20,17 +20,11 @@ export interface DashboardProps {
   onSetTab: (t: string) => void;
   onConfirmerAbsence: (id: number) => void;
   onMarquerLu: (a: Alerte) => void;
-  onShowConfirm: () => void;
-  onShowReplace: () => void;
-  onShowAbsence: () => void;
-  onShowFin: () => void;
-  onShowReprise: () => void;
 }
 
 export function TabDashboard({
   driver,todayLog,todayAbsences,enfants,messages,unreadMsg,absConfirmed,
   circ,veh,onSetTab,onConfirmerAbsence,onMarquerLu,
-  onShowConfirm,onShowReplace,onShowAbsence,onShowFin,onShowReprise,
 }:DashboardProps){
   return(
     <div>
@@ -148,20 +142,6 @@ export function TabDashboard({
         </div>
       )}
 
-      {/* Boutons rapides */}
-      <div style={{marginTop:8}}>
-        {driver.status==="disponible"&&(<>
-          <BigBtn label="Je prends mon service"      onClick={onShowConfirm}/>
-          <BigBtn label="Je remplace un collègue"    onClick={onShowReplace} color={C.blue}/>
-          <BigBtn label="Je suis absent aujourd'hui" onClick={onShowAbsence} color={C.red}/>
-        </>)}
-        {driver.status==="en_service"&&(
-          <BigBtn label="Je termine mon service" onClick={onShowFin} color={C.navy}/>
-        )}
-        {driver.status==="absent"&&(
-          <BigBtn label="Je reprends le service" onClick={onShowReprise}/>
-        )}
-      </div>
     </div>
   );
 }
