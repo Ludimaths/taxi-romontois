@@ -4,9 +4,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, isoToday, fmtHHMM, nowTimeStr } from "@/lib/constants";
 import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant, CongesDemande, Eleve, PriseEnCharge } from "@/lib/types";
-import { Bus, Home, FileText, AlertCircle, Mail, History, CalendarDays, LogOut, MoreHorizontal, MapPin, X } from "lucide-react";
+import { Bus, FileText, AlertCircle, Mail, History, CalendarDays, LogOut, MoreHorizontal, MapPin, X } from "lucide-react";
 import { BSheet, BigBtn, TA, Chip, StatusBadge } from "./tabs/shared";
-import { TabDashboard } from "./tabs/Dashboard";
 import { TabFiche } from "./tabs/Fiche";
 import { TabSignalements } from "./tabs/Signalements";
 import { TabMessages } from "./tabs/Messages";
@@ -14,7 +13,7 @@ import { TabHistorique } from "./tabs/Historique";
 import { TabConges } from "./tabs/Conges";
 import { TabTournee } from "./tabs/Tournee";
 
-type Tab = "dashboard" | "tournee" | "fiche" | "signalements" | "messages" | "historique" | "conges";
+type Tab = "tournee" | "fiche" | "signalements" | "messages" | "historique" | "conges";
 
 export default function ConducteurPage(){
   const sb=createClient();
@@ -44,19 +43,11 @@ export default function ConducteurPage(){
   const [absMotif, setAbsMotif] = useState("");
   const [absNotes, setAbsNotes] = useState("");
 
-  // Téléphone
-  const [editTel,   setEditTel]   = useState(false);
-  const [telValue,  setTelValue]  = useState("");
-  const [telSaving, setTelSaving] = useState(false);
-
   // Signalement
   const [signType,    setSignType]    = useState("");
   const [signDesc,    setSignDesc]    = useState("");
   const [signUrgence, setSignUrgence] = useState("normal");
   const [signSent,    setSignSent]    = useState(false);
-
-  // Absences confirmées localement
-  const [absConfirmed, setAbsConfirmed] = useState<Set<number>>(new Set());
 
   // ID conducteur (entier) — nécessaire pour le filtre Realtime alertes
   const [condId, setCondId] = useState<number|null>(null);
@@ -225,9 +216,10 @@ export default function ConducteurPage(){
     setMessages(p=>p.map(x=>x.id===a.id?{...x,read:true}:x));
   }
 
-  async function handleConfirmerAbsence(id:number){
-    await sb.from("absences_enfants").update({read_by_driver:true}).eq("id",id);
-    setAbsConfirmed(p=>new Set([...p,id]));
+  async function handleSaveFiche(patch:Partial<Conducteur>){
+    if(!driver)return;
+    await sb.from("conducteurs").update(patch).eq("id",driver.id);
+    setDriver(p=>p?{...p,...patch}:p);
   }
 
   async function handleMarquerEleve(eleveId: number, statut: "present" | "absent") {
@@ -267,14 +259,6 @@ export default function ConducteurPage(){
     await load();
   }
 
-  async function handleSaveTel(){
-    if(!driver)return;
-    setTelSaving(true);
-    await sb.from("conducteurs").update({tel:telValue||null}).eq("id",driver.id);
-    setDriver(p=>p?{...p,tel:telValue||undefined}:p);
-    setEditTel(false);setTelSaving(false);
-  }
-
   async function handleSignOut(){
     await sb.auth.signOut();
     router.push("/login");
@@ -284,14 +268,12 @@ export default function ConducteurPage(){
   const circ   = driver?.circuit as{nom?:string;emoji?:string;enfants_count?:number;id?:string;cercle?:{nom?:string}}|undefined;
   const veh    = driver?.vehicule as{plaque?:string;marque?:string;modele?:string}|undefined;
   const enfantsCircuit = driver?.circuit_id ? enfants.filter(e=>e.circuit_id===driver.circuit_id) : [];
-  const todayAbsences  = absences.filter(a=>a.date_absence===isoToday());
   const incWithResponse= incidents.filter(i=>i.response||i.status==="resolu");
   const unreadMsg      = messages.filter(m=>!m.read).length;
   const pendingInc     = incidents.filter(i=>i.status==="en_attente").length;
 
 
   const tabIcon=(id:Tab,size:number)=>({
-    dashboard:    <Home size={size} />,
     tournee:      <MapPin size={size} />,
     fiche:        <FileText size={size} />,
     signalements: <AlertCircle size={size} />,
@@ -302,18 +284,17 @@ export default function ConducteurPage(){
   // Barre du bas (accès rapide) — la tournée est en premier, mise en avant.
   const BOTTOM:{id:Tab;label:string;badge?:number}[]=[
     {id:"tournee",      label:"Ma tournée"},
+    {id:"fiche",        label:"Ma fiche"},
     {id:"signalements", label:"Signaler",badge:pendingInc||undefined},
     {id:"messages",     label:"Messages",badge:unreadMsg||undefined},
   ];
   // Menu « Plus » (tiroir) — le reste des onglets.
   const MORE:{id:Tab;label:string;badge?:number}[]=[
-    {id:"dashboard",    label:"Tableau de bord"},
-    {id:"fiche",        label:"Ma fiche"},
     {id:"historique",   label:"Historique"},
     {id:"conges",       label:"Mes congés"},
   ];
   const TAB_LABELS:Record<Tab,string>={
-    dashboard:"Tableau de bord",tournee:"Ma tournée",fiche:"Ma fiche",
+    tournee:"Ma tournée",fiche:"Ma fiche",
     signalements:"Signalements",messages:"Messages",historique:"Historique",conges:"Congés",
   };
 
@@ -414,14 +395,6 @@ export default function ConducteurPage(){
       <h1 style={{fontSize:19,fontWeight:900,color:C.navy,margin:"2px 2px 14px"}}>{TAB_LABELS[tab]}</h1>
 
       {/* Contenu des onglets */}
-      {tab==="dashboard"&&(
-        <TabDashboard driver={driver} todayLog={todayLog} todayAbsences={todayAbsences}
-          enfants={enfants} messages={messages} unreadMsg={unreadMsg} absConfirmed={absConfirmed}
-          circ={circ} veh={veh}
-          onSetTab={t=>setTab(t as Tab)}
-          onConfirmerAbsence={handleConfirmerAbsence}
-          onMarquerLu={handleMarquerLu}/>
-      )}
       {tab==="tournee"&&(
         <TabTournee driver={driver} circ={circ} eleves={elevesCircuit} prises={prises}
           enService={driver.status==="en_service"} onMarquerEleve={handleMarquerEleve}
@@ -431,8 +404,7 @@ export default function ConducteurPage(){
       )}
       {tab==="fiche"&&(
         <TabFiche driver={driver} circ={circ} veh={veh} enfantsCircuit={enfantsCircuit}
-          editTel={editTel} telValue={telValue} telSaving={telSaving}
-          onSetEditTel={setEditTel} onSetTelValue={setTelValue} onSaveTel={handleSaveTel}/>
+          todayLog={todayLog} onSave={handleSaveFiche}/>
       )}
       {tab==="signalements"&&(
         <TabSignalements driver={driver} incidents={incidents}
