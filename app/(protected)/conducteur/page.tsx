@@ -31,7 +31,7 @@ export default function ConducteurPage(){
   const [elevesCircuit, setElevesCircuit] = useState<Eleve[]>([]);
   const [prises,    setPrises]    = useState<PriseEnCharge[]>([]);
   const [loading,   setLoading]   = useState(true);
-  const [tab,       setTab]       = useState<Tab>("dashboard");
+  const [tab,       setTab]       = useState<Tab>("tournee");
   const [drawerOpen,setDrawerOpen]= useState(false);
 
   // Modals service
@@ -299,15 +299,15 @@ export default function ConducteurPage(){
     historique:   <History size={size} />,
     conges:       <CalendarDays size={size} />,
   }[id]);
-  // Barre du bas (accès rapide) — la tournée est au centre, mise en avant.
+  // Barre du bas (accès rapide) — la tournée est en premier, mise en avant.
   const BOTTOM:{id:Tab;label:string;badge?:number}[]=[
-    {id:"dashboard",    label:"Accueil"},
     {id:"tournee",      label:"Ma tournée"},
     {id:"signalements", label:"Signaler",badge:pendingInc||undefined},
     {id:"messages",     label:"Messages",badge:unreadMsg||undefined},
   ];
   // Menu « Plus » (tiroir) — le reste des onglets.
   const MORE:{id:Tab;label:string;badge?:number}[]=[
+    {id:"dashboard",    label:"Tableau de bord"},
     {id:"fiche",        label:"Ma fiche"},
     {id:"historique",   label:"Historique"},
     {id:"conges",       label:"Mes congés"},
