@@ -129,6 +129,13 @@ export default function EtablissementDetail() {
   const [numFacture,   setNumFacture]   = useState("");
   const [genLoading,   setGenLoading]   = useState(false);
 
+  // Mois affiché dans le calendrier du Planning
+  const [calRef, setCalRef] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
+  const shiftMonth = (delta: number) => setCalRef(r => {
+    const t = r.m + delta;
+    return { y: r.y + Math.floor(t / 12), m: ((t % 12) + 12) % 12 };
+  });
+
   const load = useCallback(async () => {
     const today_ = isoToday();
     const [
@@ -517,6 +524,10 @@ export default function EtablissementDetail() {
         .etab-card{ transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
         .etab-card:hover{ transform: translateY(-1px); box-shadow: 0 8px 22px rgba(13,59,122,.10); border-color:#c9d8ef; }
         .etab-card select, .etab-card button{ transition: background .12s ease; }
+        .plan-grid{ display:grid; grid-template-columns:1.4fr 1fr; gap:16; }
+        @media(max-width:860px){ .plan-grid{ grid-template-columns:1fr; } }
+        .cal-days{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+        .cal-cell{ min-height:76px; border:1px solid #F1F5F9; border-radius:9px; padding:6px; }
       `}</style>
       {/* Retour */}
       <button onClick={() => router.push("/gestionnaire/etablissements")}
@@ -846,47 +857,94 @@ export default function EtablissementDetail() {
         </div>
       )}
 
-      {/* ── PLANNING & ABSENCES ────────────────────────────────────────────── */}
-      {tab === "Planning & absences" && (
-        <div style={{ marginTop:20 }}>
-          <div style={{ background:"#EFF6FF", border:"1px solid #cfe0fb", borderRadius:12, padding:"12px 16px", fontSize:13, color:"#0f2f66", lineHeight:1.5, marginBottom:16 }}>
-            Les absences et exceptions planifiées ici s'appliquent <b>automatiquement à la tournée du conducteur</b> aux bonnes dates — visible par le responsable de secteur, le conducteur et le parent.
-          </div>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, gap:12, flexWrap:"wrap" }}>
-            <div style={{ fontSize:13, color:C.gray400 }}>Absence sur période · ramené par les parents · changement de circuit temporaire.</div>
-          </div>
-          {exceptions.length === 0 ? (
-            <div style={{ padding:40, textAlign:"center", color:C.gray400, background:C.gray50, borderRadius:12 }}>
-              Aucune exception planifiée. Ajoute-les depuis un élève (onglet Circuits &amp; élèves → « ⋯ »).
+      {/* ── PLANNING & ABSENCES (calendrier + infos à droite) ──────────────── */}
+      {tab === "Planning & absences" && (() => {
+        const { y, m } = calRef;
+        const startCol = (new Date(y, m, 1).getDay() + 6) % 7;        // Lundi = 0
+        const dim = new Date(y, m + 1, 0).getDate();
+        const dISO = (d:number) => `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+        const excBg = (t:ExcType) => t==="absent"?"#FDECEC":t==="parent"?"#FEF3C7":"#EDE9FE";
+        return (
+          <div style={{ marginTop:20 }}>
+            <div style={{ background:"#EFF6FF", border:"1px solid #cfe0fb", borderRadius:12, padding:"12px 16px", fontSize:13, color:"#0f2f66", lineHeight:1.5, marginBottom:16 }}>
+              Ce qui est planifié ici s'applique <b>automatiquement à la tournée du conducteur</b> aux bonnes dates — visible par le responsable de secteur, le conducteur et le parent.
             </div>
-          ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              {exceptions.map(x=>{
-                const e = eleves.find(el=>el.id===x.eleve_id);
-                const col = excColor(x.type);
-                const cible = x.circuit_cible_id ? allCircuits.find(c=>c.id===x.circuit_cible_id) : null;
-                return (
-                  <div key={x.id} style={{ display:"flex", alignItems:"center", gap:12, background:C.white, border:`1px solid ${C.gray200}`, borderRadius:12, padding:"12px 14px" }}>
-                    <div style={{ width:5, alignSelf:"stretch", borderRadius:6, background:col }} />
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontWeight:800, fontSize:14, color:C.gray800 }}>
-                        {e ? `${e.prenom_initiale} ${e.nom_famille}` : `Élève #${x.eleve_id}`}
-                        <span style={{ color:col, marginLeft:8, fontWeight:800 }}>· {EXC_LABEL[x.type]}</span>
+            <div className="plan-grid">
+              {/* Calendrier */}
+              <div style={{ background:C.white, border:`1px solid ${C.gray200}`, borderRadius:14, padding:18 }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                  <button onClick={()=>shiftMonth(-1)} style={{ background:C.gray50, border:`1px solid ${C.gray200}`, borderRadius:8, width:30, height:30, cursor:"pointer", fontWeight:900, color:C.gray }}>‹</button>
+                  <div style={{ fontSize:15, fontWeight:900, color:"#0f2540" }}>{MOIS_NOMS[m+1]} {y}</div>
+                  <button onClick={()=>shiftMonth(1)} style={{ background:C.gray50, border:`1px solid ${C.gray200}`, borderRadius:8, width:30, height:30, cursor:"pointer", fontWeight:900, color:C.gray }}>›</button>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:6, marginBottom:6 }}>
+                  {["L","M","M","J","V","S","D"].map((d,i)=>(<div key={i} style={{ textAlign:"center", fontSize:11, fontWeight:800, color:C.gray400 }}>{d}</div>))}
+                </div>
+                <div className="cal-days">
+                  {Array.from({length:startCol}).map((_,i)=><div key={"e"+i} className="cal-cell" style={{ background:C.gray50 }} />)}
+                  {Array.from({length:dim}).map((_,i)=>{
+                    const day=i+1; const iso=dISO(day);
+                    const evts = exceptions.filter(x=>x.date_debut<=iso && x.date_fin>=iso);
+                    return (
+                      <div key={day} className="cal-cell">
+                        <div style={{ fontSize:11, fontWeight:800, color:C.gray400 }}>{day}</div>
+                        {evts.slice(0,3).map(x=>{ const e=eleves.find(el=>el.id===x.eleve_id); return (
+                          <div key={x.id} title={e?`${e.prenom_initiale} ${e.nom_famille}`:""}
+                            style={{ marginTop:3, borderRadius:6, padding:"2px 5px", fontSize:10, fontWeight:800, lineHeight:1.25,
+                              background:excBg(x.type), color:excColor(x.type), overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {e?e.prenom_initiale:"?"}
+                          </div>
+                        );})}
+                        {evts.length>3 && <div style={{ fontSize:10, color:C.gray400, marginTop:2 }}>+{evts.length-3}</div>}
                       </div>
-                      <div style={{ fontSize:12.5, color:C.gray }}>
-                        du {fmtJour(x.date_debut)} au {fmtJour(x.date_fin)}
-                        {cible ? ` · vers ${cible.emoji} ${cible.nom}${x.definitif?" (définitif)":""}` : ""}
-                        {x.justification ? ` · ${x.justification}` : ""}
-                      </div>
-                    </div>
-                    <Btn small outline color={C.red} onClick={()=>removeExc(x.id)}>Clôturer</Btn>
+                    );
+                  })}
+                </div>
+                <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginTop:12, fontSize:11.5, color:C.gray }}>
+                  <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:10,height:10,borderRadius:3,background:"#E02424",display:"inline-block" }} /> Absent</span>
+                  <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:10,height:10,borderRadius:3,background:"#D97706",display:"inline-block" }} /> Ramené parents</span>
+                  <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:10,height:10,borderRadius:3,background:"#7C3AED",display:"inline-block" }} /> Circuit temporaire</span>
+                </div>
+              </div>
+
+              {/* Infos à droite : exceptions en cours / à venir */}
+              <div>
+                <div style={{ fontSize:15, fontWeight:900, color:"#0f2540", marginBottom:12 }}>Exceptions en cours &amp; à venir</div>
+                {exceptions.length === 0 ? (
+                  <div style={{ padding:26, textAlign:"center", color:C.gray400, background:C.gray50, borderRadius:12, fontSize:13 }}>
+                    Aucune exception. Ajoute-les depuis un élève (Circuits &amp; élèves → « ⋯ »).
                   </div>
-                );
-              })}
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                    {exceptions.map(x=>{
+                      const e = eleves.find(el=>el.id===x.eleve_id);
+                      const col = excColor(x.type);
+                      const cible = x.circuit_cible_id ? allCircuits.find(c=>c.id===x.circuit_cible_id) : null;
+                      return (
+                        <div key={x.id} style={{ display:"flex", alignItems:"center", gap:12, background:C.white, border:`1px solid ${C.gray200}`, borderRadius:12, padding:"12px 14px" }}>
+                          <div style={{ width:5, alignSelf:"stretch", borderRadius:6, background:col }} />
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontWeight:800, fontSize:14, color:C.gray800 }}>
+                              {e ? `${e.prenom_initiale} ${e.nom_famille}` : `Élève #${x.eleve_id}`}
+                              <span style={{ color:col, marginLeft:8, fontWeight:800 }}>· {EXC_LABEL[x.type]}</span>
+                            </div>
+                            <div style={{ fontSize:12.5, color:C.gray }}>
+                              du {fmtJour(x.date_debut)} au {fmtJour(x.date_fin)}
+                              {cible ? ` · vers ${cible.emoji} ${cible.nom}${x.definitif?" (définitif)":""}` : ""}
+                              {x.justification ? ` · ${x.justification}` : ""}
+                            </div>
+                          </div>
+                          <Btn small outline color={C.red} onClick={()=>removeExc(x.id)}>Clôturer</Btn>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       {/* ── TAB 3 : FACTURES ───────────────────────────────────────────────── */}
       {tab === "Factures" && (
