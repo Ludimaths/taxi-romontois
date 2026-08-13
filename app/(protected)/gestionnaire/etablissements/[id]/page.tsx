@@ -809,7 +809,7 @@ export default function EtablissementDetail() {
                           cEleves.slice().sort((a,b)=>(a.heure_ramassage||"~").localeCompare(b.heure_ramassage||"~")).map(e=>{
                             const pr = cPrises.find(p=>p.eleve_id===e.id);
                             const ex = excToday(e.id);
-                            let label="En attente", bg="#F1F5F9", fg=C.gray;
+                            let label = "En attente"; let bg: string = "#F1F5F9"; let fg: string = C.gray;
                             if (pr?.statut==="present"){label="Déposé";bg="#DCFCE7";fg="#15803D";}
                             else if (pr?.statut==="absent"){label="Absent";bg="#FDECEC";fg="#E02424";}
                             else if (ex?.type==="absent"){label="Absent (prévu)";bg="#FDECEC";fg="#E02424";}
@@ -1310,7 +1310,7 @@ export default function EtablissementDetail() {
                   <CircField label="Circuit cible (cet établissement ou un autre)">
                     <select value={excForm.circuit_cible_id} onChange={ev=>set({circuit_cible_id:ev.target.value})} style={cInp}>
                       <option value="">— Choisir un circuit —</option>
-                      {Object.entries(allCircuits.reduce((acc:Record<string,Circuit[]>,c)=>{ const k=String(c.ecole_id??0); (acc[k]=acc[k]||[]).push(c); return acc; }, {})).map(([eid,list])=>(
+                      {Object.entries(allCircuits.reduce<Record<string,Circuit[]>>((acc,c)=>{ const k=String(c.ecole_id??0); (acc[k]=acc[k]||[]).push(c); return acc; }, {})).map(([eid,list])=>(
                         <optgroup key={eid} label={Number(eid)===ecoleId ? `${ecole.nom} · même établissement` : "Autre établissement"}>
                           {list.map(c=>{ const d=conducteurs.find(x=>x.circuit_id===c.id); return (
                             <option key={c.id} value={c.id}>{c.emoji} {c.nom}{d?` · ${d.prenom} ${d.nom}`:" · non affecté"}</option>

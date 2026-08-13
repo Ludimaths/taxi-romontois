@@ -65,7 +65,7 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enSe
   const [arrived, setArrived] = useState(false);          // arrivé sur place à l'arrêt courant
   const [schoolPhase, setSchoolPhase] = useState<"go" | "at" | "done">("go");
 
-  const excMap = new Map(exceptions.map(x => [x.eleve_id, x.type]));   // exceptions du jour
+  const excMap = new Map<number, string>(exceptions.map(x => [x.eleve_id, x.type]));   // exceptions du jour
   const hasExc = (e: Eleve) => excMap.has(e.id);
   const tournee = [...eleves].sort((a, b) => (a.heure_ramassage || "~~").localeCompare(b.heure_ramassage || "~~"));
   const prisByEleve = new Map(prises.map(p => [p.eleve_id, p]));
