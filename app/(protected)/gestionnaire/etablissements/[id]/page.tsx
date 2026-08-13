@@ -98,6 +98,7 @@ export default function EtablissementDetail() {
   const [apercuFor,     setApercuFor]     = useState<string | null>(null);   // aperçu côté conducteur
   const [showImport,    setShowImport]    = useState(false);                 // import Excel
   const [circView,      setCircView]      = useState<"cartes" | "liste">("cartes"); // affichage circuits
+  const [showActions,   setShowActions]   = useState(false);                 // menu Actions
   const [menuFor,       setMenuFor]       = useState<number | null>(null);
   const [openAcc,       setOpenAcc]       = useState<Record<string, boolean>>({});
 
@@ -574,34 +575,34 @@ export default function EtablissementDetail() {
         <ArrowLeft size={15} /> Tous les établissements
       </button>
 
-      {/* En-tête établissement — style simulateur (identité + légende + stats) */}
-      <div style={{ background: C.white, borderRadius: 16, padding: "18px 22px",
-        border: `1px solid ${C.gray200}`, marginBottom: 18,
-        display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+      {/* En-tête établissement — compact, aligné (style simulateur) */}
+      <div style={{ background: C.white, borderRadius: 14, padding: "12px 18px",
+        border: `1px solid ${C.gray200}`, marginBottom: 16,
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 22, fontWeight: 900, color: "#0f2540" }}>{ecole.nom}</div>
-          <div style={{ fontSize: 12.5, color: C.gray400, marginTop: 3 }}>
-            {ecole.adresse || ""}{ecole.lot ? ` · Lot ${ecole.lot}` : ""} · Arrivée école 08:25
+          <div style={{ fontSize: 18, fontWeight: 900, color: "#0f2540" }}>{ecole.nom}</div>
+          <div style={{ fontSize: 12, color: C.gray400, marginTop: 1 }}>
+            {ecole.adresse || ""}{ecole.lot ? ` · Lot ${ecole.lot}` : ""} · Arrivée 08:25
           </div>
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 12, fontSize: 12, color: C.gray }}>
-            {([["#16A34A","Déposé"],["#E02424","Absent"],["#D97706","Ramené par les parents"],["#7C3AED","Circuit temporaire"]] as const).map(([col,lbl]) => (
-              <span key={lbl} style={{ display:"flex", alignItems:"center", gap:6 }}>
-                <span style={{ width:9, height:9, borderRadius:"50%", background:col, display:"inline-block" }} />{lbl}
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 7, fontSize: 11, color: C.gray }}>
+            {([["#16A34A","Déposé"],["#E02424","Absent"],["#D97706","Parents"],["#7C3AED","Circuit temp."]] as const).map(([col,lbl]) => (
+              <span key={lbl} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                <span style={{ width:8, height:8, borderRadius:"50%", background:col, display:"inline-block" }} />{lbl}
               </span>
             ))}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
           {[
-            { v: elevesActifs.length, l: "Élèves actifs", c: C.navy },
+            { v: elevesActifs.length, l: "Élèves", c: C.navy },
             { v: circuits.length,     l: "Circuits", c: C.navy },
-            { v: prisesEcole.filter(p => p.statut === "present").length, l: "Déposés aujourd'hui", c: C.green },
-            { v: exceptions.filter(x => { const t = isoToday(); return x.date_debut <= t && x.date_fin >= t; }).length, l: "Exceptions en cours", c: C.amber },
+            { v: prisesEcole.filter(p => p.statut === "present").length, l: "Déposés", c: C.green },
+            { v: exceptions.filter(x => { const t = isoToday(); return x.date_debut <= t && x.date_fin >= t; }).length, l: "Exceptions", c: C.amber },
           ].map(s => (
             <div key={s.l} style={{ background: C.gray50, border: `1px solid ${C.gray200}`,
-              borderRadius: 12, padding: "12px 15px", textAlign: "center", minWidth: 92 }}>
-              <div style={{ fontSize: 22, fontWeight: 900, color: s.c, lineHeight: 1 }}>{s.v}</div>
-              <div style={{ fontSize: 11, color: C.gray400, marginTop: 3 }}>{s.l}</div>
+              borderRadius: 10, padding: "6px 11px", textAlign: "center", minWidth: 62 }}>
+              <div style={{ fontSize: 17, fontWeight: 900, color: s.c, lineHeight: 1 }}>{s.v}</div>
+              <div style={{ fontSize: 10, color: C.gray400, marginTop: 2 }}>{s.l}</div>
             </div>
           ))}
           <Btn small outline onClick={openEditEcole}>Modifier</Btn>
@@ -705,7 +706,7 @@ export default function EtablissementDetail() {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
             marginBottom:14, gap:12, flexWrap:"wrap" }}>
             <div style={{ fontSize:13, color:C.gray400 }}>Clique un circuit pour voir les enfants et agir sur chacun.</div>
-            <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
               <div style={{ display:"flex", border:`1px solid ${C.gray200}`, borderRadius:8, overflow:"hidden" }}>
                 {([["cartes","▦"],["liste","☰"]] as const).map(([v,lbl])=>(
                   <button key={v} onClick={()=>setCircView(v)} title={v==="cartes"?"Cartes":"Liste"}
@@ -713,9 +714,25 @@ export default function EtablissementDetail() {
                       background: circView===v?C.navy:C.white, color: circView===v?"#fff":C.gray }}>{lbl}</button>
                 ))}
               </div>
-              <button onClick={()=>setShowImport(true)} title="Importer un fichier Excel"
-                style={{ background:"none", border:"none", color:C.navyL, cursor:"pointer", fontSize:13, fontWeight:700 }}>📄 Importer</button>
-              <Btn color={C.navy} small onClick={openAddCircuit}><Plus size={14} /> Ajouter un circuit</Btn>
+              <div style={{ position:"relative" }}>
+                <Btn color={C.navy} small onClick={()=>setShowActions(s=>!s)}>Actions ▾</Btn>
+                {showActions && (
+                  <>
+                    <div onClick={()=>setShowActions(false)} style={{ position:"fixed", inset:0, zIndex:40 }} />
+                    <div style={{ position:"absolute", right:0, top:36, width:210, background:C.white, border:`1px solid ${C.gray200}`,
+                      borderRadius:12, boxShadow:"0 12px 30px rgba(0,0,0,.16)", zIndex:41, overflow:"hidden" }}>
+                      <button onClick={()=>{ setShowActions(false); openAddCircuit(); }}
+                        style={{ width:"100%", textAlign:"left", background:C.white, border:"none", padding:"11px 14px", fontSize:13, cursor:"pointer", display:"flex", gap:9, color:C.gray800 }}>
+                        <Plus size={15}/> Ajouter un circuit
+                      </button>
+                      <button onClick={()=>{ setShowActions(false); setShowImport(true); }}
+                        style={{ width:"100%", textAlign:"left", background:C.white, border:"none", padding:"11px 14px", fontSize:13, cursor:"pointer", display:"flex", gap:9, color:C.gray800, borderTop:`1px solid ${C.gray100}` }}>
+                        📄 Importer un Excel
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
