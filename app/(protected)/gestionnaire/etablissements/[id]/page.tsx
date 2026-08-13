@@ -142,6 +142,7 @@ export default function EtablissementDetail() {
 
   // Mois affiché dans le calendrier du Planning
   const [calRef, setCalRef] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
+  const [planCircuit, setPlanCircuit] = useState<string>("all");   // filtre circuit du Planning & absences
   const shiftMonth = (delta: number) => setCalRef(r => {
     const t = r.m + delta;
     return { y: r.y + Math.floor(t / 12), m: ((t % 12) + 12) % 12 };
@@ -939,10 +940,24 @@ export default function EtablissementDetail() {
         const dim = new Date(y, m + 1, 0).getDate();
         const dISO = (d:number) => `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
         const excBg = (t:ExcType) => t==="absent"?"#FDECEC":t==="parent"?"#FEF3C7":"#EDE9FE";
+        const circOf = (eleveId:number) => eleves.find(el => el.id === eleveId)?.circuit_id;
+        const planExcs = planCircuit === "all" ? exceptions : exceptions.filter(x => circOf(x.eleve_id) === planCircuit);
         return (
           <div style={{ marginTop:20 }}>
             <div style={{ background:"#EFF6FF", border:"1px solid #cfe0fb", borderRadius:12, padding:"12px 16px", fontSize:13, color:"#0f2f66", lineHeight:1.5, marginBottom:16 }}>
               Ce qui est planifié ici s'applique <b>automatiquement à la tournée du conducteur</b> aux bonnes dates — visible par le responsable de secteur, le conducteur et le parent.
+            </div>
+            {/* Filtre par circuit : sinon toutes les exceptions se chevauchent */}
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14, flexWrap:"wrap" }}>
+              <span style={{ fontSize:13, fontWeight:800, color:C.gray600 }}>Circuit :</span>
+              <select value={planCircuit} onChange={e=>setPlanCircuit(e.target.value)}
+                style={{ padding:"8px 12px", borderRadius:8, border:`1px solid ${C.gray200}`, fontSize:13, background:C.white, minWidth:220 }}>
+                <option value="all">Tous les circuits ({exceptions.length})</option>
+                {circuits.map(c => {
+                  const n = exceptions.filter(x => circOf(x.eleve_id) === c.id).length;
+                  return <option key={c.id} value={c.id}>{c.nom} ({n})</option>;
+                })}
+              </select>
             </div>
             <div className="plan-grid">
               {/* Calendrier */}
@@ -959,7 +974,7 @@ export default function EtablissementDetail() {
                   {Array.from({length:startCol}).map((_,i)=><div key={"e"+i} className="cal-cell" style={{ background:C.gray50 }} />)}
                   {Array.from({length:dim}).map((_,i)=>{
                     const day=i+1; const iso=dISO(day);
-                    const evts = exceptions.filter(x=>x.date_debut<=iso && x.date_fin>=iso);
+                    const evts = planExcs.filter(x=>x.date_debut<=iso && x.date_fin>=iso);
                     return (
                       <div key={day} className="cal-cell">
                         <div style={{ fontSize:11, fontWeight:800, color:C.gray400 }}>{day}</div>
@@ -985,13 +1000,15 @@ export default function EtablissementDetail() {
               {/* Infos à droite : exceptions en cours / à venir */}
               <div>
                 <div style={{ fontSize:15, fontWeight:900, color:"#0f2540", marginBottom:12 }}>Exceptions en cours &amp; à venir</div>
-                {exceptions.length === 0 ? (
+                {planExcs.length === 0 ? (
                   <div style={{ padding:26, textAlign:"center", color:C.gray400, background:C.gray50, borderRadius:12, fontSize:13 }}>
-                    Aucune exception. Ajoute-les depuis un élève (Circuits &amp; élèves → « ⋯ »).
+                    {planCircuit === "all"
+                      ? <>Aucune exception. Ajoute-les depuis un élève (Circuits &amp; élèves → « ⋯ »).</>
+                      : <>Aucune exception pour ce circuit.</>}
                   </div>
                 ) : (
                   <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                    {exceptions.map(x=>{
+                    {planExcs.map(x=>{
                       const e = eleves.find(el=>el.id===x.eleve_id);
                       const col = excColor(x.type);
                       const cible = x.circuit_cible_id ? allCircuits.find(c=>c.id===x.circuit_cible_id) : null;
