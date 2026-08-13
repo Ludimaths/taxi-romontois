@@ -384,16 +384,27 @@ export default function EtablissementDetail() {
   }
 
   async function handleDeleteCircuit(c: Circuit) {
-    const nb = eleves.filter(e => e.circuit_id === c.id).length;
+    const eleveIds = eleves.filter(e => e.circuit_id === c.id).map(e => e.id);
+    const nb = eleveIds.length;
+    if (!confirm(nb > 0
+      ? `Supprimer le circuit « ${c.nom} » ET ses ${nb} élève(s) rattaché(s) ? Action définitive.`
+      : `Supprimer définitivement le circuit « ${c.nom} » ?`)) return;
+
+    const prevCond = c.conducteur_id ?? null;
+    // 1) Élèves rattachés : suppression (ou détachement si la suppression est bloquée)
     if (nb > 0) {
-      alert(`Impossible de supprimer « ${c.nom} » : ${nb} élève(s) y sont encore rattaché(s). Réaffectez-les d'abord.`);
-      return;
+      const { error } = await sb.from("eleves").delete().in("id", eleveIds);
+      if (error) await sb.from("eleves").update({ circuit_id: null }).in("id", eleveIds);
     }
-    if (!confirm(`Supprimer définitivement le circuit « ${c.nom} » ?`)) return;
-    // Libère le conducteur affecté
-    const drv = conducteurs.find(d => d.circuit_id === c.id);
-    if (drv) await sb.from("conducteurs").update({ circuit_id: null }).eq("id", drv.id);
-    await sb.from("circuits").delete().eq("id", c.id);
+    // 2) Libère les références au circuit avant de le supprimer
+    await sb.from("conducteurs").update({ circuit_id: null }).eq("circuit_id", c.id);
+    await sb.from("vehicules").update({ circuit_id: null }).eq("circuit_id", c.id);
+    // 3) Supprime le circuit
+    const { error: cErr } = await sb.from("circuits").delete().eq("id", c.id);
+    if (cErr) { alert("Suppression impossible : " + cErr.message); return; }
+    // 4) Cohérence du conducteur (circuit principal) + fermeture du détail
+    if (prevCond) await syncPrimaryCircuit(prevCond);
+    if (openCircuitId === c.id) setOpenCircuitId(null);
     load();
   }
 
