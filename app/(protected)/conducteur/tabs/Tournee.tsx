@@ -162,6 +162,22 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enSe
       color: kind === "p" ? "#b42323" : C.navy, background: kind === "p" ? "#FDECEC" : kind === "s" ? "#EFF6FF" : "#fff" };
   }
 
+  // ── 0bis) Aucun circuit attribué → message d'attente (avant tout le reste) ──
+  if (!driver.circuit_id) {
+    return (
+      <div>
+        <div style={{ background: "#fff", borderRadius: 16, padding: "28px 20px", textAlign: "center", boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
+          <div style={{ width: 80, height: 80, borderRadius: "50%", background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", fontSize: 38 }}>🚌</div>
+          <div style={{ fontSize: 19, fontWeight: 900, color: C.navy }}>Aucun circuit attribué pour le moment</div>
+          <p style={{ color: "#475569", fontSize: 14, marginTop: 8, lineHeight: 1.55 }}>
+            Dès qu&apos;un responsable vous assigne un circuit (par exemple à la <b>Fondation Mérine</b>),
+            votre tournée du matin et de l&apos;après-midi apparaîtra ici automatiquement.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // ── 0) Service déjà terminé aujourd'hui → FÉLICITATIONS ─────────────────────
   if (!enService && serviceFini && driver.status !== "absent") {
     return (

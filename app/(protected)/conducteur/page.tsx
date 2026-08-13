@@ -557,7 +557,16 @@ export default function ConducteurPage(){
 
       {/* ── Résumé de la journée (pop-up d'accueil) ── */}
       {!journeeSeen && journeeCircuits.length>0 && driver.status!=="absent" && (
-        <BSheet title="Votre journée" onClose={()=>setJourneeSeen(true)}>
+        <div onClick={()=>setJourneeSeen(true)} style={{position:"fixed",inset:0,zIndex:9998,
+          background:"rgba(13,59,122,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.white,borderRadius:20,padding:22,width:"100%",
+            maxWidth:440,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <h2 style={{margin:0,fontSize:20,fontWeight:900,color:C.navy}}>Votre journée</h2>
+              <button onClick={()=>setJourneeSeen(true)} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",lineHeight:1}}>
+                <X size={20} color={C.gray}/>
+              </button>
+            </div>
           <p style={{fontSize:14,color:C.gray600,lineHeight:1.5,margin:"0 0 16px"}}>
             Bonjour {driver.prenom}, voici {journeeCircuits.length>1?"vos circuits":"votre circuit"} pour aujourd&apos;hui.
           </p>
@@ -601,7 +610,8 @@ export default function ConducteurPage(){
             </div>
           ))}
           <BigBtn label="J'ai pris connaissance" onClick={()=>setJourneeSeen(true)} color={C.navy}/>
-        </BSheet>
+          </div>
+        </div>
       )}
 
       </div>
