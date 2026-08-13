@@ -103,9 +103,20 @@ export default function HistoriqueEtab({ circuits }: { circuits: Circ[] }) {
     };
   });
 
-  // Export Excel du mois : détail jour par jour (planifié + réalisé)
+  // Export Excel du mois : 2 feuilles — Récapitulatif (par circuit) + Détail (jour par jour)
   const exportMois = () => {
-    const rows: Record<string, string>[] = [];
+    const moisLabel = `${MOIS[view.m]} ${view.y}`;
+
+    // Feuille 1 — Récapitulatif par circuit
+    const recap = moisStats.map(({ c, jours, ram, dep, abs }) => ({
+      "Circuit": c.nom, "Conducteur": c.conducteur || "—",
+      "Jours réalisés": jours, "Ramassages": ram, "Déposes": dep, "Absences": abs,
+    }));
+    const wsRecap = XLSX.utils.json_to_sheet(recap.length ? recap : [{ "Circuit": "Aucune donnée" }]);
+    wsRecap["!cols"] = [{ wch: 24 }, { wch: 22 }, { wch: 15 }, { wch: 13 }, { wch: 12 }, { wch: 11 }];
+
+    // Feuille 2 — Détail jour par jour (planifié + réalisé)
+    const rows: Record<string, string | number>[] = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const dt = new Date(view.y, view.m, d);
       const jw = dt.getDay();
@@ -117,19 +128,21 @@ export default function HistoriqueEtab({ circuits }: { circuits: Circ[] }) {
           for (const h of stops) {
             const pr = h.eleve_id == null ? undefined : prises.find(p => p.date === iso && p.eleve_id === h.eleve_id && p.sens === (sens === "matin" ? "aller" : "retour"));
             rows.push({
-              Date: iso, Circuit: c.nom, Conducteur: c.conducteur ?? "", Moment: sens === "matin" ? "Matin (ramassage)" : "Après-midi (dépose)",
-              Heure: h.heure, "Élève": h.eleve_nom, Adresse: h.adresse ?? "",
-              Statut: pr?.statut === "present" ? (sens === "matin" ? "Pris" : "Déposé") : pr?.statut === "absent" ? "Absent" : "Non réalisé",
+              "Date": iso, "Jour": JOUR_LONG[jw], "Circuit": c.nom, "Conducteur": c.conducteur || "",
+              "Moment": sens === "matin" ? "Matin" : "Après-midi", "Heure": h.heure, "Élève": h.eleve_nom, "Adresse": h.adresse ?? "",
+              "Statut": pr?.statut === "present" ? (sens === "matin" ? "Pris" : "Déposé") : pr?.statut === "absent" ? "Absent" : "Non réalisé",
             });
           }
         }
       }
     }
-    const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Info: "Aucune donnée pour ce mois" }]);
-    ws["!cols"] = [{ wch: 11 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 8 }, { wch: 26 }, { wch: 34 }, { wch: 13 }];
+    const wsDetail = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Date": "Aucune donnée pour ce mois" }]);
+    wsDetail["!cols"] = [{ wch: 11 }, { wch: 10 }, { wch: 20 }, { wch: 20 }, { wch: 11 }, { wch: 8 }, { wch: 26 }, { wch: 34 }, { wch: 12 }];
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Mois");
-    XLSX.writeFile(wb, `historique_${view.y}-${String(view.m + 1).padStart(2, "0")}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, wsRecap, "Récapitulatif");
+    XLSX.utils.book_append_sheet(wb, wsDetail, "Détail");
+    XLSX.writeFile(wb, `historique_${moisLabel.replace(" ", "_")}.xlsx`);
   };
 
   return (
