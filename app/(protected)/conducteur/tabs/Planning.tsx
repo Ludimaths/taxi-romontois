@@ -16,6 +16,8 @@ const JOUR_LONG: Record<number, string> = { 0: "Dimanche", 1: "Lundi", 2: "Mardi
 const DOW = ["L", "M", "M", "J", "V", "S", "D"];
 
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// Code couleur des exceptions (identique à l'établissement)
+const excColor = (t: string) => t === "absent" ? "#E02424" : t === "parent" ? "#D97706" : t === "changement_circuit" ? "#7C3AED" : C.gray400;
 
 export function TabPlanning({ circuits, week, exceptions }:
   { circuits: Circ[]; week: HebdoRow[]; exceptions: Exc[] }) {
@@ -65,6 +67,7 @@ export function TabPlanning({ circuits, week, exceptions }:
             const weekend = dow === 0 || dow === 6;
             const isToday = str === todayStr;
             const isSel = str === sel;
+            const dTypes = [...new Set(exceptions.filter(e => e.date_debut <= str && e.date_fin >= str).map(e => e.type))];
             return (
               <button key={i} onClick={() => setSel(str)} disabled={weekend}
                 style={{
@@ -72,15 +75,26 @@ export function TabPlanning({ circuits, week, exceptions }:
                   cursor: weekend ? "default" : "pointer", fontSize: 13.5, fontWeight: isSel || isToday ? 900 : 600,
                   background: isSel ? C.navy : isToday ? C.greenL : weekend ? "transparent" : "#F8FAFC",
                   color: isSel ? "#fff" : weekend ? C.gray400 : isToday ? C.greenD : C.navy,
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
                 }}>
-                {d.getDate()}
+                <span>{d.getDate()}</span>
+                {dTypes.length > 0 && (
+                  <span style={{ display: "flex", gap: 2 }}>
+                    {dTypes.slice(0, 3).map(t => (
+                      <span key={t} style={{ width: 5, height: 5, borderRadius: "50%", background: isSel ? "#fff" : excColor(t) }} />
+                    ))}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
-        <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: C.gray600, justifyContent: "center" }}>
+        <div style={{ display: "flex", gap: 12, marginTop: 10, fontSize: 11, color: C.gray600, justifyContent: "center", flexWrap: "wrap" }}>
           <span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, border: `2px solid ${C.green}`, verticalAlign: "middle", marginRight: 4 }} />Aujourd&apos;hui</span>
-          <span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: C.navy, verticalAlign: "middle", marginRight: 4 }} />Jour sélectionné</span>
+          <span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: C.navy, verticalAlign: "middle", marginRight: 4 }} />Sélectionné</span>
+          <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#E02424", verticalAlign: "middle", marginRight: 4 }} />Absent</span>
+          <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#D97706", verticalAlign: "middle", marginRight: 4 }} />Parents</span>
+          <span><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#7C3AED", verticalAlign: "middle", marginRight: 4 }} />Changement</span>
         </div>
       </div>
 

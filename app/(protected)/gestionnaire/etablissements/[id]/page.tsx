@@ -7,6 +7,7 @@ import { C } from "@/lib/constants";
 import { circuitImage } from "@/lib/circuit-images";
 import { Btn, Badge, Modal } from "@/components/ui";
 import { ImportExcelModal } from "./ImportExcelModal";
+import HistoriqueEtab from "./HistoriqueEtab";
 import type { Ecole, Eleve, Circuit, Conducteur, PriseEnCharge, TourneeConfig, AdresseEleve, CercleScolaire } from "@/lib/types";
 
 type ConduPartial = Pick<Conducteur, "id" | "nom" | "prenom" | "circuit_id" | "status"> & { est_responsable?: boolean; tel?: string; secteur?: string };
@@ -616,6 +617,7 @@ export default function EtablissementDetail() {
           { id:"Circuits & élèves", ic:"🗺️" },
           { id:"Suivi du jour", ic:"✅", badge: circuits.length },
           { id:"Planning & absences", ic:"📅", badge: exceptions.filter(x => { const t = isoToday(); return x.date_debut <= t && x.date_fin >= t; }).length },
+          { id:"Historique", ic:"🗂️" },
           { id:"Élèves", ic:"👥" },
           { id:"Factures", ic:"🧾" },
         ] as const).map(t => {
@@ -1039,6 +1041,8 @@ export default function EtablissementDetail() {
       })()}
 
       {/* ── TAB 3 : FACTURES ───────────────────────────────────────────────── */}
+      {tab === "Historique" && <HistoriqueEtab circuits={circuits} />}
+
       {tab === "Factures" && (
         <div style={{ marginTop:20 }}>
           <div style={{ background:C.white, border:`1px solid ${C.gray200}`,
