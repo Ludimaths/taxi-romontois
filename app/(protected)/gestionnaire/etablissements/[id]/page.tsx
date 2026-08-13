@@ -146,6 +146,7 @@ export default function EtablissementDetail() {
   const [calRef, setCalRef] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [planCircuit, setPlanCircuit] = useState<string>("all");   // filtre circuit du Planning & absences
   const [hebdo, setHebdo] = useState<HebdoStop[]>([]);             // planning hebdo (matin + après-midi)
+  const [planDay, setPlanDay] = useState<number>(0);              // jour consulté dans « Circuits & élèves » (0 = aujourd'hui)
   const shiftMonth = (delta: number) => setCalRef(r => {
     const t = r.m + delta;
     return { y: r.y + Math.floor(t / 12), m: ((t % 12) + 12) % 12 };
@@ -437,9 +438,9 @@ export default function EtablissementDetail() {
 
   // Jour courant (1=lundi … 5=vendredi ; week-end → aperçu du lundi)
   const todayJour = (() => { const d = new Date().getDay(); return d >= 1 && d <= 5 ? d : 1; })();
-  // Arrêts du planning hebdo pour un circuit, aujourd'hui, par sens
-  const stopsOf = (circuitId: string, sens: "matin" | "aprem") =>
-    hebdo.filter(h => h.circuit_id === circuitId && h.jour === todayJour && h.sens === sens).sort((a, b) => a.ordre - b.ordre);
+  // Arrêts du planning hebdo pour un circuit, par sens, pour un jour donné (défaut = aujourd'hui)
+  const stopsOf = (circuitId: string, sens: "matin" | "aprem", jour: number = todayJour) =>
+    hebdo.filter(h => h.circuit_id === circuitId && h.jour === jour && h.sens === sens).sort((a, b) => a.ordre - b.ordre);
 
   // Absent / ramené parents pour AUJOURD'HUI (raccourci 1 jour)
   async function quickExc(e: Eleve, type: ExcType) {
@@ -817,8 +818,8 @@ export default function EtablissementDetail() {
                           </div>
                         </div>
 
-                        {/* ☀️ Matin — ramassage (liste + gestion par élève) */}
-                        <div style={{ padding:"8px 18px", fontSize:11, fontWeight:800, color:C.gray600, background:C.gray50, textTransform:"uppercase", letterSpacing:".4px" }}>☀️ Matin — ramassage</div>
+                        {/* 👥 Élèves du circuit (roster + gestion par élève) */}
+                        <div style={{ padding:"8px 18px", fontSize:11, fontWeight:800, color:C.gray600, background:C.gray50, textTransform:"uppercase", letterSpacing:".4px" }}>👥 Élèves du circuit</div>
                         {cEleves.length===0 ? (
                           <div style={{ padding:"18px", color:C.gray400, fontSize:13 }}>Aucun élève actif sur ce circuit.</div>
                         ) : cEleves.map((e,i)=>{
@@ -871,22 +872,45 @@ export default function EtablissementDetail() {
                             </div>
                           );
                         })}
-                        {/* 🌙 Après-midi — dépose (planning hebdo du jour) */}
-                        {(() => { const aps = stopsOf(c.id, "aprem"); if (!aps.length) return null; return (
-                          <div>
-                            <div style={{ padding:"8px 18px", fontSize:11, fontWeight:800, color:C.gray600, background:C.gray50, textTransform:"uppercase", letterSpacing:".4px" }}>🌙 Après-midi — dépose (aujourd&apos;hui)</div>
-                            {aps.map((h,idx)=>(
-                              <div key={h.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 18px", borderTop:`1px solid ${C.gray100}` }}>
-                                <div style={{ width:24,height:24,borderRadius:7,background:"#6366F1",color:"#fff",fontWeight:800,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{idx+1}</div>
-                                <div style={{ minWidth:50, fontSize:13, fontWeight:800, color:C.navy }}>{h.heure}</div>
-                                <div style={{ flex:1, minWidth:0 }}>
-                                  <div style={{ fontWeight:700, fontSize:13.5, color:C.gray800 }}>{h.eleve_nom}</div>
-                                  {h.adresse && <div style={{ fontSize:12, color:C.gray400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{h.adresse}</div>}
-                                </div>
+                        {/* 📅 Planning par jour (matin + après-midi ; change selon le jour) */}
+                        {(() => {
+                          const jour = planDay || todayJour;
+                          const mat = stopsOf(c.id, "matin", jour);
+                          const aps = stopsOf(c.id, "aprem", jour);
+                          const JOURS: [string, number][] = [["Lun", 1], ["Mar", 2], ["Mer", 3], ["Jeu", 4], ["Ven", 5]];
+                          const line = (h: HebdoStop, idx: number, bg: string) => (
+                            <div key={h.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 18px", borderTop:`1px solid ${C.gray100}` }}>
+                              <div style={{ width:24,height:24,borderRadius:7,background:bg,color:"#fff",fontWeight:800,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{idx+1}</div>
+                              <div style={{ minWidth:50, fontSize:13, fontWeight:800, color:C.navy }}>{h.heure}</div>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontWeight:700, fontSize:13.5, color:C.gray800 }}>{h.eleve_nom}</div>
+                                {h.adresse && <div style={{ fontSize:12, color:C.gray400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{h.adresse}</div>}
                               </div>
-                            ))}
-                          </div>
-                        );})()}
+                            </div>
+                          );
+                          return (
+                            <div>
+                              <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", padding:"10px 18px", background:"#EEF4FB", borderTop:`1px solid ${C.gray100}` }}>
+                                <span style={{ fontSize:11, fontWeight:800, color:C.navy, textTransform:"uppercase", letterSpacing:".4px" }}>📅 Planning du</span>
+                                {JOURS.map(([lbl,d])=>(
+                                  <button key={d} onClick={()=>setPlanDay(d)}
+                                    style={{ padding:"4px 11px", borderRadius:20, cursor:"pointer", fontWeight:800, fontSize:11.5,
+                                      border:`1.5px solid ${jour===d?C.navy:C.gray200}`, background:jour===d?C.navy:"#fff", color:jour===d?"#fff":C.gray600 }}>
+                                    {lbl}{d===todayJour?" ·":""}
+                                  </button>
+                                ))}
+                              </div>
+                              {mat.length===0 && aps.length===0 ? (
+                                <div style={{ padding:"12px 18px", color:C.gray400, fontSize:13 }}>Aucun planning importé pour ce jour.</div>
+                              ) : (<>
+                                {mat.length>0 && <div style={{ padding:"7px 18px", fontSize:11, fontWeight:800, color:C.gray600, background:C.gray50, textTransform:"uppercase", letterSpacing:".4px" }}>☀️ Matin — ramassage</div>}
+                                {mat.map((h,idx)=>line(h,idx,C.navy))}
+                                {aps.length>0 && <div style={{ padding:"7px 18px", fontSize:11, fontWeight:800, color:C.gray600, background:C.gray50, textTransform:"uppercase", letterSpacing:".4px" }}>🌙 Après-midi — dépose</div>}
+                                {aps.map((h,idx)=>line(h,idx,"#6366F1"))}
+                              </>)}
+                            </div>
+                          );
+                        })()}
                         <div style={{ padding:"12px 18px" }}>
                           <Btn small outline onClick={()=>{ setEditEleve(null); setEleveForm({...EMPTY_EF, circuit_id:c.id}); setElErr(""); setEleveAdresses([]); setShowAddrAdd(false); setAddrForm(EMPTY_ADDR); setShowModal(true); }}>
                             + Ajouter un élève à {c.nom}
