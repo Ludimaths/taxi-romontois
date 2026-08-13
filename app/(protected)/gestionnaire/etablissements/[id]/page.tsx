@@ -554,45 +554,30 @@ export default function EtablissementDetail() {
         <ArrowLeft size={15} /> Tous les établissements
       </button>
 
-      {/* Header école */}
-      <div style={{ background: C.white, borderRadius: 14, padding: "22px 24px",
-        border: `1px solid ${C.gray200}`, marginBottom: 22,
-        display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 900, color: C.gray800 }}>{ecole.nom}</div>
-          {ecole.lot && <div style={{ fontSize: 13, color: C.gray400, marginTop: 2 }}>Lot {ecole.lot}</div>}
-          <div style={{ display:"flex", gap:16, marginTop:12, flexWrap:"wrap" }}>
-            {ecole.adresse && <span style={{ fontSize:13, color:C.gray600 }}>{ecole.adresse}</span>}
-            {ecole.email   && <span style={{ fontSize:13, color:C.gray600 }}>{ecole.email}</span>}
-            {ecole.telephone && <span style={{ fontSize:13, color:C.gray600 }}>Tél : {ecole.telephone}</span>}
-          </div>
-          <div style={{ display:"flex", gap:16, marginTop:6, flexWrap:"wrap" }}>
-            {ecole.nom_responsable_facturation && (
-              <span style={{ fontSize:13, color:C.gray600 }}>
-                Responsable : {ecole.nom_responsable_facturation}
-              </span>
-            )}
-            {ecole.numero_tva && <span style={{ fontSize:12, color:C.gray400 }}>TVA : {ecole.numero_tva}</span>}
-            {ecole.iban       && <span style={{ fontSize:12, color:C.gray400 }}>IBAN : {ecole.iban}</span>}
+      {/* En-tête établissement — étiquette compacte */}
+      <div style={{ background: C.white, borderRadius: 14, padding: "14px 20px",
+        border: `1px solid ${C.gray200}`, marginBottom: 18,
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: C.gray800 }}>{ecole.nom}</div>
+          <div style={{ fontSize: 12.5, color: C.gray400, marginTop: 2 }}>
+            {ecole.adresse || ""}{ecole.lot ? ` · Lot ${ecole.lot}` : ""}
           </div>
         </div>
-        <Btn small outline onClick={openEditEcole}>Modifier</Btn>
-      </div>
-
-      {/* Stats */}
-      <div style={{ display:"flex", gap:12, marginBottom:22, flexWrap:"wrap" }}>
-        {[
-          { label:"Élèves actifs",   value: elevesActifs.length },
-          { label:"Circuits",        value: circuits.length },
-          { label:"Tournées config", value: tournees.filter(t=>t.actif).length },
-          { label:"Suivi aujourd'hui", value: prisesEcole.length },
-        ].map(s => (
-          <div key={s.label} style={{ background:C.white, border:`1px solid ${C.gray200}`,
-            borderRadius:10, padding:"14px 18px", minWidth:130 }}>
-            <div style={{ fontSize:24, fontWeight:900, color:C.navy }}>{s.value}</div>
-            <div style={{ fontSize:12, color:C.gray400, marginTop:2 }}>{s.label}</div>
-          </div>
-        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {[
+            { v: elevesActifs.length, l: "élèves" },
+            { v: circuits.length,     l: "circuits" },
+            { v: prisesEcole.length,  l: "suivi" },
+          ].map(s => (
+            <div key={s.l} style={{ background: C.gray50, border: `1px solid ${C.gray200}`,
+              borderRadius: 10, padding: "6px 13px", textAlign: "center", minWidth: 60 }}>
+              <div style={{ fontSize: 17, fontWeight: 900, color: C.navy, lineHeight: 1 }}>{s.v}</div>
+              <div style={{ fontSize: 10.5, color: C.gray400, marginTop: 2 }}>{s.l}</div>
+            </div>
+          ))}
+          <Btn small outline onClick={openEditEcole}>Modifier</Btn>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -664,9 +649,7 @@ export default function EtablissementDetail() {
                         <td style={{ padding:"10px 14px" }}>
                           <div style={{ display:"flex", gap:6 }}>
                             <Btn small outline onClick={() => openEdit(e)}>Éditer</Btn>
-                            <Btn small outline onClick={() => handlePause(e)}>
-                              {e.actif ? "Mettre en pause" : "Réactiver"}
-                            </Btn>
+                            {!e.actif && <Btn small outline onClick={() => handlePause(e)}>Réactiver</Btn>}
                           </div>
                         </td>
                       </tr>
