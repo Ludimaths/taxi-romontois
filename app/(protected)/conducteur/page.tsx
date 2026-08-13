@@ -577,7 +577,7 @@ export default function ConducteurPage(){
                   <div style={{fontSize:10.5,fontWeight:800,color:"#F59E0B",letterSpacing:".3px",marginBottom:3}}>☀️ MATIN</div>
                   <div style={{fontSize:13,color:"#1E293B",fontWeight:600,lineHeight:1.4}}>
                     {jc.premierRamassage
-                      ? <>Départ <strong>{fmtHHMM(jc.premierRamassage)}</strong>{jc.premiereDepose&&<> · école <strong>{fmtHHMM(jc.premiereDepose)}</strong></>}</>
+                      ? <>Ramassage dès <strong>{jc.premierRamassage}</strong></>
                       : <span style={{color:C.gray}}>—</span>}
                   </div>
                 </div>
@@ -585,7 +585,9 @@ export default function ConducteurPage(){
                   <div style={{fontSize:10.5,fontWeight:800,color:"#6366F1",letterSpacing:".3px",marginBottom:3}}>🌙 APRÈS-MIDI</div>
                   <div style={{fontSize:13,color:"#1E293B",fontWeight:600,lineHeight:1.4}}>
                     {jc.derniereDepose
-                      ? <>Dépose jusqu&apos;à <strong>{fmtHHMM(jc.derniereDepose)}</strong></>
+                      ? (jc.premiereDepose && jc.premiereDepose!==jc.derniereDepose
+                          ? <>Dépose <strong>{jc.premiereDepose}</strong> → <strong>{jc.derniereDepose}</strong></>
+                          : <>Dépose <strong>{jc.derniereDepose}</strong></>)
                       : <span style={{color:C.gray}}>—</span>}
                   </div>
                 </div>
