@@ -168,7 +168,7 @@ export default function ConducteursPage() {
   const fetchAll = useCallback(async () => {
     const [drv, cir, veh] = await Promise.all([
       sb.from("conducteurs")
-        .select("*,circuit:circuits(*,cercle:cercles_scolaires(*)),vehicule:vehicules(*),cercle:cercles_scolaires(*)")
+        .select("*,circuit:circuits!conducteurs_circuit_id_fkey(*,cercle:cercles_scolaires(*)),vehicule:vehicules(*),cercle:cercles_scolaires(*)")
         .order("nom"),
       sb.from("circuits").select("*,cercle:cercles_scolaires(*)").order("num"),
       sb.from("vehicules").select("*").order("plaque"),

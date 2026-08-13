@@ -77,7 +77,7 @@ export default function ConducteurPage(){
     setMustChangePwd(!!prof.must_change_password);
 
     const[drv,log,abs,enf,inc,msg,hist,cng]=await Promise.all([
-      sb.from("conducteurs").select("*,circuit:circuits(*,cercle:cercles_scolaires(*)),vehicule:vehicules(*)")
+      sb.from("conducteurs").select("*,circuit:circuits!conducteurs_circuit_id_fkey(*,cercle:cercles_scolaires(*)),vehicule:vehicules(*)")
         .eq("id",cid).single(),
       sb.from("service_logs").select("*")
         .eq("conducteur_id",cid).eq("date_service",isoToday()).maybeSingle(),
