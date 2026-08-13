@@ -7,6 +7,9 @@ import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant, C
 
 type JourneeCircuit = { id: string; nom: string; emoji?: string; nb: number;
   premierRamassage: string | null; premiereDepose: string | null; derniereDepose: string | null; excEnf: number };
+type HebdoRow = { id: number; circuit_id: string; jour: number; sens: "matin" | "aprem";
+  ordre: number; heure: string; eleve_nom: string; adresse: string | null;
+  eleve_id: number | null; besoin_special: boolean };
 import { Bus, FileText, AlertCircle, Mail, History, CalendarDays, LogOut, MoreHorizontal, MapPin, X } from "lucide-react";
 import { BSheet, BigBtn, TA, Chip, StatusBadge } from "./tabs/shared";
 import { TabFiche } from "./tabs/Fiche";
@@ -30,11 +33,13 @@ export default function ConducteurPage(){
   const [messages,  setMessages]  = useState<Alerte[]>([]);
   const [histLogs,  setHistLogs]  = useState<ServiceLog[]>([]);
   const [conges,    setConges]    = useState<CongesDemande[]>([]);
-  const [elevesCircuit, setElevesCircuit] = useState<Eleve[]>([]);
   const [prises,    setPrises]    = useState<PriseEnCharge[]>([]);
   const [exceptions,setExceptions]= useState<ExcToday[]>([]);
   const [journeeCircuits, setJourneeCircuits] = useState<JourneeCircuit[]>([]);
   const [journeeSeen,      setJourneeSeen]     = useState(false);
+  const [matinEleves, setMatinEleves] = useState<Eleve[]>([]);
+  const [apremEleves, setApremEleves] = useState<Eleve[]>([]);
+  const [phase,       setPhase]       = useState<"matin"|"aprem">("matin");
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState<Tab>("tournee");
   const [drawerOpen,setDrawerOpen]= useState(false);
@@ -107,48 +112,72 @@ export default function ConducteurPage(){
     if(hist.data)setHistLogs(hist.data);
     if(cng.data) setConges(cng.data);
 
-    // ── Journée : TOUS les circuits du conducteur (modèle circuits.conducteur_id) ──
+    // ── Jour courant (1=lundi … 5=vendredi ; week-end → aperçu du lundi) ──
     const t2 = isoToday();
+    const jsDay = new Date().getDay();               // 0=dimanche … 6=samedi
+    const jour = (jsDay >= 1 && jsDay <= 5) ? jsDay : 1;
+
+    // Tous les circuits du conducteur
     const { data: myCircsRaw } = await sb.from("circuits").select("*").eq("conducteur_id", cid).order("nom");
     const myCircs = (myCircsRaw ?? []) as Circuit[];
     const circIds = myCircs.map(c => c.id);
-    let jEleves: Eleve[] = [];
-    let jexc: { eleve_id: number }[] = [];
+
+    // Planning hebdo DU JOUR (matin + après-midi) + exceptions + prises + élèves (contacts)
+    let hebdo: HebdoRow[] = [];
+    let jexc: { eleve_id: number; type: string }[] = [];
+    let prisesJour: PriseEnCharge[] = [];
+    let elevesAll: Eleve[] = [];
     if (circIds.length) {
-      const [{ data: el2 }, { data: ex2 }] = await Promise.all([
+      const [{ data: th }, { data: ex2 }, { data: pr }, { data: elA }] = await Promise.all([
+        sb.from("tournee_hebdo").select("*").in("circuit_id", circIds).eq("jour", jour).order("sens").order("ordre"),
+        sb.from("exceptions_eleves").select("eleve_id,type").lte("date_debut", t2).gte("date_fin", t2),
+        sb.from("prises_en_charge").select("*").eq("conducteur_id", cid).eq("date", t2),
         sb.from("eleves").select("*").in("circuit_id", circIds).eq("actif", true),
-        sb.from("exceptions_eleves").select("eleve_id").lte("date_debut", t2).gte("date_fin", t2),
       ]);
-      jEleves = (el2 ?? []) as Eleve[];
-      jexc = (ex2 ?? []) as { eleve_id: number }[];
+      hebdo = (th ?? []) as HebdoRow[];
+      jexc = (ex2 ?? []) as { eleve_id: number; type: string }[];
+      prisesJour = (pr ?? []) as PriseEnCharge[];
+      elevesAll = (elA ?? []) as Eleve[];
     }
+    setExceptions(jexc as ExcToday[]);
+    setPrises(prisesJour);
+
+    // Résumé pop-up : par circuit, matin + après-midi du jour
     const journee: JourneeCircuit[] = myCircs.map(c => {
-      const es = jEleves.filter(e => e.circuit_id === c.id);
-      const rams = es.map(e => e.heure_ramassage).filter(Boolean).sort() as string[];
-      const deps = es.map(e => e.heure_depose).filter(Boolean).sort() as string[];
-      const excEnf = es.filter(e => jexc.some(x => x.eleve_id === e.id)).length;
-      return { id: c.id, nom: c.nom, emoji: c.emoji, nb: es.length,
-        premierRamassage: rams[0] ?? null, premiereDepose: deps[0] ?? null,
-        derniereDepose: deps[deps.length - 1] ?? null, excEnf };
+      const stops = hebdo.filter(h => h.circuit_id === c.id);
+      const matin = stops.filter(h => h.sens === "matin");
+      const aprem = stops.filter(h => h.sens === "aprem");
+      const excEnf = new Set(stops.filter(h => h.eleve_id && jexc.some(x => x.eleve_id === h.eleve_id)).map(h => h.eleve_id)).size;
+      const nbEnf = new Set(matin.map(h => (h.eleve_id ?? h.eleve_nom) as string | number)).size;
+      return { id: c.id, nom: c.nom, emoji: c.emoji, nb: nbEnf,
+        premierRamassage: matin[0]?.heure ?? null,
+        premiereDepose: aprem[0]?.heure ?? null,
+        derniereDepose: aprem[aprem.length - 1]?.heure ?? null, excEnf };
     });
     setJourneeCircuits(journee);
 
-    // Élèves du circuit (table facturation) + prises en charge du jour
-    const circuitId = drv.data?.circuit_id;
-    if (circuitId) {
-      const [el, pr] = await Promise.all([
-        sb.from("eleves").select("*").eq("circuit_id", circuitId).eq("actif", true).order("nom_famille"),
-        sb.from("prises_en_charge").select("*").eq("conducteur_id", cid).eq("date", isoToday()),
-      ]);
-      setElevesCircuit(el.data ?? []);
-      setPrises(pr.data ?? []);
-
-      // Exceptions du jour (absent / ramené parents / autre circuit) — la tournée les saute
-      const t = isoToday();
-      const { data: exc } = await sb.from("exceptions_eleves")
-        .select("eleve_id,type").lte("date_debut", t).gte("date_fin", t);
-      setExceptions((exc ?? []) as ExcToday[]);
-    }
+    // Tournée du circuit principal : arrêts matin + après-midi (map → forme Eleve)
+    const eleveById = new Map<number, Eleve>(elevesAll.map(e => [e.id, e]));
+    const toEleve = (h: HebdoRow): Eleve => {
+      const parts = (h.eleve_nom || "").trim().split(/\s+/);
+      const prenom = parts.shift() || "";
+      const nom = parts.join(" ");
+      const base = h.eleve_id ? eleveById.get(h.eleve_id) : undefined;
+      return {
+        ...(base ?? {} as Eleve),
+        id: h.eleve_id ?? -h.id,
+        nom_famille: base?.nom_famille ?? nom,
+        prenom_initiale: base?.prenom_initiale ?? prenom,
+        adresse: h.adresse ?? base?.adresse ?? "",
+        circuit_id: h.circuit_id,
+        actif: true, type_transport: "standard", created_at: "",
+        heure_ramassage: h.heure,
+      } as Eleve;
+    };
+    const primary = drv.data?.circuit_id;
+    const primStops = hebdo.filter(h => h.circuit_id === primary);
+    setMatinEleves(primStops.filter(h => h.sens === "matin").map(toEleve));
+    setApremEleves(primStops.filter(h => h.sens === "aprem").map(toEleve));
 
     setLoading(false);
   },[sb]);
@@ -261,8 +290,21 @@ export default function ConducteurPage(){
     setDriver(p=>p?{...p,...patch}:p);
   }
 
+  function handleValiderMatin() {
+    // Fin de la tournée du matin → l'après-midi s'active. Le service reste ouvert.
+    setPhase("aprem");
+  }
+
   async function handleMarquerEleve(eleveId: number, statut: "present" | "absent") {
     if (!driver) return;
+    // Arrêt non relié à un élève en base (id synthétique négatif) → progression locale.
+    if (eleveId <= 0) {
+      setPrises(p => [...p.filter(x => x.eleve_id !== eleveId),
+        { id: eleveId, eleve_id: eleveId, conducteur_id: driver.id,
+          circuit_id: driver.circuit_id || undefined, date: isoToday(),
+          sens: "aller", statut, created_at: "" } as PriseEnCharge]);
+      return;
+    }
     const now   = new Date().toTimeString().slice(0, 8);
     const today = isoToday();
 
@@ -435,9 +477,12 @@ export default function ConducteurPage(){
 
       {/* Contenu des onglets */}
       {tab==="tournee"&&(
-        <TabTournee driver={driver} circ={circ} eleves={elevesCircuit} prises={prises} exceptions={exceptions}
+        <TabTournee key={phase} driver={driver} circ={circ}
+          eleves={phase==="matin"?matinEleves:apremEleves} prises={prises} exceptions={exceptions}
+          sens={phase}
           enService={driver.status==="en_service"} serviceFini={!!todayLog?.heure_fin}
           onMarquerEleve={handleMarquerEleve}
+          onValiderMatin={handleValiderMatin}
           onShowConfirm={()=>setShowConfirm(true)}
           onShowFin={()=>setShowFin(true)}
           onShowReprise={()=>setShowReprise(true)}/>

@@ -21,9 +21,11 @@ interface TourneeProps {
   eleves: Eleve[];
   prises: PriseEnCharge[];
   exceptions?: ExcToday[];
+  sens?: "matin" | "aprem";
   enService: boolean;
   serviceFini?: boolean;
   onMarquerEleve: (eleveId: number, statut: "present" | "absent") => Promise<void>;
+  onValiderMatin?: () => void;
   onShowConfirm: () => void;
   onShowFin: () => void;
   onShowReprise: () => void;
@@ -59,7 +61,8 @@ function loadLeaflet(): Promise<any> {
   });
 }
 
-export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enService, serviceFini = false, onMarquerEleve, onShowConfirm, onShowFin, onShowReprise }: TourneeProps) {
+export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens = "matin", enService, serviceFini = false, onMarquerEleve, onValiderMatin, onShowConfirm, onShowFin, onShowReprise }: TourneeProps) {
+  const isAprem = sens === "aprem";
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const [mapError, setMapError] = useState(false);
@@ -124,10 +127,12 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enSe
           </div>
         : <div style={{ fontSize: 56 }}>{circ?.emoji || "🚌"}</div>}
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, opacity: .85, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>Ma tournée du jour</div>
+        <div style={{ fontSize: 12, opacity: .85, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>{isAprem ? "Ma tournée de l'après-midi" : "Ma tournée du matin"}</div>
         <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-.4px", marginTop: 1 }}>{circ?.nom || "Circuit"}</div>
         <div style={{ fontSize: 12.5, opacity: .85, marginTop: 3 }}>
-          {tournee.length} élève{tournee.length > 1 ? "s" : ""} · arrivée Mérine ~{ARRIVEE}
+          {isAprem
+            ? <>{active.length} dépose{active.length > 1 ? "s" : ""} · départ Mérine</>
+            : <>{active.length} élève{active.length > 1 ? "s" : ""} · arrivée Mérine ~{ARRIVEE}</>}
         </div>
       </div>
     </div>
@@ -234,18 +239,34 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enSe
     );
   }
 
-  // ── 2) En service, dépose à l'école (tous récupérés) ────────────────────────
+  // ── 2) Tous les arrêts faits ────────────────────────────────────────────────
   if (allPickedUp) {
+    // APRÈS-MIDI : toutes les déposes sont faites → fin de service
+    if (isAprem) {
+      return (
+        <div>
+          {header}
+          <div style={{ textAlign: "center", padding: "22px 16px" }}>
+            <div style={{ width: 84, height: 84, borderRadius: "50%", background: C.greenL, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontSize: 42 }}>🎉</div>
+            <div style={{ color: C.green, fontSize: 22, fontWeight: 900 }}>Tournée de l&apos;après-midi terminée !</div>
+            <p style={{ color: "#475569", fontSize: 14, marginTop: 6 }}>Tous les enfants ont été déposés. Bonne fin de journée.</p>
+          </div>
+          {bigBtn("Je termine mon service", onShowFin, "navy")}
+          <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} excMap={excMap} isAprem />
+        </div>
+      );
+    }
+    // MATIN : dépose à l'école puis validation → après-midi
     if (schoolPhase === "done") {
       return (
         <div>
           {header}
           <div style={{ textAlign: "center", padding: "22px 16px" }}>
             <div style={{ width: 84, height: 84, borderRadius: "50%", background: C.greenL, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontSize: 42 }}>🎉</div>
-            <div style={{ color: C.green, fontSize: 22, fontWeight: 900 }}>Tournée terminée !</div>
-            <p style={{ color: "#475569", fontSize: 14, marginTop: 6 }}>Les {active.length} enfants sont arrivés à Mérine. Les parents sont prévenus dans leur espace.</p>
+            <div style={{ color: C.green, fontSize: 22, fontWeight: 900 }}>Tournée du matin terminée !</div>
+            <p style={{ color: "#475569", fontSize: 14, marginTop: 6 }}>Les {active.length} enfants sont arrivés à Mérine. Prochaine étape : la tournée de l&apos;après-midi.</p>
           </div>
-          {bigBtn("Je termine mon service", onShowFin, "navy")}
+          {bigBtn("Valider — passer à l'après-midi", () => onValiderMatin?.(), "ok")}
         </div>
       );
     }
@@ -279,7 +300,7 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enSe
       {!mapError && withCoords.length > 0 && <div ref={mapDiv} style={{ height: 200, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.gray200}`, marginBottom: 12, background: "#dce6f2" }} />}
       {/* Progression */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#475569" }}>À récupérer</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#475569" }}>{isAprem ? "À déposer" : "À récupérer"}</span>
         <div style={{ flex: 1, height: 7, background: C.gray200, borderRadius: 99, overflow: "hidden" }}>
           <div style={{ height: "100%", width: `${Math.round(presents / (active.length || 1) * 100)}%`, background: C.green, borderRadius: 99, transition: "width .3s" }} />
         </div>
@@ -289,7 +310,9 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enSe
       {cur && (
         <div style={{ background: "#fff", borderRadius: 16, padding: 18, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: arrived ? C.amber : C.navy, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 10 }}>
-            {arrived ? "📍 Sur place — récupérez l'enfant" : currentIndex === 0 ? "🚸 Premier enfant à récupérer" : "🚸 Prochain enfant"}
+            {isAprem
+              ? (arrived ? "📍 Sur place — déposez l'enfant" : "🏠 Prochaine dépose")
+              : (arrived ? "📍 Sur place — récupérez l'enfant" : currentIndex === 0 ? "🚸 Premier enfant à récupérer" : "🚸 Prochain enfant")}
           </div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 13 }}>
             <div style={{ width: 50, height: 50, borderRadius: 15, background: "linear-gradient(160deg,#12498f,#0D3B7A)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, flexShrink: 0 }}>{initials(cur)}</div>
@@ -308,7 +331,9 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enSe
             {!arrived ? (<>
               {cur.adresse ? navBtn(gmapsAddr(cur.adresse), "Ouvrir l'itinéraire") : (cur.lat != null && cur.lon != null ? navBtn(gmapsLL(cur.lat, cur.lon), "Ouvrir l'itinéraire") : null)}
               {bigBtn("Arrivé sur place", () => setArrived(true))}
-            </>) : (<>
+            </>) : isAprem ? (
+              bigBtn(`✓ ${cur.prenom_initiale} est déposé(e)`, async () => { await onMarquerEleve(cur.id, "present"); setArrived(false); }, "ok")
+            ) : (<>
               {bigBtn(`✓ ${cur.prenom_initiale} est monté(e)`, async () => { await onMarquerEleve(cur.id, "present"); setArrived(false); }, "ok")}
               <button onClick={async () => { await onMarquerEleve(cur.id, "absent"); setArrived(false); }}
                 style={{ width: "100%", padding: "13px", borderRadius: 14, border: "1.5px solid #f3d0d0", background: "#fff", color: "#b42323", fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
@@ -319,13 +344,13 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enSe
           {contacts(cur)}
         </div>
       )}
-      <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={currentIndex} excMap={excMap} />
+      <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={currentIndex} excMap={excMap} isAprem={isAprem} />
     </div>
   );
 }
 
 // ── Liste des arrêts (fait / courant / à venir / exception) ───────────────────
-function StopList({ tournee, prisByEleve, currentIndex, excMap }: { tournee: Eleve[]; prisByEleve: Map<number, PriseEnCharge>; currentIndex: number; excMap: Map<number, string> }) {
+function StopList({ tournee, prisByEleve, currentIndex, excMap, isAprem = false }: { tournee: Eleve[]; prisByEleve: Map<number, PriseEnCharge>; currentIndex: number; excMap: Map<number, string>; isAprem?: boolean }) {
   return (
     <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,.06)", overflow: "hidden", marginTop: 4 }}>
       {tournee.map((el, i) => {
@@ -369,13 +394,15 @@ function StopList({ tournee, prisByEleve, currentIndex, excMap }: { tournee: Ele
           </div>
         );
       })}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: "#F8FAFC" }}>
-        <div style={{ width: 26, height: 26, borderRadius: 8, background: "#fff", border: `1px solid ${C.gray200}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <School size={14} color={C.navy} />
+      {!isAprem && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: "#F8FAFC" }}>
+          <div style={{ width: 26, height: 26, borderRadius: 8, background: "#fff", border: `1px solid ${C.gray200}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <School size={14} color={C.navy} />
+          </div>
+          <div style={{ minWidth: 40, fontSize: 12.5, fontWeight: 800, color: C.navy }}>{ARRIVEE}</div>
+          <div style={{ flex: 1, fontWeight: 700, fontSize: 13.5, color: "#1E293B" }}>Fondation Mérine — dépose <ArrowRight size={12} style={{ verticalAlign: "middle" }} /></div>
         </div>
-        <div style={{ minWidth: 40, fontSize: 12.5, fontWeight: 800, color: C.navy }}>{ARRIVEE}</div>
-        <div style={{ flex: 1, fontWeight: 700, fontSize: 13.5, color: "#1E293B" }}>Fondation Mérine — dépose <ArrowRight size={12} style={{ verticalAlign: "middle" }} /></div>
-      </div>
+      )}
     </div>
   );
 }
