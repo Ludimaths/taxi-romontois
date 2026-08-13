@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
-  LogOut, LayoutDashboard, FileText, Zap, Users, Bus, Map, Heart,
+  LogOut, LayoutDashboard, FileText, Zap, Users, Bus, Heart,
   AlertTriangle, Bell, Wrench, Download, MessageSquare,
   Settings, Smartphone, FolderDown, Home, School,
 } from "lucide-react";
@@ -17,7 +17,6 @@ const NAV_ITEMS: Record<Role, { path: string; label: string; icon: LucideIcon }[
     { path: "/gestionnaire/imprevus",      label: "Imprévus",           icon: Zap },
     { path: "/gestionnaire/conducteurs",   label: "Conducteurs",        icon: Users },
     { path: "/gestionnaire/vehicules",     label: "Véhicules",          icon: Bus },
-    { path: "/gestionnaire/circuits",        label: "Circuits",           icon: Map },
     { path: "/gestionnaire/etablissements", label: "Établissements",     icon: School },
     { path: "/gestionnaire/parents",        label: "Parents",            icon: Heart },
     { path: "/gestionnaire/incidents",     label: "Incidents",          icon: AlertTriangle },

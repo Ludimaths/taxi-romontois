@@ -82,6 +82,8 @@ export interface Circuit {
   num: string;
   cercle_id: number;
   cercle?: CercleScolaire;
+  ecole_id?: number;
+  ecole?: Ecole;
   enfants_count: number;
   km_aller: number;
 }

@@ -1,13 +1,17 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
 import { Btn, TabBar, Badge, Modal, SectionTitle } from "@/components/ui";
-import type { Ecole, Eleve, Circuit, Conducteur, PriseEnCharge, TourneeConfig, AdresseEleve } from "@/lib/types";
+import type { Ecole, Eleve, Circuit, Conducteur, PriseEnCharge, TourneeConfig, AdresseEleve, CercleScolaire } from "@/lib/types";
 
-type ConduPartial = Pick<Conducteur, "id" | "nom" | "prenom" | "circuit_id" | "status">;
-import { ArrowLeft, ChevronDown } from "lucide-react";
+type ConduPartial = Pick<Conducteur, "id" | "nom" | "prenom" | "circuit_id" | "status"> & { est_responsable?: boolean; tel?: string; secteur?: string };
+import { ArrowLeft, ChevronDown, Plus, Pencil, Trash2, User } from "lucide-react";
+
+interface CircuitForm { id: string; nom: string; emoji: string; num: string; km_aller: number; cercle_id: number | null; conducteur_id: number | ""; }
+const EMPTY_CF: CircuitForm = { id:"", nom:"", emoji:"🚌", num:"", km_aller:0, cercle_id:null, conducteur_id:"" };
 
 const isoToday = () => new Date().toISOString().slice(0, 10);
 
@@ -35,6 +39,14 @@ function statutLabel(s: string) {
   return s === "present" ? "Présent" : "Absent";
 }
 
+// Génère un code de circuit à partir du nom (ex: "Petit Lac" → "PETIT-LAC-4821")
+function slugCircuitId(nom: string) {
+  const base = nom.trim().toUpperCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 16) || "CIRCUIT";
+  return `${base}-${String(Date.now()).slice(-4)}`;
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function EtablissementDetail() {
@@ -48,10 +60,18 @@ export default function EtablissementDetail() {
   const [circuits,   setCircuits]   = useState<Circuit[]>([]);
   const [allCircuits,setAllCircuits]= useState<Circuit[]>([]);
   const [conducteurs,setConducteurs]= useState<ConduPartial[]>([]);
+  const [cercles,    setCercles]    = useState<CercleScolaire[]>([]);
   const [prises,     setPrises]     = useState<PriseEnCharge[]>([]);
   const [tournees,   setTournees]   = useState<TourneeConfig[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [tab,        setTab]        = useState("Élèves");
+
+  // Circuit modal (gestion des circuits depuis l'établissement)
+  const [showCircuit,  setShowCircuit]  = useState(false);
+  const [editCircuit,  setEditCircuit]  = useState<Circuit | null>(null);
+  const [circuitForm,  setCircuitForm]  = useState<CircuitForm>(EMPTY_CF);
+  const [savingCirc,   setSavingCirc]   = useState(false);
+  const [circErr,      setCircErr]      = useState("");
 
   // Élève modal
   const [showModal,  setShowModal]  = useState(false);
@@ -88,24 +108,27 @@ export default function EtablissementDetail() {
       { data: conduData },
       { data: prisesData },
       { data: tournData },
+      { data: cerclesData },
     ] = await Promise.all([
       sb.from("ecoles").select("*").eq("id", ecoleId).single(),
       sb.from("eleves").select("*").eq("ecole_id", ecoleId).order("nom_famille"),
       sb.from("circuits").select("*").order("nom"),
-      sb.from("conducteurs").select("id,nom,prenom,circuit_id,status"),
+      sb.from("conducteurs").select("id,nom,prenom,circuit_id,status,est_responsable,tel,secteur"),
       sb.from("prises_en_charge").select("*").eq("date", today_),
       sb.from("tournees_config").select("*").eq("ecole_id", ecoleId),
+      sb.from("cercles_scolaires").select("*").order("nom"),
     ]);
 
     const elevesList: Eleve[] = elevesData ?? [];
-    const circuitIds = [...new Set(elevesList.map(e => e.circuit_id).filter(Boolean) as string[])];
-    const usedCircuits = (allCirData ?? []).filter((c: Circuit) => circuitIds.includes(c.id));
+    // Circuits de cet établissement (lien direct ecole_id)
+    const ecoleCircuits = (allCirData ?? []).filter((c: Circuit) => c.ecole_id === ecoleId);
 
     setEcole(ecoleData ?? null);
     setEleves(elevesList);
-    setCircuits(usedCircuits);
+    setCircuits(ecoleCircuits);
     setAllCircuits(allCirData ?? []);
     setConducteurs(conduData ?? []);
+    setCercles(cerclesData ?? []);
     setPrises(prisesData ?? []);
     setTournees(tournData ?? []);
     setLoading(false);
@@ -119,6 +142,8 @@ export default function EtablissementDetail() {
       .on("postgres_changes", { event:"*", schema:"public", table:"eleves" }, load)
       .on("postgres_changes", { event:"*", schema:"public", table:"prises_en_charge" }, load)
       .on("postgres_changes", { event:"*", schema:"public", table:"ecoles" }, load)
+      .on("postgres_changes", { event:"*", schema:"public", table:"circuits" }, load)
+      .on("postgres_changes", { event:"*", schema:"public", table:"conducteurs" }, load)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [sb, ecoleId, load]);
@@ -224,6 +249,83 @@ export default function EtablissementDetail() {
     await sb.from("ecoles").update(editForm).eq("id", ecoleId);
     setSavingEc(false);
     setShowEdit(false);
+    load();
+  }
+
+  // ── Circuits (gérés directement dans l'établissement) ────────────────────────
+
+  function openAddCircuit() {
+    setEditCircuit(null);
+    setCircErr("");
+    setCircuitForm(EMPTY_CF);
+    setShowCircuit(true);
+  }
+  function openEditCircuit(c: Circuit) {
+    setEditCircuit(c);
+    setCircErr("");
+    const drv = conducteurs.find(d => d.circuit_id === c.id);
+    setCircuitForm({
+      id: c.id, nom: c.nom || "", emoji: c.emoji || "🚌", num: c.num || "",
+      km_aller: c.km_aller ?? 0, cercle_id: c.cercle_id ?? null,
+      conducteur_id: drv?.id ?? "",
+    });
+    setShowCircuit(true);
+  }
+
+  // Affecte un conducteur à un circuit (et libère l'ancien du circuit)
+  async function assignConducteur(circuitId: string, newDriverId: number | "") {
+    const prev = conducteurs.find(d => d.circuit_id === circuitId);
+    const newId = newDriverId === "" ? null : Number(newDriverId);
+    if (prev && prev.id !== newId) {
+      await sb.from("conducteurs").update({ circuit_id: null }).eq("id", prev.id);
+    }
+    if (newId) {
+      await sb.from("conducteurs").update({ circuit_id: circuitId }).eq("id", newId);
+    }
+  }
+
+  async function handleSaveCircuit() {
+    const f = circuitForm;
+    if (!f.nom.trim()) { setCircErr("Le nom du circuit est obligatoire."); return; }
+    setSavingCirc(true);
+    setCircErr("");
+
+    if (editCircuit) {
+      const { error } = await sb.from("circuits").update({
+        nom: f.nom.trim(), emoji: f.emoji.trim() || "🚌", num: f.num.trim(),
+        km_aller: Number(f.km_aller) || 0, cercle_id: f.cercle_id,
+      }).eq("id", editCircuit.id);
+      if (error) { setCircErr(error.message); setSavingCirc(false); return; }
+      await assignConducteur(editCircuit.id, f.conducteur_id);
+    } else {
+      const newId = (f.id.trim() || slugCircuitId(f.nom)).toUpperCase();
+      const { error } = await sb.from("circuits").insert({
+        id: newId, nom: f.nom.trim(), emoji: f.emoji.trim() || "🚌",
+        num: f.num.trim(), km_aller: Number(f.km_aller) || 0,
+        cercle_id: f.cercle_id, ecole_id: ecoleId, enfants_count: 0,
+      });
+      if (error) {
+        setCircErr(error.message.includes("duplicate") ? "Ce code de circuit existe déjà." : error.message);
+        setSavingCirc(false); return;
+      }
+      if (f.conducteur_id) await assignConducteur(newId, f.conducteur_id);
+    }
+    setSavingCirc(false);
+    setShowCircuit(false);
+    load();
+  }
+
+  async function handleDeleteCircuit(c: Circuit) {
+    const nb = eleves.filter(e => e.circuit_id === c.id).length;
+    if (nb > 0) {
+      alert(`Impossible de supprimer « ${c.nom} » : ${nb} élève(s) y sont encore rattaché(s). Réaffectez-les d'abord.`);
+      return;
+    }
+    if (!confirm(`Supprimer définitivement le circuit « ${c.nom} » ?`)) return;
+    // Libère le conducteur affecté
+    const drv = conducteurs.find(d => d.circuit_id === c.id);
+    if (drv) await sb.from("conducteurs").update({ circuit_id: null }).eq("id", drv.id);
+    await sb.from("circuits").delete().eq("id", c.id);
     load();
   }
 
@@ -428,13 +530,23 @@ export default function EtablissementDetail() {
         </div>
       )}
 
-      {/* ── TAB 1 : CIRCUITS ───────────────────────────────────────────────── */}
+      {/* ── TAB 1 : CIRCUITS (gestion complète) ────────────────────────────── */}
       {tab === "Circuits" && (
         <div style={{ marginTop:20 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+            marginBottom:14, gap:12, flexWrap:"wrap" }}>
+            <div style={{ fontSize:13, color:C.gray400 }}>
+              Créez, modifiez et attribuez les circuits de cet établissement, et affectez un conducteur à chacun.
+            </div>
+            <Btn color={C.navy} small onClick={openAddCircuit}>
+              <Plus size={14} /> Ajouter un circuit
+            </Btn>
+          </div>
+
           {circuits.length === 0 ? (
             <div style={{ padding:40, textAlign:"center", color:C.gray400,
               background:C.gray50, borderRadius:12 }}>
-              Aucun circuit lié à cet établissement (via les élèves).
+              Aucun circuit pour cet établissement. Cliquez sur « Ajouter un circuit ».
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -450,17 +562,17 @@ export default function EtablissementDetail() {
                 return (
                   <div key={c.id} style={{ background:C.white, border:`1px solid ${C.gray200}`,
                     borderRadius:12, padding:"18px 20px" }}>
-                    <div style={{ display:"flex", alignItems:"center",
+                    <div style={{ display:"flex", alignItems:"flex-start",
                       justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
                       <div>
                         <div style={{ fontSize:16, fontWeight:800, color:C.gray800 }}>
                           {c.emoji} {c.nom}
                         </div>
                         <div style={{ fontSize:13, color:C.gray400, marginTop:3 }}>
-                          {c.num} — {c.km_aller ?? "?"} km
+                          {c.id}{c.num ? ` · tournée ${c.num}` : ""} — {c.km_aller ?? "?"} km
                         </div>
                       </div>
-                      <div style={{ display:"flex", gap:14, flexWrap:"wrap" }}>
+                      <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"center" }}>
                         <div style={{ textAlign:"center" }}>
                           <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>
                             {cEleves.length}
@@ -479,17 +591,41 @@ export default function EtablissementDetail() {
                             </div>
                           </>
                         )}
+                        <div style={{ display:"flex", gap:6 }}>
+                          <Btn small outline onClick={() => openEditCircuit(c)}>
+                            <Pencil size={13} /> Éditer
+                          </Btn>
+                          <Btn small outline color={C.red} onClick={() => handleDeleteCircuit(c)}>
+                            <Trash2 size={13} />
+                          </Btn>
+                        </div>
                       </div>
                     </div>
-                    {cond && (
-                      <div style={{ marginTop:12, fontSize:13, color:C.gray600,
-                        background:C.gray50, borderRadius:8, padding:"8px 12px" }}>
-                        Conducteur : <strong>{cond.prenom} {cond.nom}</strong>
-                        <span style={{ marginLeft:10, color: cond.status === "en_service" ? C.green : C.gray400 }}>
+
+                    {/* Conducteur affecté — modifiable en ligne */}
+                    <div style={{ marginTop:14, display:"flex", alignItems:"center", gap:10,
+                      background:C.gray50, borderRadius:8, padding:"10px 12px", flexWrap:"wrap" }}>
+                      <User size={15} color={C.gray400} />
+                      <span style={{ fontSize:13, color:C.gray600, fontWeight:600 }}>Conducteur :</span>
+                      <select
+                        value={cond?.id ?? ""}
+                        onChange={e => assignConducteur(c.id, e.target.value ? Number(e.target.value) : "").then(load)}
+                        style={{ padding:"7px 10px", borderRadius:8, border:`1px solid ${C.gray200}`,
+                          fontSize:13, background:C.white, minWidth:200, flex:"0 1 auto" }}>
+                        <option value="">— Non affecté —</option>
+                        {conducteurs.map(d => (
+                          <option key={d.id} value={d.id}>
+                            {d.prenom} {d.nom}{d.est_responsable ? " (Responsable)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      {cond && (
+                        <span style={{ fontSize:12, fontWeight:700,
+                          color: cond.status === "en_service" ? C.green : C.gray400 }}>
                           ● {cond.status === "en_service" ? "En service" : cond.status}
                         </span>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -892,6 +1028,92 @@ export default function EtablissementDetail() {
           </div>
         </Modal>
       )}
+
+      {/* ── Modal circuit (ajout / édition) ─────────────────────────────────── */}
+      {showCircuit && (
+        <Modal title={editCircuit ? "Modifier le circuit" : "Nouveau circuit"} onClose={() => setShowCircuit(false)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            {!editCircuit && (
+              <CircField label="Code du circuit (optionnel)">
+                <input value={circuitForm.id}
+                  onChange={e => setCircuitForm(p => ({ ...p, id: e.target.value }))}
+                  placeholder="Généré automatiquement si vide (ex : LEOPARD-1234)"
+                  style={cInp} />
+              </CircField>
+            )}
+            <div style={{ display:"grid", gridTemplateColumns:"80px 1fr", gap:12 }}>
+              <CircField label="Emoji">
+                <input value={circuitForm.emoji}
+                  onChange={e => setCircuitForm(p => ({ ...p, emoji: e.target.value }))}
+                  placeholder="🚌" style={{ ...cInp, textAlign:"center" }} />
+              </CircField>
+              <CircField label="Nom du circuit *">
+                <input value={circuitForm.nom}
+                  onChange={e => setCircuitForm(p => ({ ...p, nom: e.target.value }))}
+                  placeholder="Ex : Léopard" style={cInp} />
+              </CircField>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <CircField label="N° de tournée">
+                <input value={circuitForm.num}
+                  onChange={e => setCircuitForm(p => ({ ...p, num: e.target.value }))}
+                  placeholder="Ex : 01" style={cInp} />
+              </CircField>
+              <CircField label="Km (aller)">
+                <input type="number" value={circuitForm.km_aller}
+                  onChange={e => setCircuitForm(p => ({ ...p, km_aller: Number(e.target.value) }))}
+                  style={cInp} />
+              </CircField>
+            </div>
+            <CircField label="Cercle scolaire">
+              <select value={circuitForm.cercle_id ?? ""}
+                onChange={e => setCircuitForm(p => ({ ...p, cercle_id: e.target.value ? Number(e.target.value) : null }))}
+                style={cInp}>
+                <option value="">— Sans cercle —</option>
+                {cercles.map(cr => <option key={cr.id} value={cr.id}>{cr.nom}</option>)}
+              </select>
+            </CircField>
+            <CircField label="Conducteur affecté">
+              <select value={circuitForm.conducteur_id}
+                onChange={e => setCircuitForm(p => ({ ...p, conducteur_id: e.target.value ? Number(e.target.value) : "" }))}
+                style={cInp}>
+                <option value="">— Non affecté —</option>
+                {conducteurs.map(d => (
+                  <option key={d.id} value={d.id}>
+                    {d.prenom} {d.nom}{d.est_responsable ? " (Responsable)" : ""}
+                  </option>
+                ))}
+              </select>
+            </CircField>
+
+            {circErr && (
+              <div style={{ background:C.redL, color:C.red, borderRadius:8,
+                padding:"10px 14px", fontSize:13 }}>{circErr}</div>
+            )}
+
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:4 }}>
+              <Btn outline onClick={() => setShowCircuit(false)}>Annuler</Btn>
+              <Btn color="navy" disabled={savingCirc} onClick={handleSaveCircuit}>
+                {savingCirc ? "Enregistrement…" : editCircuit ? "Mettre à jour" : "Créer le circuit"}
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+const cInp: CSSProperties = {
+  width:"100%", padding:"9px 12px", border:"1px solid #E2E8F0",
+  borderRadius:8, fontSize:14, boxSizing:"border-box", outline:"none",
+};
+
+function CircField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <label style={{ fontSize:13, color:"#64748B", fontWeight:600, display:"block", marginBottom:4 }}>{label}</label>
+      {children}
     </div>
   );
 }
