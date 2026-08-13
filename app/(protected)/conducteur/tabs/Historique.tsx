@@ -1,18 +1,46 @@
 "use client";
 import { C, fmtHHMM } from "@/lib/constants";
-import type { ServiceLog, Incident } from "@/lib/types";
+import type { ServiceLog, Incident, PriseEnCharge } from "@/lib/types";
 import { calcDuration, SIGN_TYPES } from "./shared";
 import HistoriqueCalendrier from "@/components/HistoriqueCalendrier";
 
 type LogItem = ServiceLog & { date: string };
+type HebdoRow = { circuit_id: string; jour: number; sens: "matin" | "aprem"; eleve_id: number | null; eleve_nom: string };
 
 export interface HistoriqueProps {
   histLogs: ServiceLog[];
   incidents: Incident[];
+  prisesHist?: PriseEnCharge[];
+  week?: HebdoRow[];
 }
 
-export function TabHistorique({ histLogs, incidents }: HistoriqueProps) {
+export function TabHistorique({ histLogs, incidents, prisesHist = [], week = [] }: HistoriqueProps) {
   const items: LogItem[] = histLogs.map(l => ({ ...l, date: l.date_service }));
+
+  // Résumé matin / après-midi pour une journée de service donnée.
+  const dayStats = (l: ServiceLog) => {
+    const jour = new Date(`${l.date_service}T00:00:00`).getDay();   // 1..5
+    const prevu = (sens: "matin" | "aprem") =>
+      new Set(week.filter(h => h.circuit_id === l.circuit_id && h.jour === jour && h.sens === sens)
+        .map(h => (h.eleve_id ?? h.eleve_nom) as string | number)).size;
+    const pr = prisesHist.filter(p => p.date === l.date_service);
+    const cnt = (sens: "aller" | "retour", st: "present" | "absent") =>
+      pr.filter(p => p.sens === sens && p.statut === st).length;
+    return {
+      matinPrevu: prevu("matin"), matinPris: cnt("aller", "present"), matinAbs: cnt("aller", "absent"),
+      apremPrevu: prevu("aprem"), apremDep: cnt("retour", "present"),
+    };
+  };
+  const statBox = (titre: string, couleur: string, lignes: [string, string | number][]) => (
+    <div style={{ flex: 1, background: "#F8FAFC", border: `1px solid ${C.gray200}`, borderRadius: 10, padding: "8px 10px" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: couleur, letterSpacing: ".3px", marginBottom: 4 }}>{titre}</div>
+      {lignes.map(([k, v]) => (
+        <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#1E293B" }}>
+          <span style={{ color: C.gray600 }}>{k}</span><b>{v}</b>
+        </div>
+      ))}
+    </div>
+  );
 
   const STATUS_MAP: Record<string, { l: string; c: string; bg: string }> = {
     en_attente: { l: "En attente", c: C.amber,    bg: C.amberL },
@@ -60,6 +88,22 @@ export function TabHistorique({ histLogs, incidents }: HistoriqueProps) {
             {l.replacement_name && (
               <div style={{ fontSize: 12, color: C.gray600, marginTop: 4 }}>
                 Remplace : {l.replacement_name}
+              </div>
+            )}
+            {l.status !== "absent" && (() => {
+              const s = dayStats(l);
+              const matin: [string, string | number][] = [["Prévus", s.matinPrevu], ["Pris en charge", s.matinPris]];
+              if (s.matinAbs) matin.push(["Absents", s.matinAbs]);
+              return (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  {statBox("☀️ Matin", "#F59E0B", matin)}
+                  {statBox("🌙 Après-midi", "#6366F1", [["Prévus", s.apremPrevu], ["Déposés", s.apremDep]])}
+                </div>
+              );
+            })()}
+            {l.notes && (
+              <div style={{ marginTop: 8, fontSize: 12.5, color: "#475569", background: C.amberL, borderRadius: 8, padding: "7px 10px" }}>
+                📝 {l.notes}
               </div>
             )}
           </div>

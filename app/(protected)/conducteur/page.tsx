@@ -50,6 +50,7 @@ export default function ConducteurPage(){
   const [phase,       setPhase]       = useState<"matin"|"aprem">("matin");
   const [weekStops,   setWeekStops]   = useState<HebdoRow[]>([]);
   const [myCircuits,  setMyCircuits]  = useState<{id:string;nom:string;emoji?:string}[]>([]);
+  const [prisesHist,  setPrisesHist]  = useState<PriseEnCharge[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState<Tab>("tournee");
   const [drawerOpen,setDrawerOpen]= useState(false);
@@ -157,6 +158,13 @@ export default function ConducteurPage(){
     }
     setExceptions(jexc as ExcToday[]);
     setPrises(prisesJour);
+
+    // Historique des prises (120 derniers jours) pour l'onglet Historique
+    const { data: prAll } = await sb.from("prises_en_charge").select("*")
+      .eq("conducteur_id", cid)
+      .gte("date", new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10))
+      .order("date", { ascending: false });
+    setPrisesHist((prAll ?? []) as PriseEnCharge[]);
 
     // Résumé pop-up : par circuit, matin + après-midi du jour
     const journee: JourneeCircuit[] = myCircs.map(c => {
@@ -313,21 +321,22 @@ export default function ConducteurPage(){
 
   async function handleMarquerEleve(eleveId: number, statut: "present" | "absent") {
     if (!driver) return;
+    const sens: "aller" | "retour" = phase === "matin" ? "aller" : "retour";  // matin=aller, après-midi=retour
+    const today = isoToday();
     // Arrêt non relié à un élève en base (id synthétique négatif) → progression locale.
     if (eleveId <= 0) {
-      setPrises(p => [...p.filter(x => x.eleve_id !== eleveId),
+      setPrises(p => [...p.filter(x => !(x.eleve_id === eleveId && x.sens === sens)),
         { id: eleveId, eleve_id: eleveId, conducteur_id: driver.id,
-          circuit_id: driver.circuit_id || undefined, date: isoToday(),
-          sens: "aller", statut, created_at: "" } as PriseEnCharge]);
+          circuit_id: driver.circuit_id || undefined, date: today,
+          sens, statut, created_at: "" } as PriseEnCharge]);
       return;
     }
-    const now   = new Date().toTimeString().slice(0, 8);
-    const today = isoToday();
+    const now = new Date().toTimeString().slice(0, 8);
 
-    // Vérifie si une entrée existe déjà
+    // Vérifie si une entrée existe déjà pour ce sens
     const { data: existing } = await sb.from("prises_en_charge")
       .select("id").eq("eleve_id", eleveId).eq("conducteur_id", driver.id)
-      .eq("date", today).eq("sens", "aller").maybeSingle();
+      .eq("date", today).eq("sens", sens).maybeSingle();
 
     if (existing) {
       await sb.from("prises_en_charge").update({ statut }).eq("id", existing.id);
@@ -336,16 +345,17 @@ export default function ConducteurPage(){
         eleve_id: eleveId, conducteur_id: driver.id,
         circuit_id: driver.circuit_id || null,
         date: today, heure_prise: statut === "present" ? now : null,
-        sens: "aller", statut,
+        sens, statut,
       });
     }
 
-    // Mise à jour locale immédiate
+    // Mise à jour locale immédiate (on garde les prises locales synthétiques)
     const { data: pr } = await sb.from("prises_en_charge").select("*")
       .eq("conducteur_id", driver.id).eq("date", today);
-    setPrises(pr ?? []);
-    // Pas de notification par élève pris/déposé (ingérable côté gestionnaire).
-    // Le suivi se lit en temps réel via la table prises_en_charge.
+    setPrises(prev => {
+      const locales = prev.filter(x => x.eleve_id <= 0);
+      return [...(pr ?? []), ...locales];
+    });
   }
 
   async function handleEnvoyerConge(form:{date_debut:string;date_fin:string;motif:string;justification:string}){
@@ -496,7 +506,8 @@ export default function ConducteurPage(){
       {/* Contenu des onglets */}
       {tab==="tournee"&&(
         <TabTournee key={phase} driver={driver} circ={circ}
-          eleves={phase==="matin"?matinEleves:apremEleves} prises={prises} exceptions={exceptions}
+          eleves={phase==="matin"?matinEleves:apremEleves}
+          prises={prises.filter(p=>p.sens===(phase==="matin"?"aller":"retour"))} exceptions={exceptions}
           sens={phase}
           enService={driver.status==="en_service"} serviceFini={!!todayLog?.heure_fin}
           onMarquerEleve={handleMarquerEleve}
@@ -525,7 +536,7 @@ export default function ConducteurPage(){
         <TabPlanning circuits={myCircuits} week={weekStops} exceptions={exceptions}/>
       )}
       {tab==="historique"&&(
-        <TabHistorique histLogs={histLogs} incidents={incidents} />
+        <TabHistorique histLogs={histLogs} incidents={incidents} prisesHist={prisesHist} week={weekStops} />
       )}
       {tab==="conges"&&(
         <TabConges conges={conges} onSend={handleEnvoyerConge}/>
