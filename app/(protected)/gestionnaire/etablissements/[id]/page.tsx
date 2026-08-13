@@ -826,9 +826,8 @@ export default function EtablissementDetail() {
                           const ex = excToday(e.id);
                           const col = excColor(ex?.type);
                           return (
-                            <div key={e.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 18px", borderTop:`1px solid ${C.gray100}` }}>
-                              <div style={{ width:26,height:26,borderRadius:8,background:C.navy,color:"#fff",fontWeight:800,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{i+1}</div>
-                              <div style={{ minWidth:50, fontSize:13, fontWeight:800, color:C.navy }}>{e.heure_ramassage||"—"}</div>
+                            <div key={e.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 18px", borderTop:`1px solid ${C.gray100}` }}>
+                              <div style={{ width:24,height:24,borderRadius:"50%",background:"#94A3B8",color:"#fff",fontWeight:800,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{i+1}</div>
                               <div style={{ flex:1, minWidth:0 }}>
                                 <div style={{ fontWeight:700, fontSize:14, color:C.gray800 }}>
                                   {e.prenom_initiale} {e.nom_famille}
@@ -1125,7 +1124,7 @@ export default function EtablissementDetail() {
       })()}
 
       {/* ── TAB 3 : FACTURES ───────────────────────────────────────────────── */}
-      {tab === "Historique" && <HistoriqueEtab circuits={circuits} />}
+      {tab === "Historique" && <HistoriqueEtab circuits={circuits.map(c => { const d = condOf(c); return { id: c.id, nom: c.nom, emoji: c.emoji, conducteur: d ? `${d.prenom} ${d.nom}` : "" }; })} />}
 
       {tab === "Factures" && (
         <div style={{ marginTop:20 }}>

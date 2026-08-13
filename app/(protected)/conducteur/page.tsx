@@ -223,6 +223,13 @@ export default function ConducteurPage(){
     return()=>{sb.removeChannel(ch);};
   },[load,sb]);
 
+  // Bascule automatique au changement de jour (à minuit) même si la page reste ouverte
+  useEffect(()=>{
+    let cur=isoToday();
+    const id=setInterval(()=>{ const now=isoToday(); if(now!==cur){ cur=now; load(); } },60000);
+    return()=>clearInterval(id);
+  },[load]);
+
   // Canal séparé pour alertes avec filtre driver_id — requis car RLS integer FK
   // ne garantit pas la livraison Realtime sans filtre explicite côté client
   useEffect(()=>{

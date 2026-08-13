@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
 import { circuitImage } from "@/lib/circuit-images";
 
-type Circ = { id: string; nom: string; emoji?: string };
+type Circ = { id: string; nom: string; emoji?: string; conducteur?: string };
 type HebdoRow = { id: number; circuit_id: string; jour: number; sens: "matin" | "aprem"; ordre: number; heure: string; eleve_nom: string; adresse: string | null; eleve_id: number | null };
 type Prise = { eleve_id: number; circuit_id: string | null; date: string; sens: string; statut: string };
 
@@ -20,6 +20,7 @@ export default function HistoriqueEtab({ circuits }: { circuits: Circ[] }) {
   const [view, setView] = useState({ y: today.getFullYear(), m: today.getMonth() });
   const [sel, setSel] = useState(ymd(today));
   const [selCirc, setSelCirc] = useState("");
+  const [mode, setMode] = useState<"jour" | "mois">("jour");
   const [hebdo, setHebdo] = useState<HebdoRow[]>([]);
   const [prises, setPrises] = useState<Prise[]>([]);
 
@@ -90,6 +91,47 @@ export default function HistoriqueEtab({ circuits }: { circuits: Circ[] }) {
     XLSX.writeFile(wb, `historique_${sel}.xlsx`);
   };
 
+  // Récapitulatif du mois par circuit (d'après les prises du mois chargées)
+  const moisStats = circuits.map(c => {
+    const pc = prises.filter(p => p.circuit_id === c.id);
+    return {
+      c,
+      jours: new Set(pc.map(p => p.date)).size,
+      ram: pc.filter(p => p.sens === "aller" && p.statut === "present").length,
+      dep: pc.filter(p => p.sens === "retour" && p.statut === "present").length,
+      abs: pc.filter(p => p.statut === "absent").length,
+    };
+  });
+
+  // Export Excel du mois : détail jour par jour (planifié + réalisé)
+  const exportMois = () => {
+    const rows: Record<string, string>[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dt = new Date(view.y, view.m, d);
+      const jw = dt.getDay();
+      if (jw < 1 || jw > 5) continue;
+      const iso = ymd(dt);
+      for (const c of circuits) {
+        for (const sens of ["matin", "aprem"] as const) {
+          const stops = hebdo.filter(h => h.circuit_id === c.id && h.jour === jw && h.sens === sens).sort((a, b) => a.ordre - b.ordre);
+          for (const h of stops) {
+            const pr = h.eleve_id == null ? undefined : prises.find(p => p.date === iso && p.eleve_id === h.eleve_id && p.sens === (sens === "matin" ? "aller" : "retour"));
+            rows.push({
+              Date: iso, Circuit: c.nom, Conducteur: c.conducteur ?? "", Moment: sens === "matin" ? "Matin (ramassage)" : "Après-midi (dépose)",
+              Heure: h.heure, "Élève": h.eleve_nom, Adresse: h.adresse ?? "",
+              Statut: pr?.statut === "present" ? (sens === "matin" ? "Pris" : "Déposé") : pr?.statut === "absent" ? "Absent" : "Non réalisé",
+            });
+          }
+        }
+      }
+    }
+    const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Info: "Aucune donnée pour ce mois" }]);
+    ws["!cols"] = [{ wch: 11 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 8 }, { wch: 26 }, { wch: 34 }, { wch: 13 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Mois");
+    XLSX.writeFile(wb, `historique_${view.y}-${String(view.m + 1).padStart(2, "0")}.xlsx`);
+  };
+
   return (
     <div style={{ marginTop: 20 }}>
       <div style={{ background: "#EFF6FF", border: "1px solid #cfe0fb", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#0f2f66", lineHeight: 1.5, marginBottom: 16 }}>
@@ -132,15 +174,49 @@ export default function HistoriqueEtab({ circuits }: { circuits: Circ[] }) {
           </div>
         </div>
 
-        {/* Détail : 1 circuit à la fois + export */}
+        {/* Détail : basculement Jour / Mois */}
         <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 15, fontWeight: 900, color: "#0f2540", textTransform: "capitalize" }}>
-              {JOUR_LONG[selJour]} {selDate.getDate()} {MOIS[selDate.getMonth()]}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", borderRadius: 9, overflow: "hidden", border: `1px solid ${C.gray200}` }}>
+              {(["jour", "mois"] as const).map(md => (
+                <button key={md} onClick={() => setMode(md)}
+                  style={{ padding: "7px 18px", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 800,
+                    background: mode === md ? C.navy : "#fff", color: mode === md ? "#fff" : C.gray600 }}>
+                  {md === "jour" ? "Jour" : "Mois"}
+                </button>
+              ))}
             </div>
-            <button onClick={exportJour} style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 9, padding: "8px 14px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
-              ⬇︎ Exporter ce jour (Excel)
+            <button onClick={mode === "jour" ? exportJour : exportMois}
+              style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 9, padding: "8px 14px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+              ⬇︎ {mode === "jour" ? "Exporter ce jour" : "Exporter le mois"} (Excel)
             </button>
+          </div>
+
+          {mode === "mois" ? (
+            <div style={{ background: C.white, border: `1px solid ${C.gray200}`, borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px", fontWeight: 900, fontSize: 14, color: "#0f2540", borderBottom: `1px solid ${C.gray100}`, textTransform: "capitalize" }}>
+                Récapitulatif — {MOIS[view.m]} {view.y}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1.2fr repeat(4, .7fr)", fontSize: 11, fontWeight: 800, color: C.gray600, background: "#F8FAFC", padding: "8px 14px", gap: 6 }}>
+                <div>Circuit</div><div>Conducteur</div><div style={{ textAlign: "center" }}>Jours</div><div style={{ textAlign: "center" }}>Ramass.</div><div style={{ textAlign: "center" }}>Dépos.</div><div style={{ textAlign: "center" }}>Abs.</div>
+              </div>
+              {moisStats.map(({ c, jours, ram, dep, abs }) => (
+                <div key={c.id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1.2fr repeat(4, .7fr)", fontSize: 13, padding: "10px 14px", gap: 6, borderTop: `1px solid ${C.gray100}`, alignItems: "center" }}>
+                  <div style={{ fontWeight: 800, color: "#0f2540", display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}><span>{c.emoji || "🚌"}</span><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nom}</span></div>
+                  <div style={{ color: c.conducteur ? C.gray800 : C.gray400, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.conducteur || "—"}</div>
+                  <div style={{ textAlign: "center", fontWeight: 800, color: C.navy }}>{jours}</div>
+                  <div style={{ textAlign: "center", fontWeight: 800, color: "#15803D" }}>{ram}</div>
+                  <div style={{ textAlign: "center", fontWeight: 800, color: "#6366F1" }}>{dep}</div>
+                  <div style={{ textAlign: "center", fontWeight: 800, color: abs ? "#E02424" : C.gray400 }}>{abs}</div>
+                </div>
+              ))}
+              <div style={{ padding: "10px 14px", fontSize: 11.5, color: C.gray, background: "#F8FAFC", borderTop: `1px solid ${C.gray100}` }}>
+                « Jours » = jours avec au moins une prise enregistrée · « Ramass./Dépos. » = élèves réellement pris / déposés dans le mois.
+              </div>
+            </div>
+          ) : (<>
+          <div style={{ fontSize: 15, fontWeight: 900, color: "#0f2540", marginBottom: 10, textTransform: "capitalize" }}>
+            {JOUR_LONG[selJour]} {selDate.getDate()} {MOIS[selDate.getMonth()]}
           </div>
 
           {/* Onglets par circuit */}
@@ -179,6 +255,7 @@ export default function HistoriqueEtab({ circuits }: { circuits: Circ[] }) {
                   </>)}
             </div>
           )}
+          </>)}
         </div>
       </div>
     </div>
