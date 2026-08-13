@@ -16,6 +16,7 @@ const NAV_ITEMS: Record<Role, { path: string; label: string; icon: LucideIcon }[
     { path: "/gestionnaire/rapport",       label: "Rapport journalier", icon: FileText },
     { path: "/gestionnaire/imprevus",      label: "Imprévus",           icon: Zap },
     { path: "/gestionnaire/conducteurs",   label: "Conducteurs",        icon: Users },
+    { path: "/gestionnaire/inscription-qr", label: "Inscription (QR)",   icon: Smartphone },
     { path: "/gestionnaire/vehicules",     label: "Véhicules",          icon: Bus },
     { path: "/gestionnaire/etablissements", label: "Établissements",     icon: School },
     { path: "/gestionnaire/parents",        label: "Parents",            icon: Heart },
