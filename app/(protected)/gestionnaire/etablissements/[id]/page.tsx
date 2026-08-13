@@ -40,8 +40,14 @@ interface EleveForm {
   circuit_id: string;
   type_transport: Eleve["type_transport"];
   actif: boolean;
+  nom_mere: string;
+  tel_mere: string;
+  nom_pere: string;
+  tel_pere: string;
+  remarques: string;
 }
-const EMPTY_EF: EleveForm = { nom_famille:"", prenom_initiale:"", adresse:"", circuit_id:"", type_transport:"standard", actif:true };
+const EMPTY_EF: EleveForm = { nom_famille:"", prenom_initiale:"", adresse:"", circuit_id:"", type_transport:"standard", actif:true,
+  nom_mere:"", tel_mere:"", nom_pere:"", tel_pere:"", remarques:"" };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -88,6 +94,7 @@ export default function EtablissementDetail() {
 
   // Détail d'un circuit (liste des enfants) + menu d'actions par élève
   const [openCircuitId, setOpenCircuitId] = useState<string | null>(null);
+  const [apercuFor,     setApercuFor]     = useState<string | null>(null);   // aperçu côté conducteur
   const [menuFor,       setMenuFor]       = useState<number | null>(null);
   const [openAcc,       setOpenAcc]       = useState<Record<string, boolean>>({});
 
@@ -216,6 +223,11 @@ export default function EtablissementDetail() {
       circuit_id: e.circuit_id ?? "",
       type_transport: e.type_transport,
       actif: e.actif,
+      nom_mere: e.nom_mere ?? "",
+      tel_mere: e.tel_mere ?? "",
+      nom_pere: e.nom_pere ?? "",
+      tel_pere: e.tel_pere ?? "",
+      remarques: e.remarques ?? "",
     });
     setElErr("");
     setShowAddrAdd(false);
@@ -258,6 +270,11 @@ export default function EtablissementDetail() {
       circuit_id: eleveForm.circuit_id || null,
       type_transport: eleveForm.type_transport,
       actif: eleveForm.actif,
+      nom_mere: eleveForm.nom_mere.trim() || null,
+      tel_mere: eleveForm.tel_mere.trim() || null,
+      nom_pere: eleveForm.nom_pere.trim() || null,
+      tel_pere: eleveForm.tel_pere.trim() || null,
+      remarques: eleveForm.remarques.trim() || null,
       ecole_id: ecoleId,
     };
     let err;
@@ -719,10 +736,48 @@ export default function EtablissementDetail() {
                             {driverOptgroups()}
                           </select>
                           <div style={{ marginLeft:"auto", display:"flex", gap:6 }}>
+                            <Btn small outline onClick={()=>setApercuFor(apercuFor===c.id?null:c.id)}>👁️ Aperçu conducteur</Btn>
                             <Btn small outline onClick={()=>openEditCircuit(c)}><Pencil size={13}/> Circuit</Btn>
                             <Btn small outline color={C.red} onClick={()=>handleDeleteCircuit(c)}><Trash2 size={13}/></Btn>
                           </div>
                         </div>
+
+                        {/* Aperçu côté conducteur (contrôle de cohérence) */}
+                        {apercuFor===c.id && (
+                          <div style={{ borderTop:`1px solid ${C.gray100}` }}>
+                            <div style={{ padding:"10px 18px", background:C.navy, color:"#fff" }}>
+                              <div style={{ fontWeight:800, fontSize:13 }}>📱 Vue conducteur — tournée du jour</div>
+                              <div style={{ fontSize:11.5, opacity:.82 }}>Un enfant absent ou ramené par les parents n'est pas un arrêt : « ne pas récupérer », on passe au suivant.</div>
+                            </div>
+                            {(() => { let n = 0; return cEleves.map(e => {
+                              const ex = excToday(e.id);
+                              if (ex) {
+                                const info = ex.type==="absent" ? { c:"#E02424", bg:"#FDECEC", t:"Absent — ne pas récupérer" }
+                                  : ex.type==="parent" ? { c:"#D97706", bg:"#FEF3C7", t:"Ramené par les parents — ne pas récupérer" }
+                                  : { c:"#7C3AED", bg:"#EDE9FE", t:"Sur un autre circuit — ne pas récupérer ici" };
+                                return (
+                                  <div key={e.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 18px", borderTop:`1px solid ${C.gray100}`, background:info.bg }}>
+                                    <div style={{ width:24,height:24,borderRadius:7,background:info.c,color:"#fff",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0 }}>⤳</div>
+                                    <div style={{ flex:1, minWidth:0 }}><b style={{ color:info.c }}>{e.prenom_initiale} {e.nom_famille}</b><div style={{ fontSize:11.5, color:info.c, fontWeight:600 }}>{info.t}</div></div>
+                                  </div>
+                                );
+                              }
+                              n += 1;
+                              return (
+                                <div key={e.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 18px", borderTop:`1px solid ${C.gray100}`, background:"#fff" }}>
+                                  <div style={{ width:24,height:24,borderRadius:7,background:C.navy,color:"#fff",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0 }}>{n}</div>
+                                  <div style={{ minWidth:46, fontSize:12.5, fontWeight:800, color:C.navy }}>{e.heure_ramassage||"—"}</div>
+                                  <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:13.5, color:C.gray800 }}>{e.prenom_initiale} {e.nom_famille}</div><div style={{ fontSize:11.5, color:C.gray400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.adresse||""}</div></div>
+                                  <span style={{ background:"#EFF6FF", color:C.navy, borderRadius:20, padding:"3px 10px", fontSize:11.5, fontWeight:800 }}>À récupérer</span>
+                                </div>
+                              );
+                            }); })()}
+                            <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 18px", borderTop:`1px solid ${C.gray100}`, background:"#F8FAFC" }}>
+                              <div style={{ width:24,height:24,borderRadius:7,background:"#fff",border:`1px solid ${C.gray200}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:13 }}>🏫</div>
+                              <div style={{ fontSize:13, fontWeight:700, color:C.gray800 }}>Arrivée établissement — dépose</div>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Enfants de la tournée */}
                         {cEleves.length===0 ? (
@@ -735,7 +790,10 @@ export default function EtablissementDetail() {
                               <div style={{ width:26,height:26,borderRadius:8,background:C.navy,color:"#fff",fontWeight:800,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{i+1}</div>
                               <div style={{ minWidth:50, fontSize:13, fontWeight:800, color:C.navy }}>{e.heure_ramassage||"—"}</div>
                               <div style={{ flex:1, minWidth:0 }}>
-                                <div style={{ fontWeight:700, fontSize:14, color:C.gray800 }}>{e.prenom_initiale} {e.nom_famille}</div>
+                                <div style={{ fontWeight:700, fontSize:14, color:C.gray800 }}>
+                                  {e.prenom_initiale} {e.nom_famille}
+                                  {e.remarques && <span title={e.remarques} style={{ marginLeft:6, cursor:"help" }}>📌</span>}
+                                </div>
                                 <div style={{ fontSize:12, color:C.gray400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.adresse||"Adresse non renseignée"}</div>
                                 {ex && (
                                   <div style={{ fontSize:11, fontWeight:700, color:col, marginTop:2 }}>
@@ -754,6 +812,7 @@ export default function EtablissementDetail() {
                                     <div style={{ position:"absolute", right:0, top:34, width:236, background:C.white, border:`1px solid ${C.gray200}`,
                                       borderRadius:12, boxShadow:"0 12px 30px rgba(0,0,0,.16)", zIndex:41, overflow:"hidden" }}>
                                       {[
+                                        {ic:"📇", t:"Voir / éditer la fiche",     fn:()=>{ setMenuFor(null); openEdit(e); }},
                                         {ic:"✗",  t:"Absent aujourd'hui",        fn:()=>quickExc(e,"absent")},
                                         {ic:"🚗", t:"Ramené par les parents",     fn:()=>quickExc(e,"parent")},
                                         {ic:"📅", t:"Absence sur une période…",   fn:()=>openExc(e,"absent")},
@@ -1100,6 +1159,38 @@ export default function EtablissementDetail() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Contacts parents */}
+            <div style={{ borderTop:`1px solid ${C.gray200}`, paddingTop:14 }}>
+              <div style={{ fontWeight:700, fontSize:13, color:C.gray800, marginBottom:10 }}>Contacts parents</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                {[
+                  { key:"nom_mere", label:"Mère — nom", ph:"Prénom Nom" },
+                  { key:"tel_mere", label:"Mère — téléphone", ph:"079 000 00 00" },
+                  { key:"nom_pere", label:"Père — nom", ph:"Prénom Nom" },
+                  { key:"tel_pere", label:"Père — téléphone", ph:"079 000 00 00" },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label style={{ fontSize:12.5, color:C.gray600, fontWeight:600, display:"block", marginBottom:4 }}>{f.label}</label>
+                    <input value={(eleveForm as unknown as Record<string,string>)[f.key]}
+                      onChange={ev => setEleveForm(prev => ({ ...prev, [f.key]: ev.target.value }))}
+                      placeholder={f.ph}
+                      style={{ width:"100%", padding:"9px 12px", border:`1px solid ${C.gray200}`, borderRadius:8, fontSize:14, boxSizing:"border-box" }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Remarques */}
+            <div>
+              <label style={{ fontSize:13, color:C.gray600, fontWeight:600, display:"block", marginBottom:4 }}>
+                Remarques (médical, comportement, informations partagées…)
+              </label>
+              <textarea value={eleveForm.remarques}
+                onChange={e => setEleveForm(prev => ({ ...prev, remarques: e.target.value }))}
+                rows={3} placeholder="Ex : allergie, PAI, consignes particulières…"
+                style={{ width:"100%", padding:"9px 12px", border:`1px solid ${C.gray200}`, borderRadius:8, fontSize:14, boxSizing:"border-box", fontFamily:"inherit", resize:"vertical" }} />
             </div>
 
             {editEleve && (

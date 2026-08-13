@@ -26,6 +26,9 @@ export interface Eleve {
   actif: boolean;
   tel_mere?: string;
   tel_pere?: string;
+  nom_mere?: string;
+  nom_pere?: string;
+  remarques?: string;
   email?: string;
   heure_ramassage?: string;
   heure_depose?: string;
