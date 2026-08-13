@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
+import { circuitImage } from "@/lib/circuit-images";
 import { Btn, TabBar, Badge, Modal } from "@/components/ui";
 import type { Ecole, Eleve, Circuit, Conducteur, PriseEnCharge, TourneeConfig, AdresseEleve, CercleScolaire } from "@/lib/types";
 
@@ -47,6 +48,14 @@ const EMPTY_EF: EleveForm = { nom_famille:"", prenom_initiale:"", adresse:"", ci
 function fmtJour(iso: string) {
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString("fr-CH", { day: "numeric", month: "short" });
+}
+
+// Panneau du circuit (image générée) — sinon fallback emoji
+function circIcon(c: Circuit, size: number) {
+  const src = circuitImage(c.id);
+  return src
+    ? <img src={src} alt={c.nom} style={{ width: size, height: size, objectFit: "contain" }} />
+    : <span style={{ fontSize: Math.round(size * 0.55) }}>{c.emoji || "🚌"}</span>;
 }
 
 // Génère un code de circuit à partir du nom (ex: "Petit Lac" → "PETIT-LAC-4821")
@@ -504,6 +513,11 @@ export default function EtablissementDetail() {
 
   return (
     <div style={{ padding: "28px 28px", maxWidth: 980, margin: "0 auto" }}>
+      <style>{`
+        .etab-card{ transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
+        .etab-card:hover{ transform: translateY(-1px); box-shadow: 0 8px 22px rgba(13,59,122,.10); border-color:#c9d8ef; }
+        .etab-card select, .etab-card button{ transition: background .12s ease; }
+      `}</style>
       {/* Retour */}
       <button onClick={() => router.push("/gestionnaire/etablissements")}
         style={{ display:"flex", alignItems:"center", gap:6, color:C.gray600,
@@ -663,13 +677,13 @@ export default function EtablissementDetail() {
                 const cond = conduMap[c.id];
                 const open = openCircuitId === c.id;
                 return (
-                  <div key={c.id} style={{ background:C.white, border:`1px solid ${open?C.navy:C.gray200}`,
+                  <div key={c.id} className="etab-card" style={{ background:C.white, border:`1px solid ${open?C.navy:C.gray200}`,
                     borderRadius:12, overflow:"hidden" }}>
                     {/* En-tête cliquable */}
                     <div onClick={()=>{ setOpenCircuitId(open?null:c.id); setMenuFor(null); }}
                       style={{ display:"flex", alignItems:"center", gap:14, padding:"15px 18px", cursor:"pointer" }}>
                       <div style={{ width:50,height:50,borderRadius:12,background:C.white,border:`1px solid ${C.gray100}`,
-                        display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:26 }}>{c.emoji||"🚌"}</div>
+                        display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 1px 4px rgba(0,0,0,.06)" }}>{circIcon(c,42)}</div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontSize:16, fontWeight:800, color:C.gray800 }}>{c.nom}</div>
                         <div style={{ fontSize:12.5, color:C.gray400, marginTop:2 }}>
@@ -791,7 +805,7 @@ export default function EtablissementDetail() {
                 return (
                   <div key={c.id} style={{ background:C.white, border:`1px solid ${C.gray200}`, borderRadius:12, overflow:"hidden" }}>
                     <div onClick={()=>setOpenAcc(p=>({...p,[c.id]:!p[c.id]}))} style={{ display:"flex", alignItems:"center", gap:12, padding:"13px 16px", cursor:"pointer" }}>
-                      <div style={{ fontSize:22 }}>{c.emoji||"🚌"}</div>
+                      <div style={{ width:40,height:40,borderRadius:10,background:C.white,border:`1px solid ${C.gray100}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{circIcon(c,32)}</div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontWeight:800, color:C.gray800, fontSize:15 }}>{c.nom}</div>
                         <div style={{ fontSize:12, color:C.gray400 }}>{cond?`👤 ${cond.prenom} ${cond.nom}`:"non affecté"} · {cEleves.length} élèves</div>
