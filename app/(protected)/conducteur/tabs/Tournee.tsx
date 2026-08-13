@@ -26,6 +26,7 @@ interface TourneeProps {
   onMarquerEleve: (eleveId: number, statut: "present" | "absent", sens: "aller" | "retour") => Promise<void>;
   onShowConfirm: () => void;
   onShowFin: () => void;
+  onReopenService?: () => void;
   onShowReprise: () => void;
 }
 
@@ -60,7 +61,7 @@ function loadLeaflet(): Promise<any> {
   });
 }
 
-export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = [], enService, serviceFini = false, onMarquerEleve, onShowConfirm, onShowFin, onShowReprise }: TourneeProps) {
+export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = [], enService, serviceFini = false, onMarquerEleve, onShowConfirm, onShowFin, onReopenService, onShowReprise }: TourneeProps) {
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const [mapError, setMapError] = useState(false);
@@ -219,6 +220,12 @@ export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = []
             Vous avez assuré votre journée (matin et après-midi).<br />Merci et bon repos.
           </p>
         </div>
+        {onReopenService && (
+          <button onClick={onReopenService}
+            style={{ width: "100%", padding: "13px", borderRadius: 14, border: `1.5px solid ${C.gray200}`, background: "#fff", color: C.navy, fontWeight: 800, fontSize: 15, cursor: "pointer", marginBottom: 12 }}>
+            Reprendre le service
+          </button>
+        )}
         {dayList}
       </div>
     );

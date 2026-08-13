@@ -223,11 +223,17 @@ export default function ConducteurPage(){
     return()=>{sb.removeChannel(ch);};
   },[load,sb]);
 
-  // Bascule automatique au changement de jour (à minuit) même si la page reste ouverte
+  // Bascule automatique au changement de jour — infaillible :
+  //  • timer chaque minute (bascule à minuit si l'appli reste ouverte)
+  //  • re-vérif dès que l'appli revient au premier plan (ouverture le matin, retour d'arrière-plan)
   useEffect(()=>{
     let cur=isoToday();
-    const id=setInterval(()=>{ const now=isoToday(); if(now!==cur){ cur=now; load(); } },60000);
-    return()=>clearInterval(id);
+    const check=()=>{ const now=isoToday(); if(now!==cur){ cur=now; setJourneeSeen(false); load(); } };
+    const id=setInterval(check,60000);
+    const onVis=()=>{ if(typeof document!=="undefined" && document.visibilityState==="visible") check(); };
+    document.addEventListener("visibilitychange",onVis);
+    window.addEventListener("focus",onVis);
+    return()=>{ clearInterval(id); document.removeEventListener("visibilitychange",onVis); window.removeEventListener("focus",onVis); };
   },[load]);
 
   // Canal séparé pour alertes avec filtre driver_id — requis car RLS integer FK
@@ -278,6 +284,19 @@ export default function ConducteurPage(){
     setDriver(p=>p?{...p,status:"disponible"}:p);
     setTodayLog(p=>p?{...p,heure_fin:nowTimeStr(),status:"termine"}:p);
     setShowFin(false);
+  }
+
+  // Rouvrir un service terminé (pour ne pas rester bloqué sur « Service terminé »)
+  async function handleReopenService(){
+    if(!driver)return;
+    if(todayLog){
+      await sb.from("service_logs").update({heure_fin:null,status:"en_service"}).eq("id",todayLog.id);
+      setTodayLog(p=>p?{...p,heure_fin:undefined,status:"en_service"}:p);
+      await sb.from("conducteurs").update({status:"en_service"}).eq("id",driver.id);
+      setDriver(p=>p?{...p,status:"en_service"}:p);
+    } else {
+      await handlePrendreService();
+    }
   }
 
   async function handleSignalerAbsence(){
@@ -516,6 +535,7 @@ export default function ConducteurPage(){
           onMarquerEleve={handleMarquerEleve}
           onShowConfirm={()=>setShowConfirm(true)}
           onShowFin={()=>setShowFin(true)}
+          onReopenService={handleReopenService}
           onShowReprise={()=>setShowReprise(true)}/>
       )}
       {tab==="fiche"&&(
