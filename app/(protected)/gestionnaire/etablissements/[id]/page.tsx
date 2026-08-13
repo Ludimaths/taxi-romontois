@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
 import { circuitImage } from "@/lib/circuit-images";
-import { Btn, TabBar, Badge, Modal } from "@/components/ui";
+import { Btn, Badge, Modal } from "@/components/ui";
 import { ImportExcelModal } from "./ImportExcelModal";
 import type { Ecole, Eleve, Circuit, Conducteur, PriseEnCharge, TourneeConfig, AdresseEleve, CercleScolaire } from "@/lib/types";
 
@@ -597,12 +597,30 @@ export default function EtablissementDetail() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <TabBar
-        tabs={["Circuits & élèves","Suivi du jour","Planning & absences","Élèves","Factures"]}
-        active={tab}
-        onChange={setTab}
-      />
+      {/* Onglets — style simulateur (emoji + soulignement) */}
+      <div style={{ display:"flex", gap:4, borderBottom:`2px solid ${C.gray100}`, marginBottom:4, flexWrap:"wrap" }}>
+        {([
+          { id:"Circuits & élèves", ic:"🗺️" },
+          { id:"Suivi du jour", ic:"✅", badge: circuits.length },
+          { id:"Planning & absences", ic:"📅", badge: exceptions.filter(x => { const t = isoToday(); return x.date_debut <= t && x.date_fin >= t; }).length },
+          { id:"Élèves", ic:"👥" },
+          { id:"Factures", ic:"🧾" },
+        ] as const).map(t => {
+          const active = tab === t.id;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              style={{ padding:"11px 15px", fontSize:14, fontWeight:700, cursor:"pointer", background:"none", border:"none",
+                borderBottom:`3px solid ${active ? C.navy : "transparent"}`, marginBottom:-2,
+                color: active ? C.navy : C.gray400, display:"flex", alignItems:"center", gap:7, whiteSpace:"nowrap" }}>
+              <span>{t.ic}</span> {t.id}
+              {"badge" in t && t.badge > 0 && (
+                <span style={{ background: active ? C.navy : C.gray100, color: active ? "#fff" : C.gray,
+                  borderRadius:20, fontSize:11, padding:"1px 8px", fontWeight:800 }}>{t.badge}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       {/* ── ÉLÈVES (liste complète) ────────────────────────────────────────── */}
       {tab === "Élèves" && (
@@ -743,48 +761,11 @@ export default function EtablissementDetail() {
                             {driverOptgroups()}
                           </select>
                           <div style={{ marginLeft:"auto", display:"flex", gap:6 }}>
-                            <Btn small outline onClick={()=>setApercuFor(apercuFor===c.id?null:c.id)}>👁️ Aperçu conducteur</Btn>
+                            <Btn small outline onClick={()=>setApercuFor(c.id)}>👁️ Aperçu conducteur</Btn>
                             <Btn small outline onClick={()=>openEditCircuit(c)}><Pencil size={13}/> Circuit</Btn>
                             <Btn small outline color={C.red} onClick={()=>handleDeleteCircuit(c)}><Trash2 size={13}/></Btn>
                           </div>
                         </div>
-
-                        {/* Aperçu côté conducteur (contrôle de cohérence) */}
-                        {apercuFor===c.id && (
-                          <div style={{ borderTop:`1px solid ${C.gray100}` }}>
-                            <div style={{ padding:"10px 18px", background:C.navy, color:"#fff" }}>
-                              <div style={{ fontWeight:800, fontSize:13 }}>📱 Vue conducteur — tournée du jour</div>
-                              <div style={{ fontSize:11.5, opacity:.82 }}>Un enfant absent ou ramené par les parents n'est pas un arrêt : « ne pas récupérer », on passe au suivant.</div>
-                            </div>
-                            {(() => { let n = 0; return cEleves.map(e => {
-                              const ex = excToday(e.id);
-                              if (ex) {
-                                const info = ex.type==="absent" ? { c:"#E02424", bg:"#FDECEC", t:"Absent — ne pas récupérer" }
-                                  : ex.type==="parent" ? { c:"#D97706", bg:"#FEF3C7", t:"Ramené par les parents — ne pas récupérer" }
-                                  : { c:"#7C3AED", bg:"#EDE9FE", t:"Sur un autre circuit — ne pas récupérer ici" };
-                                return (
-                                  <div key={e.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 18px", borderTop:`1px solid ${C.gray100}`, background:info.bg }}>
-                                    <div style={{ width:24,height:24,borderRadius:7,background:info.c,color:"#fff",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0 }}>⤳</div>
-                                    <div style={{ flex:1, minWidth:0 }}><b style={{ color:info.c }}>{e.prenom_initiale} {e.nom_famille}</b><div style={{ fontSize:11.5, color:info.c, fontWeight:600 }}>{info.t}</div></div>
-                                  </div>
-                                );
-                              }
-                              n += 1;
-                              return (
-                                <div key={e.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 18px", borderTop:`1px solid ${C.gray100}`, background:"#fff" }}>
-                                  <div style={{ width:24,height:24,borderRadius:7,background:C.navy,color:"#fff",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0 }}>{n}</div>
-                                  <div style={{ minWidth:46, fontSize:12.5, fontWeight:800, color:C.navy }}>{e.heure_ramassage||"—"}</div>
-                                  <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:13.5, color:C.gray800 }}>{e.prenom_initiale} {e.nom_famille}</div><div style={{ fontSize:11.5, color:C.gray400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.adresse||""}</div></div>
-                                  <span style={{ background:"#EFF6FF", color:C.navy, borderRadius:20, padding:"3px 10px", fontSize:11.5, fontWeight:800 }}>À récupérer</span>
-                                </div>
-                              );
-                            }); })()}
-                            <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 18px", borderTop:`1px solid ${C.gray100}`, background:"#F8FAFC" }}>
-                              <div style={{ width:24,height:24,borderRadius:7,background:"#fff",border:`1px solid ${C.gray200}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:13 }}>🏫</div>
-                              <div style={{ fontSize:13, fontWeight:700, color:C.gray800 }}>Arrivée établissement — dépose</div>
-                            </div>
-                          </div>
-                        )}
 
                         {/* Enfants de la tournée */}
                         {cEleves.length===0 ? (
@@ -1521,6 +1502,52 @@ export default function EtablissementDetail() {
         <ImportExcelModal ecoleId={ecoleId} ecoleNom={ecole.nom} circuits={circuits} eleves={eleves}
           onClose={() => setShowImport(false)} onDone={load} />
       )}
+
+      {/* ── Aperçu côté conducteur (pop-up) ── */}
+      {apercuFor && (() => {
+        const c = circuits.find(x => x.id === apercuFor);
+        if (!c) return null;
+        const cEleves = eleves.filter(e => e.circuit_id === c.id && e.actif)
+          .sort((a,b)=>(a.heure_ramassage||"~").localeCompare(b.heure_ramassage||"~"));
+        let n = 0;
+        return (
+          <Modal title={`Aperçu conducteur — ${c.nom}`} onClose={() => setApercuFor(null)} wide>
+            <div style={{ background:C.navy, color:"#fff", borderRadius:10, padding:"11px 15px", marginBottom:12 }}>
+              <div style={{ fontWeight:800, fontSize:13 }}>📱 Vue conducteur — tournée du jour</div>
+              <div style={{ fontSize:11.5, opacity:.85 }}>Un enfant absent ou ramené par les parents n'est pas un arrêt : « ne pas récupérer », on passe au suivant.</div>
+            </div>
+            <div style={{ border:`1px solid ${C.gray200}`, borderRadius:12, overflow:"hidden" }}>
+              {cEleves.map(e => {
+                const ex = excToday(e.id);
+                if (ex) {
+                  const info = ex.type==="absent" ? { c:"#E02424", bg:"#FDECEC", t:"Absent — ne pas récupérer" }
+                    : ex.type==="parent" ? { c:"#D97706", bg:"#FEF3C7", t:"Ramené par les parents — ne pas récupérer" }
+                    : { c:"#7C3AED", bg:"#EDE9FE", t:"Sur un autre circuit — ne pas récupérer ici" };
+                  return (
+                    <div key={e.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 16px", borderBottom:`1px solid ${C.gray100}`, background:info.bg }}>
+                      <div style={{ width:24,height:24,borderRadius:7,background:info.c,color:"#fff",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0 }}>⤳</div>
+                      <div style={{ flex:1, minWidth:0 }}><b style={{ color:info.c }}>{e.prenom_initiale} {e.nom_famille}</b><div style={{ fontSize:11.5, color:info.c, fontWeight:600 }}>{info.t}</div></div>
+                    </div>
+                  );
+                }
+                n += 1;
+                return (
+                  <div key={e.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 16px", borderBottom:`1px solid ${C.gray100}`, background:"#fff" }}>
+                    <div style={{ width:24,height:24,borderRadius:7,background:C.navy,color:"#fff",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0 }}>{n}</div>
+                    <div style={{ minWidth:46, fontSize:12.5, fontWeight:800, color:C.navy }}>{e.heure_ramassage||"—"}</div>
+                    <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:700, fontSize:13.5, color:C.gray800 }}>{e.prenom_initiale} {e.nom_famille}</div><div style={{ fontSize:11.5, color:C.gray400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.adresse||""}</div></div>
+                    <span style={{ background:"#EFF6FF", color:C.navy, borderRadius:20, padding:"3px 10px", fontSize:11.5, fontWeight:800 }}>À récupérer</span>
+                  </div>
+                );
+              })}
+              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 16px", background:"#F8FAFC" }}>
+                <div style={{ width:24,height:24,borderRadius:7,background:"#fff",border:`1px solid ${C.gray200}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:13 }}>🏫</div>
+                <div style={{ fontSize:13, fontWeight:700, color:C.gray800 }}>Arrivée établissement — dépose</div>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }
