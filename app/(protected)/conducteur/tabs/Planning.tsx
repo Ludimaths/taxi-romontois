@@ -9,7 +9,7 @@ type HebdoRow = {
   eleve_id: number | null; besoin_special: boolean;
 };
 type Circ = { id: string; nom: string; emoji?: string };
-type Exc = { eleve_id: number; type: string };
+type Exc = { eleve_id: number; type: string; date_debut: string; date_fin: string };
 
 const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 const JOUR_LONG: Record<number, string> = { 0: "Dimanche", 1: "Lundi", 2: "Mardi", 3: "Mercredi", 4: "Jeudi", 5: "Vendredi", 6: "Samedi" };
@@ -22,8 +22,9 @@ export function TabPlanning({ circuits, week, exceptions }:
   const today = new Date();
   const [view, setView] = useState<{ y: number; m: number }>({ y: today.getFullYear(), m: today.getMonth() });
   const [sel, setSel] = useState<string>(ymd(today));
-  const excSet = new Set(exceptions.map(e => e.eleve_id));
   const todayStr = ymd(today);
+  // Élèves absents/ramenés pour la DATE sélectionnée (les périodes couvrent plusieurs jours)
+  const excSet = new Set(exceptions.filter(e => e.date_debut <= sel && e.date_fin >= sel).map(e => e.eleve_id));
 
   // Grille du mois (semaine commençant le lundi)
   const first = new Date(view.y, view.m, 1);

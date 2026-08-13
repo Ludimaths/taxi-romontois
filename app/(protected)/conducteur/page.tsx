@@ -10,6 +10,7 @@ type JourneeCircuit = { id: string; nom: string; emoji?: string; nb: number;
 type HebdoRow = { id: number; circuit_id: string; jour: number; sens: "matin" | "aprem";
   ordre: number; heure: string; eleve_nom: string; adresse: string | null;
   eleve_id: number | null; besoin_special: boolean };
+type ExcRange = { eleve_id: number; type: string; date_debut: string; date_fin: string };
 import { Bus, FileText, AlertCircle, Mail, History, CalendarDays, CalendarRange, LogOut, MoreHorizontal, MapPin, X } from "lucide-react";
 import { BSheet, BigBtn, TA, Chip, StatusBadge } from "./tabs/shared";
 import { TabFiche } from "./tabs/Fiche";
@@ -47,8 +48,8 @@ export default function ConducteurPage(){
   }
   const [matinEleves, setMatinEleves] = useState<Eleve[]>([]);
   const [apremEleves, setApremEleves] = useState<Eleve[]>([]);
-  const [phase,       setPhase]       = useState<"matin"|"aprem">("matin");
   const [weekStops,   setWeekStops]   = useState<HebdoRow[]>([]);
+  const [excRange,    setExcRange]    = useState<ExcRange[]>([]);
   const [myCircuits,  setMyCircuits]  = useState<{id:string;nom:string;emoji?:string}[]>([]);
   const [prisesHist,  setPrisesHist]  = useState<PriseEnCharge[]>([]);
   const [loading,   setLoading]   = useState(true);
@@ -135,28 +136,31 @@ export default function ConducteurPage(){
 
     setMyCircuits(myCircs.map(c => ({ id: c.id, nom: c.nom, emoji: c.emoji })));
 
-    // Planning hebdo COMPLET (tous les jours) + exceptions + prises + élèves (contacts)
+    // Planning hebdo COMPLET (tous les jours) + exceptions (avec période) + prises + élèves (contacts)
     let hebdo: HebdoRow[] = [];      // arrêts du JOUR courant
-    let jexc: { eleve_id: number; type: string }[] = [];
+    let jexc: { eleve_id: number; type: string }[] = [];   // exceptions ACTIVES aujourd'hui
+    let excAll: ExcRange[] = [];                             // exceptions en cours ou à venir (avec dates)
     let prisesJour: PriseEnCharge[] = [];
     let elevesAll: Eleve[] = [];
     if (circIds.length) {
       const [{ data: th }, { data: ex2 }, { data: pr }, { data: elA }] = await Promise.all([
         sb.from("tournee_hebdo").select("*").in("circuit_id", circIds).order("jour").order("sens").order("ordre"),
-        sb.from("exceptions_eleves").select("eleve_id,type").lte("date_debut", t2).gte("date_fin", t2),
+        sb.from("exceptions_eleves").select("eleve_id,type,date_debut,date_fin").gte("date_fin", t2),
         sb.from("prises_en_charge").select("*").eq("conducteur_id", cid).eq("date", t2),
         sb.from("eleves").select("*").in("circuit_id", circIds).eq("actif", true),
       ]);
       const week = (th ?? []) as HebdoRow[];
       setWeekStops(week);
       hebdo = week.filter(h => h.jour === jour);
-      jexc = (ex2 ?? []) as { eleve_id: number; type: string }[];
+      excAll = (ex2 ?? []) as ExcRange[];
+      jexc = excAll.filter(x => x.date_debut <= t2 && x.date_fin >= t2).map(x => ({ eleve_id: x.eleve_id, type: x.type }));
       prisesJour = (pr ?? []) as PriseEnCharge[];
       elevesAll = (elA ?? []) as Eleve[];
     } else {
       setWeekStops([]);
     }
     setExceptions(jexc as ExcToday[]);
+    setExcRange(excAll);
     setPrises(prisesJour);
 
     // Historique des prises (120 derniers jours) pour l'onglet Historique
@@ -314,14 +318,8 @@ export default function ConducteurPage(){
     setDriver(p=>p?{...p,...patch}:p);
   }
 
-  function handleValiderMatin() {
-    // Fin de la tournée du matin → l'après-midi s'active. Le service reste ouvert.
-    setPhase("aprem");
-  }
-
-  async function handleMarquerEleve(eleveId: number, statut: "present" | "absent") {
+  async function handleMarquerEleve(eleveId: number, statut: "present" | "absent", sens: "aller" | "retour") {
     if (!driver) return;
-    const sens: "aller" | "retour" = phase === "matin" ? "aller" : "retour";  // matin=aller, après-midi=retour
     const today = isoToday();
     // Arrêt non relié à un élève en base (id synthétique négatif) → progression locale.
     if (eleveId <= 0) {
@@ -505,13 +503,10 @@ export default function ConducteurPage(){
 
       {/* Contenu des onglets */}
       {tab==="tournee"&&(
-        <TabTournee key={phase} driver={driver} circ={circ}
-          eleves={phase==="matin"?matinEleves:apremEleves}
-          prises={prises.filter(p=>p.sens===(phase==="matin"?"aller":"retour"))} exceptions={exceptions}
-          sens={phase}
+        <TabTournee driver={driver} circ={circ}
+          matin={matinEleves} aprem={apremEleves} prises={prises} exceptions={exceptions}
           enService={driver.status==="en_service"} serviceFini={!!todayLog?.heure_fin}
           onMarquerEleve={handleMarquerEleve}
-          onValiderMatin={handleValiderMatin}
           onShowConfirm={()=>setShowConfirm(true)}
           onShowFin={()=>setShowFin(true)}
           onShowReprise={()=>setShowReprise(true)}/>
@@ -533,7 +528,7 @@ export default function ConducteurPage(){
           onMarquerLu={handleMarquerLu} onSetTab={t=>setTab(t as Tab)}/>
       )}
       {tab==="planning"&&(
-        <TabPlanning circuits={myCircuits} week={weekStops} exceptions={exceptions}/>
+        <TabPlanning circuits={myCircuits} week={weekStops} exceptions={excRange}/>
       )}
       {tab==="historique"&&(
         <TabHistorique histLogs={histLogs} incidents={incidents} prisesHist={prisesHist} week={weekStops} />

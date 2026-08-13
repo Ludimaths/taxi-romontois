@@ -1,14 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Navigation, School, ArrowRight } from "lucide-react";
+import { Navigation, School } from "lucide-react";
 import { C } from "@/lib/constants";
 import { circuitImage } from "@/lib/circuit-images";
 import type { Conducteur, Eleve, PriseEnCharge } from "@/lib/types";
 
 type CircType = { nom?: string; emoji?: string; id?: string };
 
-// Destination (Fondation Mérine) — fallback tant que les écoles n'ont pas
-// leurs propres coordonnées en base.
+// Destination (Fondation Mérine) — fallback tant que les écoles n'ont pas leurs coordonnées.
 const ECOLE = { nom: "Fondation Mérine", adr: "Rue du Château 47, 1510 Moudon", lat: 46.6692349, lon: 6.7932469, tel: "021 905 30 30" };
 const CENTRAL_TEL = "024 455 44 80";
 const ARRIVEE = "08:25";
@@ -18,14 +17,13 @@ export interface ExcToday { eleve_id: number; type: "absent" | "parent" | "chang
 interface TourneeProps {
   driver: Conducteur;
   circ?: CircType;
-  eleves: Eleve[];
-  prises: PriseEnCharge[];
+  matin: Eleve[];
+  aprem: Eleve[];
+  prises: PriseEnCharge[];                 // toutes les prises du jour (aller + retour)
   exceptions?: ExcToday[];
-  sens?: "matin" | "aprem";
   enService: boolean;
   serviceFini?: boolean;
-  onMarquerEleve: (eleveId: number, statut: "present" | "absent") => Promise<void>;
-  onValiderMatin?: () => void;
+  onMarquerEleve: (eleveId: number, statut: "present" | "absent", sens: "aller" | "retour") => Promise<void>;
   onShowConfirm: () => void;
   onShowFin: () => void;
   onShowReprise: () => void;
@@ -41,6 +39,7 @@ const gmapsAddr = (adr: string) => `https://www.google.com/maps/dir/?api=1&desti
 const gmapsLL = (la: number, lo: number) => `https://www.google.com/maps/dir/?api=1&destination=${la},${lo}`;
 const cleanTel = (t?: string) => (t || "").replace(/\s/g, "");
 const initials = (e: Eleve) => ((e.prenom_initiale?.[0] || "") + (e.nom_famille?.[0] || "")).toUpperCase();
+const byHeure = (a: Eleve, b: Eleve) => (a.heure_ramassage || "~~").localeCompare(b.heure_ramassage || "~~");
 
 function loadLeaflet(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -61,29 +60,45 @@ function loadLeaflet(): Promise<any> {
   });
 }
 
-export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens = "matin", enService, serviceFini = false, onMarquerEleve, onValiderMatin, onShowConfirm, onShowFin, onShowReprise }: TourneeProps) {
-  const isAprem = sens === "aprem";
+export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = [], enService, serviceFini = false, onMarquerEleve, onShowConfirm, onShowFin, onShowReprise }: TourneeProps) {
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const [mapError, setMapError] = useState(false);
-  const [arrived, setArrived] = useState(false);          // arrivé sur place à l'arrêt courant
-  const [schoolPhase, setSchoolPhase] = useState<"go" | "at" | "done">("go");
+  const [arrived, setArrived] = useState(false);        // arrivé sur place à l'arrêt courant
+  const [ecolePassed, setEcolePassed] = useState(false); // dépose école faite (transition matin → après-midi)
 
-  const excMap = new Map<number, string>(exceptions.map(x => [x.eleve_id, x.type]));   // exceptions du jour
+  const excMap = new Map<number, string>(exceptions.map(x => [x.eleve_id, x.type]));
   const hasExc = (e: Eleve) => excMap.has(e.id);
-  const tournee = [...eleves].sort((a, b) => (a.heure_ramassage || "~~").localeCompare(b.heure_ramassage || "~~"));
-  const prisByEleve = new Map(prises.map(p => [p.eleve_id, p]));
-  // Un enfant absent / ramené par les parents / sur un autre circuit n'est PAS un arrêt :
-  // il compte comme "réglé" pour la progression, on passe au suivant.
-  const isDone = (e: Eleve) => prisByEleve.has(e.id) || hasExc(e);
-  const currentIndex = tournee.findIndex(e => !isDone(e));
-  const active = tournee.filter(e => !hasExc(e));                       // à réellement récupérer
-  const allPickedUp = tournee.length > 0 && currentIndex === -1;
-  const presents = prises.filter(p => p.statut === "present").length;
-  const img = circuitImage(driver.circuit_id);
-  const withCoords = tournee.filter(e => e.lat != null && e.lon != null);
 
-  // Carte (visible en service)
+  const matinList = [...matin].sort(byHeure);
+  const apremList = [...aprem].sort(byHeure);
+
+  const priseAllerBy = new Map(prises.filter(p => p.sens === "aller").map(p => [p.eleve_id, p]));
+  const priseRetourBy = new Map(prises.filter(p => p.sens === "retour").map(p => [p.eleve_id, p]));
+
+  const doneMatin = (e: Eleve) => priseAllerBy.has(e.id) || hasExc(e);
+  const doneAprem = (e: Eleve) => priseRetourBy.has(e.id) || hasExc(e);
+
+  const curMatinIdx = matinList.findIndex(e => !doneMatin(e));
+  const curApremIdx = apremList.findIndex(e => !doneAprem(e));
+  const matinComplete = matinList.length === 0 || curMatinIdx === -1;
+  const apremComplete = apremList.length === 0 || curApremIdx === -1;
+  const dayComplete = matinComplete && apremComplete;
+  const apremStarted = priseRetourBy.size > 0;
+
+  const matinActive = matinList.filter(e => !hasExc(e)).length;
+  const apremActive = apremList.filter(e => !hasExc(e)).length;
+  const presMatin = [...priseAllerBy.values()].filter(p => p.statut === "present").length;
+  const presAprem = [...priseRetourBy.values()].filter(p => p.statut === "present").length;
+
+  const inMatin = !matinComplete;
+  const curList = inMatin ? matinList : apremList;
+  const curIdx = inMatin ? curMatinIdx : curApremIdx;
+  const cur = curList[curIdx];
+  const img = circuitImage(driver.circuit_id);
+  const withCoords = curList.filter(e => e.lat != null && e.lon != null);
+
+  // ── Carte (arrêts de la phase en cours) ─────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     if (!enService || !mapDiv.current || withCoords.length === 0) return;
@@ -95,29 +110,28 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
         mapRef.current = map;
         L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", { maxZoom: 19 }).addTo(map);
         const pts: [number, number][] = [];
-        tournee.forEach((e, k) => {
+        curList.forEach((e, k) => {
           if (e.lat == null || e.lon == null) return;
-          const done = isDone(e);
-          const cur = k === currentIndex;
-          const col = done ? "#0E9F6E" : cur ? "#E02424" : "#0D3B7A";
+          const done = inMatin ? doneMatin(e) : doneAprem(e);
+          const isCur = k === curIdx;
+          const col = done ? "#0E9F6E" : isCur ? "#E02424" : "#0D3B7A";
           L.marker([e.lat, e.lon], { icon: L.divIcon({ className: "", iconSize: [26, 26], iconAnchor: [13, 13],
             html: `<div style="background:${col};color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font:700 12px sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)">${done ? "✓" : k + 1}</div>` }) })
             .addTo(map).bindPopup(`<b>${e.prenom_initiale} ${e.nom_famille}</b><br>${e.adresse || ""}`);
           pts.push([e.lat, e.lon]);
         });
-        L.polyline([...pts, [ECOLE.lat, ECOLE.lon]], { color: "#0D3B7A", weight: 3, opacity: .45, dashArray: "6,6" }).addTo(map);
         L.marker([ECOLE.lat, ECOLE.lon], { icon: L.divIcon({ className: "", iconSize: [28, 28], iconAnchor: [14, 14],
           html: `<div style="background:#fff;border-radius:8px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid #0D3B7A;box-shadow:0 1px 4px rgba(0,0,0,.3)">🏫</div>` }) }).addTo(map);
         pts.push([ECOLE.lat, ECOLE.lon]);
-        map.fitBounds(pts, { padding: [30, 30] });
+        if (pts.length) { map.fitBounds(pts, { padding: [30, 30] }); }
         setTimeout(() => { try { map.invalidateSize(); } catch { /* noop */ } }, 200);
       } catch { setMapError(true); }
     }).catch(() => setMapError(true));
     return () => { cancelled = true; if (mapRef.current) { try { mapRef.current.remove(); } catch { /* noop */ } mapRef.current = null; } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enService, driver.circuit_id, eleves.length, prises.length, currentIndex]);
+  }, [enService, driver.circuit_id, inMatin, curIdx, prises.length]);
 
-  // ── En-tête (étiquette de présentation) ────────────────────────────────────
+  // ── En-tête ─────────────────────────────────────────────────────────────────
   const header = (
     <div style={{ background: "linear-gradient(160deg,#12498f,#0D3B7A)", borderRadius: 20, padding: "18px 20px",
       color: "#fff", marginBottom: 14, display: "flex", alignItems: "center", gap: 16, boxShadow: "0 6px 20px rgba(13,59,122,.25)" }}>
@@ -127,12 +141,10 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
           </div>
         : <div style={{ fontSize: 56 }}>{circ?.emoji || "🚌"}</div>}
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, opacity: .85, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>{isAprem ? "Ma tournée de l'après-midi" : "Ma tournée du matin"}</div>
+        <div style={{ fontSize: 12, opacity: .85, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>Ma tournée du jour</div>
         <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-.4px", marginTop: 1 }}>{circ?.nom || "Circuit"}</div>
         <div style={{ fontSize: 12.5, opacity: .85, marginTop: 3 }}>
-          {isAprem
-            ? <>{active.length} dépose{active.length > 1 ? "s" : ""} · départ Mérine</>
-            : <>{active.length} élève{active.length > 1 ? "s" : ""} · arrivée Mérine ~{ARRIVEE}</>}
+          {matinActive} ramassage{matinActive > 1 ? "s" : ""} · {apremActive} dépose{apremActive > 1 ? "s" : ""}
         </div>
       </div>
     </div>
@@ -153,8 +165,6 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
     </a>
   );
 
-  // Un seul geste : on appuie → l'app téléphone s'ouvre avec le numéro. Le numéro
-  // reste visible pour le lire / le copier au besoin.
   const telChip = (label: string, num: string, kind?: "p" | "s") => (
     <a href={`tel:${cleanTel(num)}`} style={{ ...cbtn(kind), display: "flex", flexDirection: "column", gap: 2, padding: "9px 10px" }}>
       <span style={{ fontSize: 12, fontWeight: 800 }}>{label}</span>
@@ -175,7 +185,12 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
       color: kind === "p" ? "#b42323" : C.navy, background: kind === "p" ? "#FDECEC" : kind === "s" ? "#EFF6FF" : "#fff" };
   }
 
-  // ── 0bis) Aucun circuit attribué → message d'attente (avant tout le reste) ──
+  const dayList = (
+    <DayList matin={matinList} aprem={apremList} priseAllerBy={priseAllerBy} priseRetourBy={priseRetourBy}
+      excMap={excMap} curMatinIdx={enService && inMatin ? curMatinIdx : -1} curApremIdx={enService && !inMatin ? curApremIdx : -1} />
+  );
+
+  // ── 0bis) Aucun circuit attribué ────────────────────────────────────────────
   if (!driver.circuit_id) {
     return (
       <div>
@@ -191,7 +206,7 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
     );
   }
 
-  // ── 0) Service déjà terminé aujourd'hui → FÉLICITATIONS ─────────────────────
+  // ── 0) Service terminé aujourd'hui → FÉLICITATIONS ──────────────────────────
   if (!enService && serviceFini && driver.status !== "absent") {
     return (
       <div>
@@ -200,17 +215,17 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
           <div style={{ width: 88, height: 88, borderRadius: "50%", background: C.greenL, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", fontSize: 44 }}>🎉</div>
           <div style={{ color: C.green, fontSize: 22, fontWeight: 900 }}>Service terminé — félicitations !</div>
           <p style={{ color: "#475569", fontSize: 14, marginTop: 8, lineHeight: 1.5 }}>
-            Vous avez assuré votre tournée. Merci et bon repos.<br />Rendez-vous à la prochaine tournée.
+            Vous avez assuré votre journée (matin et après-midi).<br />Merci et bon repos.
           </p>
         </div>
-        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} excMap={excMap} isAprem={isAprem} />
+        {dayList}
       </div>
     );
   }
 
-  // ── 1) Pas encore en service → BRIEFING ─────────────────────────────────────
+  // ── 1) Pas encore en service → BRIEFING de la journée ───────────────────────
   if (!enService) {
-    const first = tournee[0];
+    const first = matinList[0];
     return (
       <div>
         {header}
@@ -224,13 +239,14 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
         ) : (
           <>
             <div style={{ background: "#fff", borderRadius: 16, padding: 18, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
-              <div style={{ fontSize: 18, fontWeight: 900, color: C.navy, marginBottom: 6 }}>Voici votre tournée</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: C.navy, marginBottom: 6 }}>Voici votre journée</div>
               <div style={{ fontSize: 14, color: "#475569", lineHeight: 1.5 }}>
-                Vous récupérez <b>{tournee.length} enfant{tournee.length > 1 ? "s" : ""}</b> et les déposez à la <b>Fondation Mérine</b> pour <b>{ARRIVEE}</b>.
+                Le matin, vous récupérez <b>{matinActive} enfant{matinActive > 1 ? "s" : ""}</b> pour la <b>Fondation Mérine</b> ({ARRIVEE}).
+                L&apos;après-midi, vous les ramenez chez eux (<b>{apremActive} dépose{apremActive > 1 ? "s" : ""}</b>).
                 {first?.heure_ramassage ? <> Premier ramassage à <b>{first.heure_ramassage}</b>.</> : null}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 }}>
-                {[["Enfants", String(tournee.length)], ["Premier", first?.heure_ramassage || "—"], ["Arrivée école", ARRIVEE], ["Véhicule", (driver.vehicule_id as string) || "—"]].map(([l, v]) => (
+                {[["Ramassages", String(matinActive)], ["Déposes", String(apremActive)], ["Premier", first?.heure_ramassage || "—"], ["Arrivée école", ARRIVEE]].map(([l, v]) => (
                   <div key={l} style={{ background: "#F8FAFC", border: `1px solid ${C.gray200}`, borderRadius: 12, padding: "12px 14px" }}>
                     <div style={{ fontSize: 20, fontWeight: 900, color: C.navy }}>{v}</div>
                     <div style={{ fontSize: 11.5, color: C.gray, marginTop: 1 }}>{l}</div>
@@ -238,89 +254,72 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
                 ))}
               </div>
             </div>
-            {bigBtn("Démarrer la tournée", onShowConfirm, "ok")}
+            {bigBtn("Démarrer la journée", onShowConfirm, "ok")}
           </>
         )}
-        {/* Aperçu liste */}
-        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} excMap={excMap} />
+        {dayList}
       </div>
     );
   }
 
-  // ── 2) Tous les arrêts faits ────────────────────────────────────────────────
-  if (allPickedUp) {
-    // APRÈS-MIDI : toutes les déposes sont faites → fin de service
-    if (isAprem) {
-      return (
-        <div>
-          {header}
-          <div style={{ textAlign: "center", padding: "22px 16px" }}>
-            <div style={{ width: 84, height: 84, borderRadius: "50%", background: C.greenL, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontSize: 42 }}>🎉</div>
-            <div style={{ color: C.green, fontSize: 22, fontWeight: 900 }}>Tournée de l&apos;après-midi terminée !</div>
-            <p style={{ color: "#475569", fontSize: 14, marginTop: 6 }}>Tous les enfants ont été déposés. Bonne fin de journée.</p>
-          </div>
-          {bigBtn("Je termine mon service", onShowFin, "navy")}
-          <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} excMap={excMap} isAprem />
-        </div>
-      );
-    }
-    // MATIN : dépose à l'école puis validation → après-midi
-    if (schoolPhase === "done") {
-      return (
-        <div>
-          {header}
-          <div style={{ textAlign: "center", padding: "22px 16px" }}>
-            <div style={{ width: 84, height: 84, borderRadius: "50%", background: C.greenL, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontSize: 42 }}>🎉</div>
-            <div style={{ color: C.green, fontSize: 22, fontWeight: 900 }}>Tournée du matin terminée !</div>
-            <p style={{ color: "#475569", fontSize: 14, marginTop: 6 }}>{presents} enfant{presents > 1 ? "s" : ""} déposé{presents > 1 ? "s" : ""} à Mérine. Prochaine étape : la tournée de l&apos;après-midi.</p>
-          </div>
-          {bigBtn("Valider — passer à l'après-midi", () => onValiderMatin?.(), "ok")}
-        </div>
-      );
-    }
+  // ── 2) Journée terminée (tout fait) → fin de service ────────────────────────
+  if (dayComplete) {
     return (
       <div>
         {header}
-        {!mapError && withCoords.length > 0 && <div ref={mapDiv} style={{ height: 200, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.gray200}`, marginBottom: 14, background: "#dce6f2" }} />}
-        <div style={{ background: "#fff", borderRadius: 16, padding: 18, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: C.navy, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>🏫 Destination finale</div>
-          <div style={{ fontSize: 19, fontWeight: 800, color: "#1E293B" }}>{ECOLE.nom}</div>
-          <div style={{ fontSize: 13, color: C.gray, marginTop: 2 }}>{ECOLE.adr}</div>
-          <div style={{ marginTop: 14 }}>
-            {schoolPhase === "go" ? (<>
-              {navBtn(gmapsLL(ECOLE.lat, ECOLE.lon), "Itinéraire vers l'école")}
-              {bigBtn("Arrivé à l'école", () => setSchoolPhase("at"))}
-            </>) : (
-              bigBtn(`Déposer ${presents} enfant${presents > 1 ? "s" : ""}`, () => setSchoolPhase("done"), "ok")
-            )}
-          </div>
+        <div style={{ textAlign: "center", padding: "22px 16px" }}>
+          <div style={{ width: 84, height: 84, borderRadius: "50%", background: C.greenL, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontSize: 42 }}>🎉</div>
+          <div style={{ color: C.green, fontSize: 22, fontWeight: 900 }}>Journée terminée !</div>
+          <p style={{ color: "#475569", fontSize: 14, marginTop: 6 }}>Matin et après-midi assurés. Vous pouvez terminer votre service.</p>
         </div>
-        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} excMap={excMap} />
+        {bigBtn("Je termine mon service", onShowFin, "navy")}
+        {dayList}
       </div>
     );
   }
 
-  // ── 3) En service, arrêt courant ────────────────────────────────────────────
-  const cur = tournee[currentIndex];
+  // ── 3) Transition école : matin fini, après-midi pas commencé ───────────────
+  if (matinComplete && !apremStarted && !ecolePassed && apremList.length > 0) {
+    return (
+      <div>
+        {header}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 18, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: C.navy, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>🏫 Dépose à l&apos;école</div>
+          <div style={{ fontSize: 19, fontWeight: 800, color: "#1E293B" }}>{ECOLE.nom}</div>
+          <div style={{ fontSize: 13, color: C.gray, marginTop: 2 }}>{ECOLE.adr}</div>
+          <p style={{ fontSize: 13.5, color: "#475569", margin: "10px 0 0" }}>
+            {presMatin} enfant{presMatin > 1 ? "s" : ""} déposé{presMatin > 1 ? "s" : ""} à Mérine. Quand c&apos;est fait, commencez l&apos;après-midi.
+          </p>
+          <div style={{ marginTop: 14 }}>
+            {navBtn(gmapsLL(ECOLE.lat, ECOLE.lon), "Itinéraire vers l'école")}
+            {bigBtn("Commencer la tournée de l'après-midi", () => setEcolePassed(true), "ok")}
+          </div>
+        </div>
+        {dayList}
+      </div>
+    );
+  }
+
+  // ── 4) Arrêt courant (ramassage le matin, dépose l'après-midi) ──────────────
+  const sensCourant: "aller" | "retour" = inMatin ? "aller" : "retour";
   return (
     <div>
       {header}
       {!mapError && withCoords.length > 0 && <div ref={mapDiv} style={{ height: 200, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.gray200}`, marginBottom: 12, background: "#dce6f2" }} />}
       {/* Progression */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#475569" }}>{isAprem ? "À déposer" : "À récupérer"}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#475569" }}>{inMatin ? "Matin — à récupérer" : "Après-midi — à déposer"}</span>
         <div style={{ flex: 1, height: 7, background: C.gray200, borderRadius: 99, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${Math.round(presents / (active.length || 1) * 100)}%`, background: C.green, borderRadius: 99, transition: "width .3s" }} />
+          <div style={{ height: "100%", width: `${Math.round((inMatin ? presMatin : presAprem) / ((inMatin ? matinActive : apremActive) || 1) * 100)}%`, background: C.green, borderRadius: 99, transition: "width .3s" }} />
         </div>
-        <span style={{ fontSize: 12, fontWeight: 800, color: C.green }}>{presents}/{active.length}</span>
+        <span style={{ fontSize: 12, fontWeight: 800, color: C.green }}>{inMatin ? presMatin : presAprem}/{inMatin ? matinActive : apremActive}</span>
       </div>
-      {/* Carte arrêt courant */}
       {cur && (
         <div style={{ background: "#fff", borderRadius: 16, padding: 18, marginBottom: 14, boxShadow: "0 2px 8px rgba(0,0,0,.06)" }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: arrived ? C.amber : C.navy, textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 10 }}>
-            {isAprem
-              ? (arrived ? "📍 Sur place — déposez l'enfant" : "🏠 Prochaine dépose")
-              : (arrived ? "📍 Sur place — récupérez l'enfant" : currentIndex === 0 ? "🚸 Premier enfant à récupérer" : "🚸 Prochain enfant")}
+            {inMatin
+              ? (arrived ? "📍 Sur place — récupérez l'enfant" : curIdx === 0 ? "🚸 Premier enfant à récupérer" : "🚸 Prochain enfant")
+              : (arrived ? "📍 Sur place — déposez l'enfant" : "🏠 Prochaine dépose")}
           </div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 13 }}>
             <div style={{ width: 50, height: 50, borderRadius: 15, background: "linear-gradient(160deg,#12498f,#0D3B7A)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 18, flexShrink: 0 }}>{initials(cur)}</div>
@@ -339,78 +338,84 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
             {!arrived ? (<>
               {cur.adresse ? navBtn(gmapsAddr(cur.adresse), "Ouvrir l'itinéraire") : (cur.lat != null && cur.lon != null ? navBtn(gmapsLL(cur.lat, cur.lon), "Ouvrir l'itinéraire") : null)}
               {bigBtn("Arrivé sur place", () => setArrived(true))}
-            </>) : isAprem ? (
-              bigBtn(`✓ ${cur.prenom_initiale} est déposé(e)`, async () => { await onMarquerEleve(cur.id, "present"); setArrived(false); }, "ok")
-            ) : (<>
-              {bigBtn(`✓ ${cur.prenom_initiale} est monté(e)`, async () => { await onMarquerEleve(cur.id, "present"); setArrived(false); }, "ok")}
-              <button onClick={async () => { await onMarquerEleve(cur.id, "absent"); setArrived(false); }}
+            </>) : inMatin ? (<>
+              {bigBtn(`✓ ${cur.prenom_initiale} est monté(e)`, async () => { await onMarquerEleve(cur.id, "present", sensCourant); setArrived(false); }, "ok")}
+              <button onClick={async () => { await onMarquerEleve(cur.id, "absent", sensCourant); setArrived(false); }}
                 style={{ width: "100%", padding: "13px", borderRadius: 14, border: "1.5px solid #f3d0d0", background: "#fff", color: "#b42323", fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
-                Absent aujourd'hui
+                Absent aujourd&apos;hui
               </button>
-            </>)}
+            </>) : (
+              bigBtn(`✓ ${cur.prenom_initiale} est déposé(e)`, async () => { await onMarquerEleve(cur.id, "present", sensCourant); setArrived(false); }, "ok")
+            )}
           </div>
           {contacts(cur)}
         </div>
       )}
-      <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={currentIndex} excMap={excMap} isAprem={isAprem} />
+      {dayList}
     </div>
   );
 }
 
-// ── Liste des arrêts (fait / courant / à venir / exception) ───────────────────
-function StopList({ tournee, prisByEleve, currentIndex, excMap, isAprem = false }: { tournee: Eleve[]; prisByEleve: Map<number, PriseEnCharge>; currentIndex: number; excMap: Map<number, string>; isAprem?: boolean }) {
+// ── Liste de la journée : matin (ramassage) → école → après-midi (dépose) ──────
+function DayList({ matin, aprem, priseAllerBy, priseRetourBy, excMap, curMatinIdx, curApremIdx }:
+  { matin: Eleve[]; aprem: Eleve[]; priseAllerBy: Map<number, PriseEnCharge>; priseRetourBy: Map<number, PriseEnCharge>;
+    excMap: Map<number, string>; curMatinIdx: number; curApremIdx: number }) {
   return (
     <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,.06)", overflow: "hidden", marginTop: 4 }}>
-      {tournee.map((el, i) => {
-        const exc = excMap.get(el.id);
-        const info = exc ? EXC_INFO[exc] : null;
-        const prise = prisByEleve.get(el.id);
-        const done = !!prise;
-        const cur = i === currentIndex;
-        if (info) {
-          return (
-            <div key={el.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px",
-              borderBottom: i < tournee.length - 1 ? `1px solid ${C.gray100}` : "none", background: info.bg }}>
-              <div style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, color: "#fff", fontWeight: 800, fontSize: 14,
-                display: "flex", alignItems: "center", justifyContent: "center", background: info.color }}>⤳</div>
-              <div style={{ minWidth: 40, fontSize: 12.5, fontWeight: 800, color: info.color, textDecoration: "line-through", opacity: .7 }}>{el.heure_ramassage || "—"}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 13.5, color: info.color }}>{el.prenom_initiale} {el.nom_famille}</div>
-                <div style={{ fontSize: 11.5, color: info.color, fontWeight: 600 }}>{info.label}</div>
-              </div>
-            </div>
-          );
-        }
-        return (
-          <div key={el.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px",
-            borderBottom: i < tournee.length - 1 ? `1px solid ${C.gray100}` : "none",
-            opacity: done ? .6 : cur ? 1 : currentIndex >= 0 && i > currentIndex ? .5 : 1,
-            background: cur ? "#F8FBFF" : "#fff" }}>
-            <div style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, color: "#fff", fontWeight: 800, fontSize: 12,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: done ? (prise?.statut === "present" ? C.green : C.red) : cur ? C.navy : "#c3ccd8" }}>
-              {done ? (prise?.statut === "present" ? "✓" : "✗") : i + 1}
-            </div>
-            <div style={{ minWidth: 40, fontSize: 12.5, fontWeight: 800, color: C.navy }}>{el.heure_ramassage || "—"}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 13.5, color: "#1E293B" }}>
-                {el.prenom_initiale} {el.nom_famille}
-                {!el.heure_ramassage && <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, background: C.amberL, borderRadius: 6, padding: "1px 6px", marginLeft: 6 }}>amené par les parents</span>}
-              </div>
-              {el.adresse && <div style={{ fontSize: 11, color: C.gray, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{el.adresse}</div>}
-            </div>
-          </div>
-        );
-      })}
-      {!isAprem && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: "#F8FAFC" }}>
-          <div style={{ width: 26, height: 26, borderRadius: 8, background: "#fff", border: `1px solid ${C.gray200}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <School size={14} color={C.navy} />
-          </div>
-          <div style={{ minWidth: 40, fontSize: 12.5, fontWeight: 800, color: C.navy }}>{ARRIVEE}</div>
-          <div style={{ flex: 1, fontWeight: 700, fontSize: 13.5, color: "#1E293B" }}>Fondation Mérine — dépose <ArrowRight size={12} style={{ verticalAlign: "middle" }} /></div>
+      <SectionHead label="☀️ Matin — ramassage" />
+      {matin.length === 0
+        ? <Empty text="Aucun ramassage." />
+        : matin.map((el, i) => <StopRow key={`m${el.id}`} el={el} prise={priseAllerBy.get(el.id)} exc={excMap.get(el.id)} current={i === curMatinIdx} index={i} />)}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#EEF4FB" }}>
+        <div style={{ width: 26, height: 26, borderRadius: 8, background: "#fff", border: `1px solid ${C.gray200}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <School size={14} color={C.navy} />
         </div>
-      )}
+        <div style={{ minWidth: 44, fontSize: 12.5, fontWeight: 800, color: C.navy }}>{ARRIVEE}</div>
+        <div style={{ flex: 1, fontWeight: 800, fontSize: 13, color: C.navy }}>Fondation Mérine</div>
+      </div>
+      <SectionHead label="🌙 Après-midi — dépose" />
+      {aprem.length === 0
+        ? <Empty text="Aucune dépose." />
+        : aprem.map((el, i) => <StopRow key={`a${el.id}`} el={el} prise={priseRetourBy.get(el.id)} exc={excMap.get(el.id)} current={i === curApremIdx} index={i} />)}
+    </div>
+  );
+}
+
+function SectionHead({ label }: { label: string }) {
+  return <div style={{ padding: "8px 14px", fontSize: 11, fontWeight: 800, color: C.gray600, background: "#F8FAFC", textTransform: "uppercase", letterSpacing: ".4px" }}>{label}</div>;
+}
+function Empty({ text }: { text: string }) {
+  return <div style={{ padding: "12px 14px", fontSize: 12.5, color: C.gray }}>{text}</div>;
+}
+
+function StopRow({ el, prise, exc, current, index }:
+  { el: Eleve; prise?: PriseEnCharge; exc?: string; current: boolean; index: number }) {
+  const info = exc ? EXC_INFO[exc] : null;
+  if (info) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderTop: `1px solid ${C.gray100}`, background: info.bg }}>
+        <div style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, color: "#fff", fontWeight: 800, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", background: info.color }}>⤳</div>
+        <div style={{ minWidth: 44, fontSize: 12.5, fontWeight: 800, color: info.color, textDecoration: "line-through", opacity: .7 }}>{el.heure_ramassage || "—"}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: 13.5, color: info.color }}>{el.prenom_initiale} {el.nom_famille}</div>
+          <div style={{ fontSize: 11.5, color: info.color, fontWeight: 600 }}>{info.label}</div>
+        </div>
+      </div>
+    );
+  }
+  const done = !!prise;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderTop: `1px solid ${C.gray100}`,
+      opacity: done ? .6 : 1, background: current ? "#F8FBFF" : "#fff" }}>
+      <div style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, color: "#fff", fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center",
+        background: done ? (prise?.statut === "present" ? C.green : C.red) : current ? C.navy : "#c3ccd8" }}>
+        {done ? (prise?.statut === "present" ? "✓" : "✗") : index + 1}
+      </div>
+      <div style={{ minWidth: 44, fontSize: 12.5, fontWeight: 800, color: C.navy }}>{el.heure_ramassage || "—"}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 13.5, color: "#1E293B" }}>{el.prenom_initiale} {el.nom_famille}</div>
+        {el.adresse && <div style={{ fontSize: 11, color: C.gray, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{el.adresse}</div>}
+      </div>
     </div>
   );
 }
