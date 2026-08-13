@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
 import { circuitImage } from "@/lib/circuit-images";
@@ -18,20 +19,19 @@ export default function HistoriqueEtab({ circuits }: { circuits: Circ[] }) {
   const today = new Date();
   const [view, setView] = useState({ y: today.getFullYear(), m: today.getMonth() });
   const [sel, setSel] = useState(ymd(today));
+  const [selCirc, setSelCirc] = useState("");
   const [hebdo, setHebdo] = useState<HebdoRow[]>([]);
   const [prises, setPrises] = useState<Prise[]>([]);
 
   const circIds = useMemo(() => circuits.map(c => c.id), [circuits]);
+  const activeCirc = selCirc || circuits[0]?.id || "";
 
-  // Planning hebdo (fixe) — chargé une fois
   useEffect(() => {
     if (!circIds.length) { setHebdo([]); return; }
     sb.from("tournee_hebdo").select("id,circuit_id,jour,sens,ordre,heure,eleve_nom,adresse,eleve_id")
-      .in("circuit_id", circIds)
-      .then(({ data }) => setHebdo((data ?? []) as HebdoRow[]));
+      .in("circuit_id", circIds).then(({ data }) => setHebdo((data ?? []) as HebdoRow[]));
   }, [sb, circIds]);
 
-  // Prises réalisées du mois affiché
   useEffect(() => {
     if (!circIds.length) { setPrises([]); return; }
     const start = `${view.y}-${String(view.m + 1).padStart(2, "0")}-01`;
@@ -41,7 +41,6 @@ export default function HistoriqueEtab({ circuits }: { circuits: Circ[] }) {
       .then(({ data }) => setPrises((data ?? []) as Prise[]));
   }, [sb, circIds, view]);
 
-  // Grille calendrier (lundi en tête)
   const first = new Date(view.y, view.m, 1);
   const startOffset = (first.getDay() + 6) % 7;
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
@@ -55,17 +54,46 @@ export default function HistoriqueEtab({ circuits }: { circuits: Circ[] }) {
   const isWeekend = selJour === 0 || selJour === 6;
   const shift = (delta: number) => { const d = new Date(view.y, view.m + delta, 1); setView({ y: d.getFullYear(), m: d.getMonth() }); };
 
-  // Prise réalisée pour un élève à une date + sens
   const priseFor = (eleveId: number | null, sens: "aller" | "retour") =>
     eleveId == null ? undefined : prises.find(p => p.date === sel && p.eleve_id === eleveId && p.sens === sens);
-
-  // Jours du mois ayant au moins une prise (pastille sur le calendrier)
   const joursAvecActivite = useMemo(() => new Set(prises.map(p => p.date)), [prises]);
+
+  const stopsDuJour = (cid: string, sens: "matin" | "aprem") =>
+    hebdo.filter(h => h.circuit_id === cid && h.jour === selJour && h.sens === sens).sort((a, b) => a.ordre - b.ordre);
+
+  const circ = circuits.find(c => c.id === activeCirc);
+  const matin = circ ? stopsDuJour(circ.id, "matin") : [];
+  const aprem = circ ? stopsDuJour(circ.id, "aprem") : [];
+  const prisMatin = matin.filter(h => priseFor(h.eleve_id, "aller")?.statut === "present").length;
+  const absMatin = matin.filter(h => priseFor(h.eleve_id, "aller")?.statut === "absent").length;
+  const prisAprem = aprem.filter(h => priseFor(h.eleve_id, "retour")?.statut === "present").length;
+
+  // Export Excel du jour sélectionné (tous les circuits)
+  const exportJour = () => {
+    const rows: Record<string, string>[] = [];
+    for (const c of circuits) {
+      for (const sens of ["matin", "aprem"] as const) {
+        for (const h of stopsDuJour(c.id, sens)) {
+          const pr = priseFor(h.eleve_id, sens === "matin" ? "aller" : "retour");
+          rows.push({
+            Date: sel, Circuit: c.nom, Moment: sens === "matin" ? "Matin (ramassage)" : "Après-midi (dépose)",
+            Heure: h.heure, "Élève": h.eleve_nom, Adresse: h.adresse ?? "",
+            Statut: pr?.statut === "present" ? (sens === "matin" ? "Pris" : "Déposé") : pr?.statut === "absent" ? "Absent" : "Non réalisé",
+          });
+        }
+      }
+    }
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 11 }, { wch: 16 }, { wch: 20 }, { wch: 8 }, { wch: 26 }, { wch: 34 }, { wch: 13 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Historique");
+    XLSX.writeFile(wb, `historique_${sel}.xlsx`);
+  };
 
   return (
     <div style={{ marginTop: 20 }}>
       <div style={{ background: "#EFF6FF", border: "1px solid #cfe0fb", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#0f2f66", lineHeight: 1.5, marginBottom: 16 }}>
-        Historique complet, jour par jour et par circuit. Tout est <b>enregistré et conservé</b> : la tournée prévue (matin &amp; après-midi) et ce qui a été <b>réellement réalisé</b> — pour la facturation et l&apos;archivage.
+        Historique conservé jour par jour et par circuit — tournée prévue (matin &amp; après-midi) et ce qui a été <b>réellement réalisé</b>. Exportable en Excel pour la facturation et l&apos;archivage.
       </div>
 
       <div className="plan-grid">
@@ -104,45 +132,51 @@ export default function HistoriqueEtab({ circuits }: { circuits: Circ[] }) {
           </div>
         </div>
 
-        {/* Détail du jour sélectionné */}
+        {/* Détail : 1 circuit à la fois + export */}
         <div>
-          <div style={{ fontSize: 15, fontWeight: 900, color: "#0f2540", marginBottom: 12, textTransform: "capitalize" }}>
-            {JOUR_LONG[selJour]} {selDate.getDate()} {MOIS[selDate.getMonth()]}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 15, fontWeight: 900, color: "#0f2540", textTransform: "capitalize" }}>
+              {JOUR_LONG[selJour]} {selDate.getDate()} {MOIS[selDate.getMonth()]}
+            </div>
+            <button onClick={exportJour} style={{ background: C.navy, color: "#fff", border: "none", borderRadius: 9, padding: "8px 14px", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+              ⬇︎ Exporter ce jour (Excel)
+            </button>
+          </div>
+
+          {/* Onglets par circuit */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+            {circuits.map(c => (
+              <button key={c.id} onClick={() => setSelCirc(c.id)}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 20, cursor: "pointer",
+                  border: `1.5px solid ${activeCirc === c.id ? C.navy : C.gray200}`, background: activeCirc === c.id ? C.navy : C.white,
+                  color: activeCirc === c.id ? "#fff" : C.gray600, fontWeight: 800, fontSize: 12.5 }}>
+                <span style={{ fontSize: 15 }}>{c.emoji || "🚌"}</span>{c.nom}
+              </button>
+            ))}
           </div>
 
           {isWeekend ? (
             <div style={{ padding: 26, textAlign: "center", color: C.gray400, background: C.gray50, borderRadius: 12, fontSize: 13 }}>Pas de tournée le week-end.</div>
-          ) : circuits.length === 0 ? (
+          ) : !circ ? (
             <div style={{ padding: 26, textAlign: "center", color: C.gray400, background: C.gray50, borderRadius: 12, fontSize: 13 }}>Aucun circuit.</div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {circuits.map(c => {
-                const stops = hebdo.filter(h => h.circuit_id === c.id && h.jour === selJour);
-                const matin = stops.filter(h => h.sens === "matin").sort((a, b) => a.ordre - b.ordre);
-                const aprem = stops.filter(h => h.sens === "aprem").sort((a, b) => a.ordre - b.ordre);
-                const prisMatin = matin.filter(h => priseFor(h.eleve_id, "aller")?.statut === "present").length;
-                const absMatin = matin.filter(h => priseFor(h.eleve_id, "aller")?.statut === "absent").length;
-                const prisAprem = aprem.filter(h => priseFor(h.eleve_id, "retour")?.statut === "present").length;
-                const img = circuitImage(c.id);
-                return (
-                  <div key={c.id} style={{ background: C.white, border: `1px solid ${C.gray200}`, borderRadius: 14, overflow: "hidden" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 14px", borderBottom: `1px solid ${C.gray100}` }}>
-                      {img ? <div style={{ width: 38, height: 38, borderRadius: 10, background: "#fff", border: `1px solid ${C.gray100}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><img src={img} alt={c.nom} style={{ width: 30, height: 30, objectFit: "contain" }} /></div> : <span style={{ fontSize: 24 }}>{c.emoji || "🚌"}</span>}
-                      <div style={{ fontWeight: 900, fontSize: 15, color: "#0f2540", flex: 1 }}>{c.nom}</div>
-                      <div style={{ fontSize: 11.5, color: C.gray600, textAlign: "right" }}>
-                        <div>☀️ {prisMatin}/{matin.length} pris{absMatin ? ` · ${absMatin} abs.` : ""}</div>
-                        <div>🌙 {prisAprem}/{aprem.length} déposés</div>
-                      </div>
-                    </div>
-                    {stops.length === 0
-                      ? <div style={{ padding: 14, color: C.gray400, fontSize: 13 }}>Pas de tournée ce jour-là.</div>
-                      : (<>
-                          <Section title="☀️ Matin — ramassage" rows={matin} sens="aller" priseFor={priseFor} />
-                          <Section title="🌙 Après-midi — dépose" rows={aprem} sens="retour" priseFor={priseFor} />
-                        </>)}
-                  </div>
-                );
-              })}
+            <div style={{ background: C.white, border: `1px solid ${C.gray200}`, borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 14px", borderBottom: `1px solid ${C.gray100}` }}>
+                {circuitImage(circ.id)
+                  ? <div style={{ width: 38, height: 38, borderRadius: 10, background: "#fff", border: `1px solid ${C.gray100}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><img src={circuitImage(circ.id)!} alt={circ.nom} style={{ width: 30, height: 30, objectFit: "contain" }} /></div>
+                  : <span style={{ fontSize: 24 }}>{circ.emoji || "🚌"}</span>}
+                <div style={{ fontWeight: 900, fontSize: 15, color: "#0f2540", flex: 1 }}>{circ.nom}</div>
+                <div style={{ fontSize: 11.5, color: C.gray600, textAlign: "right" }}>
+                  <div>☀️ {prisMatin}/{matin.length} pris{absMatin ? ` · ${absMatin} abs.` : ""}</div>
+                  <div>🌙 {prisAprem}/{aprem.length} déposés</div>
+                </div>
+              </div>
+              {matin.length === 0 && aprem.length === 0
+                ? <div style={{ padding: 16, color: C.gray400, fontSize: 13 }}>Pas de tournée ce jour-là.</div>
+                : (<>
+                    <Section title="☀️ Matin — ramassage" rows={matin} sens="aller" priseFor={priseFor} />
+                    <Section title="🌙 Après-midi — dépose" rows={aprem} sens="retour" priseFor={priseFor} />
+                  </>)}
             </div>
           )}
         </div>
