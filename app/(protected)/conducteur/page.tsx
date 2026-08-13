@@ -36,7 +36,14 @@ export default function ConducteurPage(){
   const [prises,    setPrises]    = useState<PriseEnCharge[]>([]);
   const [exceptions,setExceptions]= useState<ExcToday[]>([]);
   const [journeeCircuits, setJourneeCircuits] = useState<JourneeCircuit[]>([]);
-  const [journeeSeen,      setJourneeSeen]     = useState(false);
+  const [journeeSeen,      setJourneeSeen]     = useState<boolean>(() => {
+    try { return typeof window !== "undefined" && localStorage.getItem("taxi_journee_seen") === isoToday(); }
+    catch { return false; }
+  });
+  function markJourneeSeen() {
+    try { localStorage.setItem("taxi_journee_seen", isoToday()); } catch { /* noop */ }
+    setJourneeSeen(true);
+  }
   const [matinEleves, setMatinEleves] = useState<Eleve[]>([]);
   const [apremEleves, setApremEleves] = useState<Eleve[]>([]);
   const [phase,       setPhase]       = useState<"matin"|"aprem">("matin");
@@ -602,13 +609,13 @@ export default function ConducteurPage(){
 
       {/* ── Résumé de la journée (pop-up d'accueil) ── */}
       {!journeeSeen && journeeCircuits.length>0 && driver.status!=="absent" && (
-        <div onClick={()=>setJourneeSeen(true)} style={{position:"fixed",inset:0,zIndex:9998,
+        <div onClick={markJourneeSeen} style={{position:"fixed",inset:0,zIndex:9998,
           background:"rgba(13,59,122,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
           <div onClick={e=>e.stopPropagation()} style={{background:C.white,borderRadius:20,padding:22,width:"100%",
             maxWidth:440,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
               <h2 style={{margin:0,fontSize:20,fontWeight:900,color:C.navy}}>Votre journée</h2>
-              <button onClick={()=>setJourneeSeen(true)} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",lineHeight:1}}>
+              <button onClick={markJourneeSeen} style={{background:"none",border:"none",cursor:"pointer",padding:4,display:"flex",lineHeight:1}}>
                 <X size={20} color={C.gray}/>
               </button>
             </div>
@@ -654,7 +661,7 @@ export default function ConducteurPage(){
               )}
             </div>
           ))}
-          <BigBtn label="J'ai pris connaissance" onClick={()=>setJourneeSeen(true)} color={C.navy}/>
+          <BigBtn label="J'ai pris connaissance" onClick={markJourneeSeen} color={C.navy}/>
           </div>
         </div>
       )}

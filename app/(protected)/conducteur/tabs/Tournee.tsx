@@ -68,6 +68,11 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
   const [mapError, setMapError] = useState(false);
   const [arrived, setArrived] = useState(false);          // arrivé sur place à l'arrêt courant
   const [schoolPhase, setSchoolPhase] = useState<"go" | "at" | "done">("go");
+  const [copiedTel, setCopiedTel] = useState<string | null>(null);
+  async function copyTel(num: string) {
+    try { await navigator.clipboard.writeText(num); } catch { /* noop */ }
+    setCopiedTel(num); setTimeout(() => setCopiedTel(null), 1500);
+  }
 
   const excMap = new Map<number, string>(exceptions.map(x => [x.eleve_id, x.type]));   // exceptions du jour
   const hasExc = (e: Eleve) => excMap.has(e.id);
@@ -153,12 +158,27 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
     </a>
   );
 
+  const telBlock = (label: string, num: string, kind?: "p" | "s") => {
+    const base = cbtn(kind);
+    return (
+      <div style={{ ...base, padding: "9px 10px", display: "flex", flexDirection: "column", gap: 5 }}>
+        <div style={{ fontSize: 12, fontWeight: 800 }}>{label}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: ".2px" }}>{num}</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <a href={`tel:${cleanTel(num)}`} style={{ flex: 1, textAlign: "center", textDecoration: "none", fontSize: 12, fontWeight: 800, padding: "6px 4px", borderRadius: 8, background: C.navy, color: "#fff" }}>Appeler</a>
+          <button onClick={() => copyTel(num)} style={{ flex: 1, textAlign: "center", fontSize: 12, fontWeight: 800, padding: "6px 4px", borderRadius: 8, border: `1px solid ${C.gray200}`, background: "#fff", color: C.navy, cursor: "pointer" }}>
+            {copiedTel === num ? "Copié ✓" : "Copier"}
+          </button>
+        </div>
+      </div>
+    );
+  };
   const contacts = (e: Eleve) => (
     <div style={{ display: "flex", gap: 7, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.gray100}`, flexWrap: "wrap" }}>
-      {e.tel_mere && <a href={`tel:${cleanTel(e.tel_mere)}`} style={cbtn("p")}>📞 Mère</a>}
-      {e.tel_pere && <a href={`tel:${cleanTel(e.tel_pere)}`} style={cbtn("p")}>📞 Père</a>}
-      <a href={`tel:${cleanTel(ECOLE.tel)}`} style={cbtn("s")}>🏫 École</a>
-      <a href={`tel:${cleanTel(CENTRAL_TEL)}`} style={cbtn()}>🏢 Central</a>
+      {e.tel_mere && telBlock("📞 Mère", e.tel_mere, "p")}
+      {e.tel_pere && telBlock("📞 Père", e.tel_pere, "p")}
+      {telBlock("🏫 École", ECOLE.tel, "s")}
+      {telBlock("🏢 Central", CENTRAL_TEL)}
     </div>
   );
   function cbtn(kind?: "p" | "s"): React.CSSProperties {
@@ -195,7 +215,7 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
             Vous avez assuré votre tournée. Merci et bon repos.<br />Rendez-vous à la prochaine tournée.
           </p>
         </div>
-        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} excMap={excMap} />
+        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} excMap={excMap} isAprem={isAprem} />
       </div>
     );
   }
@@ -264,7 +284,7 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
           <div style={{ textAlign: "center", padding: "22px 16px" }}>
             <div style={{ width: 84, height: 84, borderRadius: "50%", background: C.greenL, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontSize: 42 }}>🎉</div>
             <div style={{ color: C.green, fontSize: 22, fontWeight: 900 }}>Tournée du matin terminée !</div>
-            <p style={{ color: "#475569", fontSize: 14, marginTop: 6 }}>Les {active.length} enfants sont arrivés à Mérine. Prochaine étape : la tournée de l&apos;après-midi.</p>
+            <p style={{ color: "#475569", fontSize: 14, marginTop: 6 }}>{presents} enfant{presents > 1 ? "s" : ""} déposé{presents > 1 ? "s" : ""} à Mérine. Prochaine étape : la tournée de l&apos;après-midi.</p>
           </div>
           {bigBtn("Valider — passer à l'après-midi", () => onValiderMatin?.(), "ok")}
         </div>
@@ -283,7 +303,7 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
               {navBtn(gmapsLL(ECOLE.lat, ECOLE.lon), "Itinéraire vers l'école")}
               {bigBtn("Arrivé à l'école", () => setSchoolPhase("at"))}
             </>) : (
-              bigBtn(`Déposer les ${active.length} enfants`, () => setSchoolPhase("done"), "ok")
+              bigBtn(`Déposer ${presents} enfant${presents > 1 ? "s" : ""}`, () => setSchoolPhase("done"), "ok")
             )}
           </div>
         </div>
