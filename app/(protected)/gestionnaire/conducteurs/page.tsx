@@ -130,6 +130,7 @@ export default function ConducteursPage() {
   const [tab,       setTab]       = useState("infos");
   const [search,    setSearch]    = useState("");
   const [filterSt,  setFilterSt]  = useState(() => searchParams.get("status") ?? "all");
+  const [filterSec, setFilterSec] = useState("all");
   const [editModal, setEditModal] = useState(false);
   const [addModal,  setAddModal]  = useState(false);
   const [saving,    setSaving]    = useState(false);
@@ -269,7 +270,15 @@ export default function ConducteursPage() {
   const confirmDelete = async () => {
     if (!sel) return;
     setDelConfirm(false);
-    await sb.from("conducteurs").delete().eq("id", sel);
+    // Suppression complète : compte de connexion + profil + fiche + rattachements
+    const res = await fetch("/api/gestionnaire/delete-account", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conducteurId: sel }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error || "La suppression a échoué.");
+    }
     setSel(null);
     fetchAll();
   };
@@ -400,10 +409,21 @@ export default function ConducteursPage() {
   }
 
   // ── Filter ─────────────────────────────────────────────────────────────────
+  const secOf = (x: Conducteur) => (x as { secteur?: string | null }).secteur ?? "";
   const filtered = drivers.filter(d => {
     const match = `${d.prenom} ${d.nom} ${d.tel ?? ""}`.toLowerCase().includes(search.toLowerCase());
     const stMatch = filterSt === "all" || d.status === filterSt;
-    return match && stMatch;
+    const secMatch = filterSec === "all" || secOf(d) === filterSec;
+    return match && stMatch && secMatch;
+  });
+
+  // Secteurs présents + compteur par secteur (pour le filtre)
+  const secteurs = [...new Set(drivers.map(secOf).filter(Boolean))].sort();
+  const countSec = (s: string) => drivers.filter(x => secOf(x) === s).length;
+  const secChip = (active: boolean): React.CSSProperties => ({
+    padding: "5px 12px", borderRadius: 20, border: `1.5px solid ${active ? C.green : C.gray200}`,
+    background: active ? C.green : C.white, color: active ? C.white : C.gray600,
+    fontWeight: 700, fontSize: 12, cursor: "pointer",
   });
 
   const d = sel ? drivers.find(x => x.id === sel) : null;
@@ -1028,6 +1048,18 @@ export default function ConducteursPage() {
             </button>
           ))}
         </div>
+        {secteurs.length > 0 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: C.gray400 }}>Secteur :</span>
+            <button onClick={() => setFilterSec("all")}
+              style={secChip(filterSec === "all")}>Tous ({drivers.length})</button>
+            {secteurs.map(s => (
+              <button key={s} onClick={() => setFilterSec(s)} style={secChip(filterSec === s)}>
+                {s} ({countSec(s)})
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Grid */}
