@@ -751,7 +751,7 @@ export default function EtablissementDetail() {
                 const liste = circView === "liste";
                 return (
                   <div key={c.id} className="etab-card" style={{ background:C.white, border:`1px solid ${open?C.navy:C.gray200}`,
-                    borderRadius:16, overflow:"hidden", gridColumn: (open || liste) ? "1 / -1" : "auto" }}>
+                    borderRadius:16, overflow: open ? "visible" : "hidden", gridColumn: (open || liste) ? "1 / -1" : "auto" }}>
                     {/* En-tête / carte cliquable */}
                     <div onClick={()=>{ setOpenCircuitId(open?null:c.id); setMenuFor(null); setApercuFor(null); }}
                       style={{ display:"flex", flexDirection: (liste||open) ? "row" : "column", alignItems: (liste||open) ? "center" : "stretch",

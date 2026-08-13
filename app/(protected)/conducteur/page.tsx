@@ -3,7 +3,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, isoToday, fmtHHMM, nowTimeStr } from "@/lib/constants";
-import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant, CongesDemande, Eleve, PriseEnCharge } from "@/lib/types";
+import type { Conducteur, ServiceLog, Incident, Alerte, AbsenceEnfant, Enfant, CongesDemande, Eleve, PriseEnCharge, Circuit } from "@/lib/types";
+
+type JourneeCircuit = { id: string; nom: string; emoji?: string; nb: number;
+  premierRamassage: string | null; premiereDepose: string | null; derniereDepose: string | null; excEnf: number };
 import { Bus, FileText, AlertCircle, Mail, History, CalendarDays, LogOut, MoreHorizontal, MapPin, X } from "lucide-react";
 import { BSheet, BigBtn, TA, Chip, StatusBadge } from "./tabs/shared";
 import { TabFiche } from "./tabs/Fiche";
@@ -30,6 +33,8 @@ export default function ConducteurPage(){
   const [elevesCircuit, setElevesCircuit] = useState<Eleve[]>([]);
   const [prises,    setPrises]    = useState<PriseEnCharge[]>([]);
   const [exceptions,setExceptions]= useState<ExcToday[]>([]);
+  const [journeeCircuits, setJourneeCircuits] = useState<JourneeCircuit[]>([]);
+  const [journeeSeen,      setJourneeSeen]     = useState(false);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState<Tab>("tournee");
   const [drawerOpen,setDrawerOpen]= useState(false);
@@ -101,6 +106,32 @@ export default function ConducteurPage(){
     if(msg.data) setMessages(msg.data);
     if(hist.data)setHistLogs(hist.data);
     if(cng.data) setConges(cng.data);
+
+    // ── Journée : TOUS les circuits du conducteur (modèle circuits.conducteur_id) ──
+    const t2 = isoToday();
+    const { data: myCircsRaw } = await sb.from("circuits").select("*").eq("conducteur_id", cid).order("nom");
+    const myCircs = (myCircsRaw ?? []) as Circuit[];
+    const circIds = myCircs.map(c => c.id);
+    let jEleves: Eleve[] = [];
+    let jexc: { eleve_id: number }[] = [];
+    if (circIds.length) {
+      const [{ data: el2 }, { data: ex2 }] = await Promise.all([
+        sb.from("eleves").select("*").in("circuit_id", circIds).eq("actif", true),
+        sb.from("exceptions_eleves").select("eleve_id").lte("date_debut", t2).gte("date_fin", t2),
+      ]);
+      jEleves = (el2 ?? []) as Eleve[];
+      jexc = (ex2 ?? []) as { eleve_id: number }[];
+    }
+    const journee: JourneeCircuit[] = myCircs.map(c => {
+      const es = jEleves.filter(e => e.circuit_id === c.id);
+      const rams = es.map(e => e.heure_ramassage).filter(Boolean).sort() as string[];
+      const deps = es.map(e => e.heure_depose).filter(Boolean).sort() as string[];
+      const excEnf = es.filter(e => jexc.some(x => x.eleve_id === e.id)).length;
+      return { id: c.id, nom: c.nom, emoji: c.emoji, nb: es.length,
+        premierRamassage: rams[0] ?? null, premiereDepose: deps[0] ?? null,
+        derniereDepose: deps[deps.length - 1] ?? null, excEnf };
+    });
+    setJourneeCircuits(journee);
 
     // Élèves du circuit (table facturation) + prises en charge du jour
     const circuitId = drv.data?.circuit_id;
@@ -521,6 +552,53 @@ export default function ConducteurPage(){
           </div>
           <BigBtn label="Je reprends le service" onClick={handleRepriseService}/>
           <BigBtn label="Annuler" onClick={()=>setShowReprise(false)} color={C.gray} outline/>
+        </BSheet>
+      )}
+
+      {/* ── Résumé de la journée (pop-up d'accueil) ── */}
+      {!journeeSeen && journeeCircuits.length>0 && driver.status!=="absent" && (
+        <BSheet title="Votre journée" onClose={()=>setJourneeSeen(true)}>
+          <p style={{fontSize:14,color:C.gray600,lineHeight:1.5,margin:"0 0 16px"}}>
+            Bonjour {driver.prenom}, voici {journeeCircuits.length>1?"vos circuits":"votre circuit"} pour aujourd&apos;hui.
+          </p>
+          {journeeCircuits.map((jc,i)=>(
+            <div key={jc.id} style={{background:C.gray50,border:`1.5px solid ${C.gray200}`,
+              borderRadius:14,padding:14,marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <span style={{fontSize:20,lineHeight:1}}>{jc.emoji||"🚌"}</span>
+                <span style={{fontWeight:800,fontSize:15,color:C.navy,flex:1}}>{jc.nom}</span>
+                <span style={{fontSize:12,fontWeight:700,color:C.gray600,background:C.white,
+                  border:`1px solid ${C.gray200}`,borderRadius:99,padding:"2px 9px"}}>
+                  {jc.nb} élève{jc.nb>1?"s":""}
+                </span>
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <div style={{flex:1,background:C.white,borderRadius:10,padding:"9px 11px",border:`1px solid ${C.gray200}`}}>
+                  <div style={{fontSize:10.5,fontWeight:800,color:"#F59E0B",letterSpacing:".3px",marginBottom:3}}>☀️ MATIN</div>
+                  <div style={{fontSize:13,color:"#1E293B",fontWeight:600,lineHeight:1.4}}>
+                    {jc.premierRamassage
+                      ? <>Départ <strong>{fmtHHMM(jc.premierRamassage)}</strong>{jc.premiereDepose&&<> · école <strong>{fmtHHMM(jc.premiereDepose)}</strong></>}</>
+                      : <span style={{color:C.gray}}>—</span>}
+                  </div>
+                </div>
+                <div style={{flex:1,background:C.white,borderRadius:10,padding:"9px 11px",border:`1px solid ${C.gray200}`}}>
+                  <div style={{fontSize:10.5,fontWeight:800,color:"#6366F1",letterSpacing:".3px",marginBottom:3}}>🌙 APRÈS-MIDI</div>
+                  <div style={{fontSize:13,color:"#1E293B",fontWeight:600,lineHeight:1.4}}>
+                    {jc.derniereDepose
+                      ? <>Dépose jusqu&apos;à <strong>{fmtHHMM(jc.derniereDepose)}</strong></>
+                      : <span style={{color:C.gray}}>—</span>}
+                  </div>
+                </div>
+              </div>
+              {jc.excEnf>0&&(
+                <div style={{marginTop:9,background:"#FFF7ED",border:"1px solid #FED7AA",borderRadius:9,
+                  padding:"7px 10px",fontSize:12.5,color:"#9A3412",fontWeight:600}}>
+                  ⚠️ {jc.excEnf} élève{jc.excEnf>1?"s":""} à ne pas récupérer aujourd&apos;hui (absent / ramené par les parents).
+                </div>
+              )}
+            </div>
+          ))}
+          <BigBtn label="J'ai pris connaissance" onClick={()=>setJourneeSeen(true)} color={C.navy}/>
         </BSheet>
       )}
 
