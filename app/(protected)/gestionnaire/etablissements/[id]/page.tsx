@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
-import { Btn, TabBar, Badge, Modal, SectionTitle } from "@/components/ui";
+import { Btn, TabBar, Badge, Modal } from "@/components/ui";
 import type { Ecole, Eleve, Circuit, Conducteur, PriseEnCharge, TourneeConfig, AdresseEleve, CercleScolaire } from "@/lib/types";
 
 type ConduPartial = Pick<Conducteur, "id" | "nom" | "prenom" | "circuit_id" | "status"> & { est_responsable?: boolean; tel?: string; secteur?: string };
@@ -12,6 +12,15 @@ import { ArrowLeft, ChevronDown, Plus, Pencil, Trash2, User } from "lucide-react
 
 interface CircuitForm { id: string; nom: string; emoji: string; num: string; km_aller: number; cercle_id: number | null; conducteur_id: number | ""; }
 const EMPTY_CF: CircuitForm = { id:"", nom:"", emoji:"🚌", num:"", km_aller:0, cercle_id:null, conducteur_id:"" };
+
+type ExcType = "absent" | "parent" | "changement_circuit";
+interface ExceptionEleve {
+  id: number; eleve_id: number; type: ExcType; date_debut: string; date_fin: string;
+  circuit_cible_id: string | null; definitif: boolean; justification: string | null;
+  source: string; statut: string; created_at: string;
+}
+interface ExcForm { eleve_id: number; type: ExcType; date_debut: string; date_fin: string; circuit_cible_id: string; definitif: boolean; justification: string; }
+const EXC_LABEL: Record<ExcType,string> = { absent:"Absent", parent:"Ramené par les parents", changement_circuit:"Changement de circuit" };
 
 const isoToday = () => new Date().toISOString().slice(0, 10);
 
@@ -35,8 +44,9 @@ const EMPTY_EF: EleveForm = { nom_famille:"", prenom_initiale:"", adresse:"", ci
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function statutLabel(s: string) {
-  return s === "present" ? "Présent" : "Absent";
+function fmtJour(iso: string) {
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString("fr-CH", { day: "numeric", month: "short" });
 }
 
 // Génère un code de circuit à partir du nom (ex: "Petit Lac" → "PETIT-LAC-4821")
@@ -63,8 +73,19 @@ export default function EtablissementDetail() {
   const [cercles,    setCercles]    = useState<CercleScolaire[]>([]);
   const [prises,     setPrises]     = useState<PriseEnCharge[]>([]);
   const [tournees,   setTournees]   = useState<TourneeConfig[]>([]);
+  const [exceptions, setExceptions] = useState<ExceptionEleve[]>([]);
   const [loading,    setLoading]    = useState(true);
-  const [tab,        setTab]        = useState("Élèves");
+  const [tab,        setTab]        = useState("Circuits & élèves");
+
+  // Détail d'un circuit (liste des enfants) + menu d'actions par élève
+  const [openCircuitId, setOpenCircuitId] = useState<string | null>(null);
+  const [menuFor,       setMenuFor]       = useState<number | null>(null);
+  const [openAcc,       setOpenAcc]       = useState<Record<string, boolean>>({});
+
+  // Modal exception (absence période / ramené parents / changement de circuit)
+  const [showExc, setShowExc] = useState(false);
+  const [excForm, setExcForm] = useState<ExcForm | null>(null);
+  const [savingExc, setSavingExc] = useState(false);
 
   // Circuit modal (gestion des circuits depuis l'établissement)
   const [showCircuit,  setShowCircuit]  = useState(false);
@@ -123,6 +144,15 @@ export default function EtablissementDetail() {
     // Circuits de cet établissement (lien direct ecole_id)
     const ecoleCircuits = (allCirData ?? []).filter((c: Circuit) => c.ecole_id === ecoleId);
 
+    // Exceptions par période des élèves de cet établissement
+    const ids = elevesList.map(e => e.id);
+    let excData: ExceptionEleve[] = [];
+    if (ids.length) {
+      const { data: exc } = await sb.from("exceptions_eleves").select("*")
+        .in("eleve_id", ids).neq("statut", "clos").order("date_debut", { ascending: false });
+      excData = (exc ?? []) as ExceptionEleve[];
+    }
+
     setEcole(ecoleData ?? null);
     setEleves(elevesList);
     setCircuits(ecoleCircuits);
@@ -131,6 +161,7 @@ export default function EtablissementDetail() {
     setCercles(cerclesData ?? []);
     setPrises(prisesData ?? []);
     setTournees(tournData ?? []);
+    setExceptions(excData);
     setLoading(false);
   }, [sb, ecoleId]);
 
@@ -144,6 +175,7 @@ export default function EtablissementDetail() {
       .on("postgres_changes", { event:"*", schema:"public", table:"ecoles" }, load)
       .on("postgres_changes", { event:"*", schema:"public", table:"circuits" }, load)
       .on("postgres_changes", { event:"*", schema:"public", table:"conducteurs" }, load)
+      .on("postgres_changes", { event:"*", schema:"public", table:"exceptions_eleves" }, load)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [sb, ecoleId, load]);
@@ -221,11 +253,6 @@ export default function EtablissementDetail() {
     setSavingEl(false);
     if (err) { setElErr(err.message); return; }
     setShowModal(false);
-    load();
-  }
-
-  async function handleToggleActif(e: Eleve) {
-    await sb.from("eleves").update({ actif: !e.actif }).eq("id", e.id);
     load();
   }
 
@@ -329,6 +356,82 @@ export default function EtablissementDetail() {
     load();
   }
 
+  // ── Exceptions (absence période, ramené parents, changement de circuit) ──────
+
+  // Exception active aujourd'hui pour un élève (couvre la date du jour)
+  function excToday(eleveId: number) {
+    const t = isoToday();
+    return exceptions.find(x => x.eleve_id === eleveId && x.date_debut <= t && x.date_fin >= t);
+  }
+  function excColor(type?: ExcType) {
+    return type === "absent" ? C.red : type === "parent" ? C.amber : type === "changement_circuit" ? "#7C3AED" : C.gray400;
+  }
+
+  // Absent / ramené parents pour AUJOURD'HUI (raccourci 1 jour)
+  async function quickExc(e: Eleve, type: ExcType) {
+    const t = isoToday();
+    setMenuFor(null);
+    await sb.from("exceptions_eleves").insert({
+      eleve_id: e.id, type, date_debut: t, date_fin: t, source: "gestionnaire", statut: "actif",
+    });
+    load();
+  }
+  async function removeExc(id: number) {
+    await sb.from("exceptions_eleves").delete().eq("id", id);
+    load();
+  }
+  function openExc(e: Eleve, type: ExcType) {
+    setMenuFor(null);
+    const t = isoToday();
+    setExcForm({ eleve_id: e.id, type, date_debut: t, date_fin: t, circuit_cible_id: "", definitif: false, justification: "" });
+    setShowExc(true);
+  }
+  async function handleSaveExc() {
+    if (!excForm) return;
+    const f = excForm;
+    setSavingExc(true);
+    if (f.type === "changement_circuit" && f.definitif && f.circuit_cible_id) {
+      // changement définitif : on déplace l'élève de circuit
+      await sb.from("eleves").update({ circuit_id: f.circuit_cible_id }).eq("id", f.eleve_id);
+    } else {
+      await sb.from("exceptions_eleves").insert({
+        eleve_id: f.eleve_id, type: f.type, date_debut: f.date_debut, date_fin: f.date_fin,
+        circuit_cible_id: f.type === "changement_circuit" ? (f.circuit_cible_id || null) : null,
+        definitif: !!f.definitif, justification: f.justification.trim() || null,
+        source: "gestionnaire", statut: "actif",
+      });
+    }
+    setSavingExc(false);
+    setShowExc(false);
+    load();
+  }
+
+  // Mise en pause justifiée (au lieu de supprimer) — réactivable
+  async function handlePause(e: Eleve) {
+    setMenuFor(null);
+    if (e.actif) {
+      const m = prompt(`Motif de la mise en pause de ${e.prenom_initiale} ${e.nom_famille} ?\n(ex : congé longue durée, déménagement…)`);
+      if (m === null) return;
+      await sb.from("eleves").update({ actif: false, pause_motif: m || null, paused_at: new Date().toISOString() }).eq("id", e.id);
+    } else {
+      await sb.from("eleves").update({ actif: true, pause_motif: null, paused_at: null }).eq("id", e.id);
+    }
+    load();
+  }
+
+  // Conducteurs groupés par secteur (pour l'affectation « par catégorie »)
+  function driverOptgroups() {
+    const groups: Record<string, ConduPartial[]> = {};
+    conducteurs.forEach(d => { const s = d.secteur || "Sans secteur"; (groups[s] = groups[s] || []).push(d); });
+    return Object.entries(groups).map(([sect, list]) => (
+      <optgroup key={sect} label={`Secteur ${sect}`}>
+        {list.map(d => (
+          <option key={d.id} value={d.id}>{d.prenom} {d.nom}{d.est_responsable ? " (resp.)" : ""}</option>
+        ))}
+      </optgroup>
+    ));
+  }
+
   // ── Facture DGEO ───────────────────────────────────────────────────────────
 
   async function handleGenererFacture() {
@@ -397,8 +500,7 @@ export default function EtablissementDetail() {
 
   // Suivi du jour — prises de cette école aujourd'hui
   const prisesEcole = prises.filter(p => elevesIds.has(p.eleve_id));
-  const circuitsMap = Object.fromEntries(circuits.map(c => [c.id, c]));
-  const conduMap    = Object.fromEntries(conducteurs.map(c => [c.circuit_id, c]));
+  const conduMap    = Object.fromEntries(conducteurs.map(c => [c.circuit_id, c])) as Record<string, ConduPartial>;
 
   return (
     <div style={{ padding: "28px 28px", maxWidth: 980, margin: "0 auto" }}>
@@ -453,12 +555,12 @@ export default function EtablissementDetail() {
 
       {/* Tabs */}
       <TabBar
-        tabs={["Élèves","Circuits","Suivi du jour","Factures"]}
+        tabs={["Circuits & élèves","Suivi du jour","Planning & absences","Élèves","Factures"]}
         active={tab}
         onChange={setTab}
       />
 
-      {/* ── TAB 0 : ÉLÈVES ─────────────────────────────────────────────────── */}
+      {/* ── ÉLÈVES (liste complète) ────────────────────────────────────────── */}
       {tab === "Élèves" && (
         <div style={{ marginTop: 20 }}>
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:14 }}>
@@ -509,14 +611,19 @@ export default function EtablissementDetail() {
                         </td>
                         <td style={{ padding:"10px 14px" }}>
                           <Badge color={e.actif ? "green" : "gray"}>
-                            {e.actif ? "Inscrit" : "Non inscrit"}
+                            {e.actif ? "Actif" : "En pause"}
                           </Badge>
+                          {!e.actif && (e as Eleve & {pause_motif?:string}).pause_motif && (
+                            <div style={{ fontSize:11, color:C.gray400, marginTop:3 }}>
+                              {(e as Eleve & {pause_motif?:string}).pause_motif}
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding:"10px 14px" }}>
                           <div style={{ display:"flex", gap:6 }}>
                             <Btn small outline onClick={() => openEdit(e)}>Éditer</Btn>
-                            <Btn small outline onClick={() => handleToggleActif(e)}>
-                              {e.actif ? "Désinscrire" : "Réinscrire"}
+                            <Btn small outline onClick={() => handlePause(e)}>
+                              {e.actif ? "Mettre en pause" : "Réactiver"}
                             </Btn>
                           </div>
                         </td>
@@ -530,13 +637,13 @@ export default function EtablissementDetail() {
         </div>
       )}
 
-      {/* ── TAB 1 : CIRCUITS (gestion complète) ────────────────────────────── */}
-      {tab === "Circuits" && (
+      {/* ── CIRCUITS & ÉLÈVES (clic = détail + actions par enfant) ──────────── */}
+      {tab === "Circuits & élèves" && (
         <div style={{ marginTop:20 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
             marginBottom:14, gap:12, flexWrap:"wrap" }}>
             <div style={{ fontSize:13, color:C.gray400 }}>
-              Créez, modifiez et attribuez les circuits de cet établissement, et affectez un conducteur à chacun.
+              Clique un circuit pour voir les enfants de la tournée et agir sur chacun (« ⋯ »).
             </div>
             <Btn color={C.navy} small onClick={openAddCircuit}>
               <Plus size={14} /> Ajouter un circuit
@@ -551,81 +658,103 @@ export default function EtablissementDetail() {
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
               {circuits.map(c => {
-                const cEleves = elevesActifs.filter(e => e.circuit_id === c.id);
-                const cond    = conduMap[c.id];
-                const cPrises = prisesEcole.filter(p =>
-                  eleves.find(e => e.id === p.eleve_id && e.circuit_id === c.id)
-                );
-                const presents = cPrises.filter(p => p.statut === "present").length;
-                const absents  = cPrises.filter(p => p.statut === "absent").length;
-
+                const cEleves = eleves.filter(e => e.circuit_id === c.id && e.actif)
+                  .sort((a,b)=>(a.heure_ramassage||"~").localeCompare(b.heure_ramassage||"~"));
+                const cond = conduMap[c.id];
+                const open = openCircuitId === c.id;
                 return (
-                  <div key={c.id} style={{ background:C.white, border:`1px solid ${C.gray200}`,
-                    borderRadius:12, padding:"18px 20px" }}>
-                    <div style={{ display:"flex", alignItems:"flex-start",
-                      justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
-                      <div>
-                        <div style={{ fontSize:16, fontWeight:800, color:C.gray800 }}>
-                          {c.emoji} {c.nom}
-                        </div>
-                        <div style={{ fontSize:13, color:C.gray400, marginTop:3 }}>
-                          {c.id}{c.num ? ` · tournée ${c.num}` : ""} — {c.km_aller ?? "?"} km
-                        </div>
-                      </div>
-                      <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"center" }}>
-                        <div style={{ textAlign:"center" }}>
-                          <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>
-                            {cEleves.length}
-                          </div>
-                          <div style={{ fontSize:11, color:C.gray400 }}>élèves</div>
-                        </div>
-                        {cPrises.length > 0 && (
-                          <>
-                            <div style={{ textAlign:"center" }}>
-                              <div style={{ fontSize:18, fontWeight:900, color:C.green }}>{presents}</div>
-                              <div style={{ fontSize:11, color:C.gray400 }}>présents</div>
-                            </div>
-                            <div style={{ textAlign:"center" }}>
-                              <div style={{ fontSize:18, fontWeight:900, color:C.red }}>{absents}</div>
-                              <div style={{ fontSize:11, color:C.gray400 }}>absents</div>
-                            </div>
-                          </>
-                        )}
-                        <div style={{ display:"flex", gap:6 }}>
-                          <Btn small outline onClick={() => openEditCircuit(c)}>
-                            <Pencil size={13} /> Éditer
-                          </Btn>
-                          <Btn small outline color={C.red} onClick={() => handleDeleteCircuit(c)}>
-                            <Trash2 size={13} />
-                          </Btn>
+                  <div key={c.id} style={{ background:C.white, border:`1px solid ${open?C.navy:C.gray200}`,
+                    borderRadius:12, overflow:"hidden" }}>
+                    {/* En-tête cliquable */}
+                    <div onClick={()=>{ setOpenCircuitId(open?null:c.id); setMenuFor(null); }}
+                      style={{ display:"flex", alignItems:"center", gap:14, padding:"15px 18px", cursor:"pointer" }}>
+                      <div style={{ width:50,height:50,borderRadius:12,background:C.white,border:`1px solid ${C.gray100}`,
+                        display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:26 }}>{c.emoji||"🚌"}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:16, fontWeight:800, color:C.gray800 }}>{c.nom}</div>
+                        <div style={{ fontSize:12.5, color:C.gray400, marginTop:2 }}>
+                          {c.id}{c.num?` · tournée ${c.num}`:""} · {cEleves.length} élèves{c.km_aller?` · ${c.km_aller} km`:""}
                         </div>
                       </div>
+                      <span style={{ fontSize:12.5, color:cond?C.gray600:C.amber, fontWeight:700, textAlign:"right" }}>
+                        {cond?`👤 ${cond.prenom} ${cond.nom}`:"⚠️ non affecté"}
+                      </span>
+                      <ChevronDown size={16} style={{ color:C.gray400, transform:open?"rotate(180deg)":"none", transition:"transform .18s" }} />
                     </div>
 
-                    {/* Conducteur affecté — modifiable en ligne */}
-                    <div style={{ marginTop:14, display:"flex", alignItems:"center", gap:10,
-                      background:C.gray50, borderRadius:8, padding:"10px 12px", flexWrap:"wrap" }}>
-                      <User size={15} color={C.gray400} />
-                      <span style={{ fontSize:13, color:C.gray600, fontWeight:600 }}>Conducteur :</span>
-                      <select
-                        value={cond?.id ?? ""}
-                        onChange={e => assignConducteur(c.id, e.target.value ? Number(e.target.value) : "").then(load)}
-                        style={{ padding:"7px 10px", borderRadius:8, border:`1px solid ${C.gray200}`,
-                          fontSize:13, background:C.white, minWidth:200, flex:"0 1 auto" }}>
-                        <option value="">— Non affecté —</option>
-                        {conducteurs.map(d => (
-                          <option key={d.id} value={d.id}>
-                            {d.prenom} {d.nom}{d.est_responsable ? " (Responsable)" : ""}
-                          </option>
-                        ))}
-                      </select>
-                      {cond && (
-                        <span style={{ fontSize:12, fontWeight:700,
-                          color: cond.status === "en_service" ? C.green : C.gray400 }}>
-                          ● {cond.status === "en_service" ? "En service" : cond.status}
-                        </span>
-                      )}
-                    </div>
+                    {open && (
+                      <div style={{ borderTop:`1px solid ${C.gray100}` }}>
+                        {/* Gestion du circuit */}
+                        <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 18px", background:C.gray50, flexWrap:"wrap" }}>
+                          <User size={15} color={C.gray400} />
+                          <span style={{ fontSize:13, color:C.gray600, fontWeight:600 }}>Conducteur :</span>
+                          <select value={cond?.id ?? ""} onChange={e=>assignConducteur(c.id, e.target.value?Number(e.target.value):"").then(load)}
+                            style={{ padding:"7px 10px", borderRadius:8, border:`1px solid ${C.gray200}`, fontSize:13, background:C.white, minWidth:210 }}>
+                            <option value="">— Non affecté —</option>
+                            {driverOptgroups()}
+                          </select>
+                          <div style={{ marginLeft:"auto", display:"flex", gap:6 }}>
+                            <Btn small outline onClick={()=>openEditCircuit(c)}><Pencil size={13}/> Circuit</Btn>
+                            <Btn small outline color={C.red} onClick={()=>handleDeleteCircuit(c)}><Trash2 size={13}/></Btn>
+                          </div>
+                        </div>
+
+                        {/* Enfants de la tournée */}
+                        {cEleves.length===0 ? (
+                          <div style={{ padding:"18px", color:C.gray400, fontSize:13 }}>Aucun élève actif sur ce circuit.</div>
+                        ) : cEleves.map((e,i)=>{
+                          const ex = excToday(e.id);
+                          const col = excColor(ex?.type);
+                          return (
+                            <div key={e.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 18px", borderTop:`1px solid ${C.gray100}` }}>
+                              <div style={{ width:26,height:26,borderRadius:8,background:C.navy,color:"#fff",fontWeight:800,fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{i+1}</div>
+                              <div style={{ minWidth:50, fontSize:13, fontWeight:800, color:C.navy }}>{e.heure_ramassage||"—"}</div>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontWeight:700, fontSize:14, color:C.gray800 }}>{e.prenom_initiale} {e.nom_famille}</div>
+                                <div style={{ fontSize:12, color:C.gray400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.adresse||"Adresse non renseignée"}</div>
+                                {ex && (
+                                  <div style={{ fontSize:11, fontWeight:700, color:col, marginTop:2 }}>
+                                    {EXC_LABEL[ex.type]}{ex.date_debut!==ex.date_fin?` · ${fmtJour(ex.date_debut)}–${fmtJour(ex.date_fin)}`:" · aujourd'hui"}
+                                    <button onClick={()=>removeExc(ex.id)} style={{ marginLeft:8, background:"none", border:"none", color:C.gray400, cursor:"pointer", fontSize:11, textDecoration:"underline" }}>annuler</button>
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{ position:"relative" }}>
+                                <button onClick={()=>setMenuFor(menuFor===e.id?null:e.id)}
+                                  style={{ width:34,height:30,borderRadius:8,border:`1px solid ${ex?col:C.gray200}`,
+                                    background:ex?col+"18":C.white, color:ex?col:C.gray600, cursor:"pointer", fontWeight:900, fontSize:16, lineHeight:1 }}>⋯</button>
+                                {menuFor===e.id && (
+                                  <>
+                                    <div onClick={()=>setMenuFor(null)} style={{ position:"fixed", inset:0, zIndex:40 }} />
+                                    <div style={{ position:"absolute", right:0, top:34, width:236, background:C.white, border:`1px solid ${C.gray200}`,
+                                      borderRadius:12, boxShadow:"0 12px 30px rgba(0,0,0,.16)", zIndex:41, overflow:"hidden" }}>
+                                      {[
+                                        {ic:"✗",  t:"Absent aujourd'hui",        fn:()=>quickExc(e,"absent")},
+                                        {ic:"🚗", t:"Ramené par les parents",     fn:()=>quickExc(e,"parent")},
+                                        {ic:"📅", t:"Absence sur une période…",   fn:()=>openExc(e,"absent")},
+                                        {ic:"🔀", t:"Changer de circuit…",        fn:()=>openExc(e,"changement_circuit")},
+                                        {ic:"⏸️", t:e.actif?"Mettre en pause":"Réactiver", fn:()=>handlePause(e)},
+                                      ].map(m=>(
+                                        <button key={m.t} onClick={m.fn}
+                                          style={{ width:"100%", textAlign:"left", background:C.white, border:"none", padding:"11px 14px",
+                                            fontSize:13, cursor:"pointer", display:"flex", gap:9, color:C.gray800 }}>
+                                          <span style={{ width:18, textAlign:"center" }}>{m.ic}</span>{m.t}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div style={{ padding:"12px 18px" }}>
+                          <Btn small outline onClick={()=>{ setEditEleve(null); setEleveForm({...EMPTY_EF, circuit_id:c.id}); setElErr(""); setEleveAdresses([]); setShowAddrAdd(false); setAddrForm(EMPTY_ADDR); setShowModal(true); }}>
+                            + Ajouter un élève à {c.nom}
+                          </Btn>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -634,55 +763,109 @@ export default function EtablissementDetail() {
         </div>
       )}
 
-      {/* ── TAB 2 : SUIVI DU JOUR ──────────────────────────────────────────── */}
+      {/* ── SUIVI DU JOUR (accordéon par circuit) ──────────────────────────── */}
       {tab === "Suivi du jour" && (
         <div style={{ marginTop:20 }}>
-          <div style={{ fontSize:13, color:C.gray400, marginBottom:14 }}>
-            Suivi en temps réel — {isoToday()}
+          <div style={{ fontSize:14, fontWeight:800, color:C.navy, marginBottom:14 }}>
+            En direct — {fmtJour(isoToday())} · clique un circuit pour le détail
           </div>
-          {circuits.length === 0 || prisesEcole.length === 0 ? (
-            <div style={{ padding:40, textAlign:"center", color:C.gray400,
-              background:C.gray50, borderRadius:12 }}>
-              Aucune prise en charge enregistrée aujourd&apos;hui.
+          {circuits.length === 0 ? (
+            <div style={{ padding:40, textAlign:"center", color:C.gray400, background:C.gray50, borderRadius:12 }}>
+              Aucun circuit.
             </div>
           ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               {circuits.map(c => {
-                const cEleves = elevesActifs.filter(e => e.circuit_id === c.id);
-                const eleveIdsC = new Set(cEleves.map(e => e.id));
-                const cPrises  = prisesEcole.filter(p => eleveIdsC.has(p.eleve_id));
-                if (cPrises.length === 0) return null;
-
+                const cEleves = eleves.filter(e => e.circuit_id === c.id && e.actif);
+                const eids = new Set(cEleves.map(e => e.id));
+                const cPrises = prisesEcole.filter(p => eids.has(p.eleve_id));
+                const dep   = cPrises.filter(p => p.statut === "present").length;
+                const absPr = cPrises.filter(p => p.statut === "absent").length;
+                const excCnt = cEleves.filter(e => { const x = excToday(e.id); return x && (x.type === "absent" || x.type === "parent"); }).length;
+                const rest  = Math.max(0, cEleves.length - dep - absPr - excCnt);
+                const cond = conduMap[c.id];
+                const acc = openAcc[c.id];
+                const pill = (bg:string,fg:string,txt:string)=>(
+                  <span style={{ background:bg, color:fg, borderRadius:20, padding:"4px 10px", fontSize:12, fontWeight:800 }}>{txt}</span>
+                );
                 return (
-                  <div key={c.id} style={{ background:C.white, border:`1px solid ${C.gray200}`,
-                    borderRadius:12, padding:"16px 18px" }}>
-                    <div style={{ fontWeight:800, color:C.gray800, marginBottom:12, fontSize:15 }}>
-                      {c.emoji} {c.nom}
+                  <div key={c.id} style={{ background:C.white, border:`1px solid ${C.gray200}`, borderRadius:12, overflow:"hidden" }}>
+                    <div onClick={()=>setOpenAcc(p=>({...p,[c.id]:!p[c.id]}))} style={{ display:"flex", alignItems:"center", gap:12, padding:"13px 16px", cursor:"pointer" }}>
+                      <div style={{ fontSize:22 }}>{c.emoji||"🚌"}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontWeight:800, color:C.gray800, fontSize:15 }}>{c.nom}</div>
+                        <div style={{ fontSize:12, color:C.gray400 }}>{cond?`👤 ${cond.prenom} ${cond.nom}`:"non affecté"} · {cEleves.length} élèves</div>
+                      </div>
+                      <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+                        {pill("#DCFCE7","#15803D",`${dep} déposés`)}
+                        {(absPr+excCnt)>0 && pill("#FDECEC","#E02424",`${absPr+excCnt} absents`)}
+                        {pill("#EFF6FF","#2563EB",`${rest} restants`)}
+                        <ChevronDown size={15} style={{ color:C.gray400, transform:acc?"rotate(180deg)":"none", transition:"transform .18s" }} />
+                      </div>
                     </div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                      {cPrises.map(p => {
-                        const eleve = eleves.find(e => e.id === p.eleve_id);
-                        return (
-                          <div key={p.id} style={{ display:"flex", alignItems:"center",
-                            justifyContent:"space-between", padding:"8px 12px",
-                            background:C.gray50, borderRadius:8 }}>
-                            <span style={{ fontWeight:600, color:C.gray800 }}>
-                              {eleve ? `${eleve.prenom_initiale} ${eleve.nom_famille}` : `Élève #${p.eleve_id}`}
-                            </span>
-                            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                              {p.heure_prise && (
-                                <span style={{ fontSize:12, color:C.gray400 }}>
-                                  {p.heure_prise.slice(0,5)}
-                                </span>
-                              )}
-                              <Badge color={p.statut === "present" ? "green" : "red"}>
-                                {statutLabel(p.statut)}
-                              </Badge>
-                            </div>
-                          </div>
-                        );
-                      })}
+                    {acc && (
+                      <div style={{ borderTop:`1px solid ${C.gray100}` }}>
+                        {cEleves.length===0 ? <div style={{padding:16,color:C.gray400,fontSize:13}}>Aucun élève.</div> :
+                          cEleves.slice().sort((a,b)=>(a.heure_ramassage||"~").localeCompare(b.heure_ramassage||"~")).map(e=>{
+                            const pr = cPrises.find(p=>p.eleve_id===e.id);
+                            const ex = excToday(e.id);
+                            let label="En attente", bg="#F1F5F9", fg=C.gray;
+                            if (pr?.statut==="present"){label="Déposé";bg="#DCFCE7";fg="#15803D";}
+                            else if (pr?.statut==="absent"){label="Absent";bg="#FDECEC";fg="#E02424";}
+                            else if (ex?.type==="absent"){label="Absent (prévu)";bg="#FDECEC";fg="#E02424";}
+                            else if (ex?.type==="parent"){label="Ramené parents";bg="#FEF3C7";fg="#D97706";}
+                            else if (ex?.type==="changement_circuit"){label="Autre circuit";bg="#EDE9FE";fg="#7C3AED";}
+                            return (
+                              <div key={e.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 16px", borderTop:`1px solid ${C.gray100}` }}>
+                                <span style={{ fontSize:13.5, color:C.gray800 }}><b style={{color:C.navy}}>{e.heure_ramassage||"—"}</b> &nbsp; {e.prenom_initiale} {e.nom_famille}</span>
+                                <span style={{ background:bg, color:fg, borderRadius:20, padding:"3px 10px", fontSize:12, fontWeight:800 }}>{label}</span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── PLANNING & ABSENCES ────────────────────────────────────────────── */}
+      {tab === "Planning & absences" && (
+        <div style={{ marginTop:20 }}>
+          <div style={{ background:"#EFF6FF", border:"1px solid #cfe0fb", borderRadius:12, padding:"12px 16px", fontSize:13, color:"#0f2f66", lineHeight:1.5, marginBottom:16 }}>
+            Les absences et exceptions planifiées ici s'appliquent <b>automatiquement à la tournée du conducteur</b> aux bonnes dates — visible par le responsable de secteur, le conducteur et le parent.
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, gap:12, flexWrap:"wrap" }}>
+            <div style={{ fontSize:13, color:C.gray400 }}>Absence sur période · ramené par les parents · changement de circuit temporaire.</div>
+          </div>
+          {exceptions.length === 0 ? (
+            <div style={{ padding:40, textAlign:"center", color:C.gray400, background:C.gray50, borderRadius:12 }}>
+              Aucune exception planifiée. Ajoute-les depuis un élève (onglet Circuits &amp; élèves → « ⋯ »).
+            </div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {exceptions.map(x=>{
+                const e = eleves.find(el=>el.id===x.eleve_id);
+                const col = excColor(x.type);
+                const cible = x.circuit_cible_id ? allCircuits.find(c=>c.id===x.circuit_cible_id) : null;
+                return (
+                  <div key={x.id} style={{ display:"flex", alignItems:"center", gap:12, background:C.white, border:`1px solid ${C.gray200}`, borderRadius:12, padding:"12px 14px" }}>
+                    <div style={{ width:5, alignSelf:"stretch", borderRadius:6, background:col }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:800, fontSize:14, color:C.gray800 }}>
+                        {e ? `${e.prenom_initiale} ${e.nom_famille}` : `Élève #${x.eleve_id}`}
+                        <span style={{ color:col, marginLeft:8, fontWeight:800 }}>· {EXC_LABEL[x.type]}</span>
+                      </div>
+                      <div style={{ fontSize:12.5, color:C.gray }}>
+                        du {fmtJour(x.date_debut)} au {fmtJour(x.date_fin)}
+                        {cible ? ` · vers ${cible.emoji} ${cible.nom}${x.definitif?" (définitif)":""}` : ""}
+                        {x.justification ? ` · ${x.justification}` : ""}
+                      </div>
                     </div>
+                    <Btn small outline color={C.red} onClick={()=>removeExc(x.id)}>Clôturer</Btn>
                   </div>
                 );
               })}
@@ -1100,6 +1283,68 @@ export default function EtablissementDetail() {
           </div>
         </Modal>
       )}
+
+      {/* ── Modal exception (période / changement de circuit) ─────────────── */}
+      {showExc && excForm && (() => {
+        const e = eleves.find(el => el.id === excForm.eleve_id);
+        const set = (patch: Partial<ExcForm>) => setExcForm(f => f ? { ...f, ...patch } : f);
+        const isChg = excForm.type === "changement_circuit";
+        return (
+          <Modal title={isChg ? "Changer de circuit" : "Absence sur une période"} onClose={() => setShowExc(false)}>
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              <div style={{ fontWeight:800, fontSize:15, color:"#0f2540" }}>{e ? `${e.prenom_initiale} ${e.nom_famille}` : ""}</div>
+              <CircField label="Type">
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  {(["absent","parent","changement_circuit"] as ExcType[]).map(t => (
+                    <button key={t} onClick={()=>set({type:t})}
+                      style={{ flex:1, minWidth:130, padding:"10px", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:13,
+                        border:`1.5px solid ${excForm.type===t?C.navy:C.gray200}`,
+                        background:excForm.type===t?"#EFF6FF":"#fff", color:excForm.type===t?C.navy:C.gray }}>
+                      {EXC_LABEL[t]}
+                    </button>
+                  ))}
+                </div>
+              </CircField>
+              {isChg && (
+                <>
+                  <CircField label="Circuit cible (cet établissement ou un autre)">
+                    <select value={excForm.circuit_cible_id} onChange={ev=>set({circuit_cible_id:ev.target.value})} style={cInp}>
+                      <option value="">— Choisir un circuit —</option>
+                      {Object.entries(allCircuits.reduce((acc:Record<string,Circuit[]>,c)=>{ const k=String(c.ecole_id??0); (acc[k]=acc[k]||[]).push(c); return acc; }, {})).map(([eid,list])=>(
+                        <optgroup key={eid} label={Number(eid)===ecoleId ? `${ecole.nom} · même établissement` : "Autre établissement"}>
+                          {list.map(c=>{ const d=conducteurs.find(x=>x.circuit_id===c.id); return (
+                            <option key={c.id} value={c.id}>{c.emoji} {c.nom}{d?` · ${d.prenom} ${d.nom}`:" · non affecté"}</option>
+                          );})}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </CircField>
+                  <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:C.gray, fontWeight:600 }}>
+                    <input type="checkbox" checked={excForm.definitif} onChange={ev=>set({definitif:ev.target.checked})} />
+                    Changement définitif (l'élève reste sur ce circuit)
+                  </label>
+                </>
+              )}
+              {!(isChg && excForm.definitif) && (
+                <div style={{ display:"flex", gap:12 }}>
+                  <CircField label="Du"><input type="date" value={excForm.date_debut} onChange={ev=>set({date_debut:ev.target.value})} style={cInp} /></CircField>
+                  <CircField label="Au"><input type="date" value={excForm.date_fin} onChange={ev=>set({date_fin:ev.target.value})} style={cInp} /></CircField>
+                </div>
+              )}
+              <CircField label="Justification (visible par le conducteur & le responsable)">
+                <textarea rows={2} value={excForm.justification} onChange={ev=>set({justification:ev.target.value})}
+                  placeholder="Ex : certificat médical, garde alternée…" style={{ ...cInp, fontFamily:"inherit", resize:"vertical" }} />
+              </CircField>
+              <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+                <Btn outline onClick={()=>setShowExc(false)}>Annuler</Btn>
+                <Btn color="navy" disabled={savingExc || (isChg && !excForm.circuit_cible_id)} onClick={handleSaveExc}>
+                  {savingExc ? "Enregistrement…" : "Enregistrer"}
+                </Btn>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }

@@ -11,7 +11,7 @@ import { TabSignalements } from "./tabs/Signalements";
 import { TabMessages } from "./tabs/Messages";
 import { TabHistorique } from "./tabs/Historique";
 import { TabConges } from "./tabs/Conges";
-import { TabTournee } from "./tabs/Tournee";
+import { TabTournee, type ExcToday } from "./tabs/Tournee";
 
 type Tab = "tournee" | "fiche" | "signalements" | "messages" | "historique" | "conges";
 
@@ -29,6 +29,7 @@ export default function ConducteurPage(){
   const [conges,    setConges]    = useState<CongesDemande[]>([]);
   const [elevesCircuit, setElevesCircuit] = useState<Eleve[]>([]);
   const [prises,    setPrises]    = useState<PriseEnCharge[]>([]);
+  const [exceptions,setExceptions]= useState<ExcToday[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState<Tab>("tournee");
   const [drawerOpen,setDrawerOpen]= useState(false);
@@ -110,6 +111,12 @@ export default function ConducteurPage(){
       ]);
       setElevesCircuit(el.data ?? []);
       setPrises(pr.data ?? []);
+
+      // Exceptions du jour (absent / ramené parents / autre circuit) — la tournée les saute
+      const t = isoToday();
+      const { data: exc } = await sb.from("exceptions_eleves")
+        .select("eleve_id,type").lte("date_debut", t).gte("date_fin", t);
+      setExceptions((exc ?? []) as ExcToday[]);
     }
 
     setLoading(false);
@@ -123,6 +130,7 @@ export default function ConducteurPage(){
       .on("postgres_changes",{event:"*",schema:"public",table:"service_logs"},load)
       .on("postgres_changes",{event:"*",schema:"public",table:"conges_demandes"},load)
       .on("postgres_changes",{event:"*",schema:"public",table:"prises_en_charge"},load)
+      .on("postgres_changes",{event:"*",schema:"public",table:"exceptions_eleves"},load)
       .subscribe();
     return()=>{sb.removeChannel(ch);};
   },[load,sb]);
@@ -396,7 +404,7 @@ export default function ConducteurPage(){
 
       {/* Contenu des onglets */}
       {tab==="tournee"&&(
-        <TabTournee driver={driver} circ={circ} eleves={elevesCircuit} prises={prises}
+        <TabTournee driver={driver} circ={circ} eleves={elevesCircuit} prises={prises} exceptions={exceptions}
           enService={driver.status==="en_service"} onMarquerEleve={handleMarquerEleve}
           onShowConfirm={()=>setShowConfirm(true)}
           onShowFin={()=>setShowFin(true)}

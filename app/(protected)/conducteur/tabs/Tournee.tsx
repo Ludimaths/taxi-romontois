@@ -13,17 +13,26 @@ const ECOLE = { nom: "Fondation Mérine", adr: "Rue du Château 47, 1510 Moudon"
 const CENTRAL_TEL = "024 455 44 80";
 const ARRIVEE = "08:25";
 
+export interface ExcToday { eleve_id: number; type: "absent" | "parent" | "changement_circuit"; }
+
 interface TourneeProps {
   driver: Conducteur;
   circ?: CircType;
   eleves: Eleve[];
   prises: PriseEnCharge[];
+  exceptions?: ExcToday[];
   enService: boolean;
   onMarquerEleve: (eleveId: number, statut: "present" | "absent") => Promise<void>;
   onShowConfirm: () => void;
   onShowFin: () => void;
   onShowReprise: () => void;
 }
+
+const EXC_INFO: Record<string, { label: string; color: string; bg: string }> = {
+  absent: { label: "Absent — ne pas récupérer", color: "#b42323", bg: "#FDECEC" },
+  parent: { label: "Ramené par les parents — ne pas récupérer", color: "#92600b", bg: "#FEF3C7" },
+  changement_circuit: { label: "Sur un autre circuit aujourd'hui", color: "#6B21A8", bg: "#EDE9FE" },
+};
 
 const gmapsAddr = (adr: string) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(adr)}`;
 const gmapsLL = (la: number, lo: number) => `https://www.google.com/maps/dir/?api=1&destination=${la},${lo}`;
@@ -49,17 +58,22 @@ function loadLeaflet(): Promise<any> {
   });
 }
 
-export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerEleve, onShowConfirm, onShowFin, onShowReprise }: TourneeProps) {
+export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enService, onMarquerEleve, onShowConfirm, onShowFin, onShowReprise }: TourneeProps) {
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const [mapError, setMapError] = useState(false);
   const [arrived, setArrived] = useState(false);          // arrivé sur place à l'arrêt courant
   const [schoolPhase, setSchoolPhase] = useState<"go" | "at" | "done">("go");
 
+  const excMap = new Map(exceptions.map(x => [x.eleve_id, x.type]));   // exceptions du jour
+  const hasExc = (e: Eleve) => excMap.has(e.id);
   const tournee = [...eleves].sort((a, b) => (a.heure_ramassage || "~~").localeCompare(b.heure_ramassage || "~~"));
   const prisByEleve = new Map(prises.map(p => [p.eleve_id, p]));
-  const isDone = (e: Eleve) => prisByEleve.has(e.id);
+  // Un enfant absent / ramené par les parents / sur un autre circuit n'est PAS un arrêt :
+  // il compte comme "réglé" pour la progression, on passe au suivant.
+  const isDone = (e: Eleve) => prisByEleve.has(e.id) || hasExc(e);
   const currentIndex = tournee.findIndex(e => !isDone(e));
+  const active = tournee.filter(e => !hasExc(e));                       // à réellement récupérer
   const allPickedUp = tournee.length > 0 && currentIndex === -1;
   const presents = prises.filter(p => p.statut === "present").length;
   const img = circuitImage(driver.circuit_id);
@@ -181,7 +195,7 @@ export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerE
           </>
         )}
         {/* Aperçu liste */}
-        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} />
+        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} excMap={excMap} />
       </div>
     );
   }
@@ -195,7 +209,7 @@ export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerE
           <div style={{ textAlign: "center", padding: "22px 16px" }}>
             <div style={{ width: 84, height: 84, borderRadius: "50%", background: C.greenL, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontSize: 42 }}>🎉</div>
             <div style={{ color: C.green, fontSize: 22, fontWeight: 900 }}>Tournée terminée !</div>
-            <p style={{ color: "#475569", fontSize: 14, marginTop: 6 }}>Les {tournee.length} enfants sont arrivés à Mérine. Les parents sont prévenus dans leur espace.</p>
+            <p style={{ color: "#475569", fontSize: 14, marginTop: 6 }}>Les {active.length} enfants sont arrivés à Mérine. Les parents sont prévenus dans leur espace.</p>
           </div>
           {bigBtn("Je termine mon service", onShowFin, "navy")}
         </div>
@@ -214,11 +228,11 @@ export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerE
               {navBtn(gmapsLL(ECOLE.lat, ECOLE.lon), "Itinéraire vers l'école")}
               {bigBtn("Arrivé à l'école", () => setSchoolPhase("at"))}
             </>) : (
-              bigBtn(`Déposer les ${tournee.length} enfants`, () => setSchoolPhase("done"), "ok")
+              bigBtn(`Déposer les ${active.length} enfants`, () => setSchoolPhase("done"), "ok")
             )}
           </div>
         </div>
-        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} />
+        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} excMap={excMap} />
       </div>
     );
   }
@@ -231,11 +245,11 @@ export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerE
       {!mapError && withCoords.length > 0 && <div ref={mapDiv} style={{ height: 200, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.gray200}`, marginBottom: 12, background: "#dce6f2" }} />}
       {/* Progression */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#475569" }}>Arrêt {currentIndex + 1}/{tournee.length}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#475569" }}>À récupérer</span>
         <div style={{ flex: 1, height: 7, background: C.gray200, borderRadius: 99, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${Math.round(presents / tournee.length * 100)}%`, background: C.green, borderRadius: 99, transition: "width .3s" }} />
+          <div style={{ height: "100%", width: `${Math.round(presents / (active.length || 1) * 100)}%`, background: C.green, borderRadius: 99, transition: "width .3s" }} />
         </div>
-        <span style={{ fontSize: 12, fontWeight: 800, color: C.green }}>{presents}/{tournee.length}</span>
+        <span style={{ fontSize: 12, fontWeight: 800, color: C.green }}>{presents}/{active.length}</span>
       </div>
       {/* Carte arrêt courant */}
       {cur && (
@@ -271,19 +285,35 @@ export function TabTournee({ driver, circ, eleves, prises, enService, onMarquerE
           {contacts(cur)}
         </div>
       )}
-      <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={currentIndex} />
+      <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={currentIndex} excMap={excMap} />
     </div>
   );
 }
 
-// ── Liste des arrêts (fait / courant / à venir) ───────────────────────────────
-function StopList({ tournee, prisByEleve, currentIndex }: { tournee: Eleve[]; prisByEleve: Map<number, PriseEnCharge>; currentIndex: number }) {
+// ── Liste des arrêts (fait / courant / à venir / exception) ───────────────────
+function StopList({ tournee, prisByEleve, currentIndex, excMap }: { tournee: Eleve[]; prisByEleve: Map<number, PriseEnCharge>; currentIndex: number; excMap: Map<number, string> }) {
   return (
     <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,.06)", overflow: "hidden", marginTop: 4 }}>
       {tournee.map((el, i) => {
+        const exc = excMap.get(el.id);
+        const info = exc ? EXC_INFO[exc] : null;
         const prise = prisByEleve.get(el.id);
         const done = !!prise;
         const cur = i === currentIndex;
+        if (info) {
+          return (
+            <div key={el.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px",
+              borderBottom: i < tournee.length - 1 ? `1px solid ${C.gray100}` : "none", background: info.bg }}>
+              <div style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, color: "#fff", fontWeight: 800, fontSize: 14,
+                display: "flex", alignItems: "center", justifyContent: "center", background: info.color }}>⤳</div>
+              <div style={{ minWidth: 40, fontSize: 12.5, fontWeight: 800, color: info.color, textDecoration: "line-through", opacity: .7 }}>{el.heure_ramassage || "—"}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 13.5, color: info.color }}>{el.prenom_initiale} {el.nom_famille}</div>
+                <div style={{ fontSize: 11.5, color: info.color, fontWeight: 600 }}>{info.label}</div>
+              </div>
+            </div>
+          );
+        }
         return (
           <div key={el.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px",
             borderBottom: i < tournee.length - 1 ? `1px solid ${C.gray100}` : "none",
