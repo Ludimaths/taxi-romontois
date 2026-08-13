@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { C } from "@/lib/constants";
 import { circuitImage } from "@/lib/circuit-images";
 import { Btn, TabBar, Badge, Modal } from "@/components/ui";
+import { ImportExcelModal } from "./ImportExcelModal";
 import type { Ecole, Eleve, Circuit, Conducteur, PriseEnCharge, TourneeConfig, AdresseEleve, CercleScolaire } from "@/lib/types";
 
 type ConduPartial = Pick<Conducteur, "id" | "nom" | "prenom" | "circuit_id" | "status"> & { est_responsable?: boolean; tel?: string; secteur?: string };
@@ -95,6 +96,7 @@ export default function EtablissementDetail() {
   // Détail d'un circuit (liste des enfants) + menu d'actions par élève
   const [openCircuitId, setOpenCircuitId] = useState<string | null>(null);
   const [apercuFor,     setApercuFor]     = useState<string | null>(null);   // aperçu côté conducteur
+  const [showImport,    setShowImport]    = useState(false);                 // import Excel
   const [menuFor,       setMenuFor]       = useState<number | null>(null);
   const [openAcc,       setOpenAcc]       = useState<Record<string, boolean>>({});
 
@@ -670,9 +672,12 @@ export default function EtablissementDetail() {
             <div style={{ fontSize:13, color:C.gray400 }}>
               Clique un circuit pour voir les enfants de la tournée et agir sur chacun (« ⋯ »).
             </div>
-            <Btn color={C.navy} small onClick={openAddCircuit}>
-              <Plus size={14} /> Ajouter un circuit
-            </Btn>
+            <div style={{ display:"flex", gap:8 }}>
+              <Btn small outline onClick={()=>setShowImport(true)}>📄 Importer un Excel</Btn>
+              <Btn color={C.navy} small onClick={openAddCircuit}>
+                <Plus size={14} /> Ajouter un circuit
+              </Btn>
+            </div>
           </div>
 
           {circuits.length === 0 ? (
@@ -1491,6 +1496,12 @@ export default function EtablissementDetail() {
           </Modal>
         );
       })()}
+
+      {/* ── Import Excel ── */}
+      {showImport && (
+        <ImportExcelModal ecoleId={ecoleId} ecoleNom={ecole.nom} circuits={circuits} eleves={eleves}
+          onClose={() => setShowImport(false)} onDone={load} />
+      )}
     </div>
   );
 }
