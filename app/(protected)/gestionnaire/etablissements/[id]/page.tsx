@@ -97,6 +97,7 @@ export default function EtablissementDetail() {
   const [openCircuitId, setOpenCircuitId] = useState<string | null>(null);
   const [apercuFor,     setApercuFor]     = useState<string | null>(null);   // aperçu côté conducteur
   const [showImport,    setShowImport]    = useState(false);                 // import Excel
+  const [circView,      setCircView]      = useState<"cartes" | "liste">("cartes"); // affichage circuits
   const [menuFor,       setMenuFor]       = useState<number | null>(null);
   const [openAcc,       setOpenAcc]       = useState<Record<string, boolean>>({});
 
@@ -334,16 +335,21 @@ export default function EtablissementDetail() {
     setShowCircuit(true);
   }
 
-  // Affecte un conducteur à un circuit (et libère l'ancien du circuit)
+  // Affecte un conducteur à un circuit — modèle « circuit → conducteur »
+  // (un conducteur peut porter plusieurs circuits, chacun entier).
   async function assignConducteur(circuitId: string, newDriverId: number | "") {
-    const prev = conducteurs.find(d => d.circuit_id === circuitId);
     const newId = newDriverId === "" ? null : Number(newDriverId);
-    if (prev && prev.id !== newId) {
-      await sb.from("conducteurs").update({ circuit_id: null }).eq("id", prev.id);
-    }
-    if (newId) {
-      await sb.from("conducteurs").update({ circuit_id: circuitId }).eq("id", newId);
-    }
+    const prevId = circuits.find(c => c.id === circuitId)?.conducteur_id ?? null;
+    await sb.from("circuits").update({ conducteur_id: newId }).eq("id", circuitId);
+    // Sync du « circuit principal » (le compte conducteur lit encore conducteurs.circuit_id)
+    await syncPrimaryCircuit(newId);
+    if (prevId && prevId !== newId) await syncPrimaryCircuit(prevId);
+  }
+  // conducteurs.circuit_id = un des circuits du conducteur (ou null) — cohérence avec le nouveau modèle
+  async function syncPrimaryCircuit(driverId: number | null) {
+    if (!driverId) return;
+    const { data } = await sb.from("circuits").select("id").eq("conducteur_id", driverId).order("nom").limit(1);
+    await sb.from("conducteurs").update({ circuit_id: data && data[0] ? data[0].id : null }).eq("id", driverId);
   }
 
   async function handleSaveCircuit() {
@@ -535,7 +541,8 @@ export default function EtablissementDetail() {
 
   // Suivi du jour — prises de cette école aujourd'hui
   const prisesEcole = prises.filter(p => elevesIds.has(p.eleve_id));
-  const conduMap    = Object.fromEntries(conducteurs.map(c => [c.circuit_id, c])) as Record<string, ConduPartial>;
+  // Conducteur d'un circuit — via le nouveau modèle circuits.conducteur_id
+  const condOf = (c: Circuit): ConduPartial | undefined => conducteurs.find(d => d.id === c.conducteur_id);
 
   return (
     <div style={{ padding: "28px 28px", maxWidth: 980, margin: "0 auto" }}>
@@ -672,7 +679,14 @@ export default function EtablissementDetail() {
             <div style={{ fontSize:13, color:C.gray400 }}>
               Clique un circuit pour voir les enfants de la tournée et agir sur chacun (« ⋯ »).
             </div>
-            <div style={{ display:"flex", gap:8 }}>
+            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+              <div style={{ display:"flex", border:`1px solid ${C.gray200}`, borderRadius:9, overflow:"hidden" }}>
+                {([["cartes","▦ Cartes"],["liste","☰ Liste"]] as const).map(([v,lbl])=>(
+                  <button key={v} onClick={()=>setCircView(v)}
+                    style={{ padding:"7px 12px", fontSize:12.5, fontWeight:700, cursor:"pointer", border:"none",
+                      background: circView===v?C.navy:C.white, color: circView===v?"#fff":C.gray }}>{lbl}</button>
+                ))}
+              </div>
               <Btn small outline onClick={()=>setShowImport(true)}>📄 Importer un Excel</Btn>
               <Btn color={C.navy} small onClick={openAddCircuit}>
                 <Plus size={14} /> Ajouter un circuit
@@ -686,23 +700,25 @@ export default function EtablissementDetail() {
               Aucun circuit pour cet établissement. Cliquez sur « Ajouter un circuit ».
             </div>
           ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap: circView==="liste" ? 6 : 12 }}>
               {circuits.map(c => {
                 const cEleves = eleves.filter(e => e.circuit_id === c.id && e.actif)
                   .sort((a,b)=>(a.heure_ramassage||"~").localeCompare(b.heure_ramassage||"~"));
-                const cond = conduMap[c.id];
+                const cond = condOf(c);
                 const open = openCircuitId === c.id;
+                const liste = circView === "liste";
+                const box = liste ? 34 : 50;
                 return (
                   <div key={c.id} className="etab-card" style={{ background:C.white, border:`1px solid ${open?C.navy:C.gray200}`,
                     borderRadius:12, overflow:"hidden" }}>
                     {/* En-tête cliquable */}
                     <div onClick={()=>{ setOpenCircuitId(open?null:c.id); setMenuFor(null); }}
-                      style={{ display:"flex", alignItems:"center", gap:14, padding:"15px 18px", cursor:"pointer" }}>
-                      <div style={{ width:50,height:50,borderRadius:12,background:C.white,border:`1px solid ${C.gray100}`,
-                        display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 1px 4px rgba(0,0,0,.06)" }}>{circIcon(c,42)}</div>
+                      style={{ display:"flex", alignItems:"center", gap: liste?11:14, padding: liste?"9px 14px":"15px 18px", cursor:"pointer" }}>
+                      <div style={{ width:box,height:box,borderRadius:liste?9:12,background:C.white,border:`1px solid ${C.gray100}`,
+                        display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 1px 4px rgba(0,0,0,.06)" }}>{circIcon(c,liste?26:42)}</div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:16, fontWeight:800, color:C.gray800 }}>{c.nom}</div>
-                        <div style={{ fontSize:12.5, color:C.gray400, marginTop:2 }}>
+                        <div style={{ fontSize: liste?14:16, fontWeight:800, color:C.gray800 }}>{c.nom}</div>
+                        <div style={{ fontSize: liste?11.5:12.5, color:C.gray400, marginTop:2 }}>
                           {c.id}{c.num?` · tournée ${c.num}`:""} · {cEleves.length} élèves{c.km_aller?` · ${c.km_aller} km`:""}
                         </div>
                       </div>
@@ -855,7 +871,7 @@ export default function EtablissementDetail() {
                 const absPr = cPrises.filter(p => p.statut === "absent").length;
                 const excCnt = cEleves.filter(e => { const x = excToday(e.id); return x && (x.type === "absent" || x.type === "parent"); }).length;
                 const rest  = Math.max(0, cEleves.length - dep - absPr - excCnt);
-                const cond = conduMap[c.id];
+                const cond = condOf(c);
                 const acc = openAcc[c.id];
                 const pill = (bg:string,fg:string,txt:string)=>(
                   <span style={{ background:bg, color:fg, borderRadius:20, padding:"4px 10px", fontSize:12, fontWeight:800 }}>{txt}</span>

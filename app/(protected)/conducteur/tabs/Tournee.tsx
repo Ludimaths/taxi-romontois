@@ -22,6 +22,7 @@ interface TourneeProps {
   prises: PriseEnCharge[];
   exceptions?: ExcToday[];
   enService: boolean;
+  serviceFini?: boolean;
   onMarquerEleve: (eleveId: number, statut: "present" | "absent") => Promise<void>;
   onShowConfirm: () => void;
   onShowFin: () => void;
@@ -58,7 +59,7 @@ function loadLeaflet(): Promise<any> {
   });
 }
 
-export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enService, onMarquerEleve, onShowConfirm, onShowFin, onShowReprise }: TourneeProps) {
+export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enService, serviceFini = false, onMarquerEleve, onShowConfirm, onShowFin, onShowReprise }: TourneeProps) {
   const mapDiv = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const [mapError, setMapError] = useState(false);
@@ -159,6 +160,23 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], enSe
     return { flex: 1, minWidth: "calc(50% - 4px)", textAlign: "center", textDecoration: "none", fontSize: 12.5, fontWeight: 700,
       padding: "10px 8px", borderRadius: 11, border: `1px solid ${C.gray200}`,
       color: kind === "p" ? "#b42323" : C.navy, background: kind === "p" ? "#FDECEC" : kind === "s" ? "#EFF6FF" : "#fff" };
+  }
+
+  // ── 0) Service déjà terminé aujourd'hui → FÉLICITATIONS ─────────────────────
+  if (!enService && serviceFini && driver.status !== "absent") {
+    return (
+      <div>
+        {header}
+        <div style={{ textAlign: "center", padding: "26px 16px" }}>
+          <div style={{ width: 88, height: 88, borderRadius: "50%", background: C.greenL, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", fontSize: 44 }}>🎉</div>
+          <div style={{ color: C.green, fontSize: 22, fontWeight: 900 }}>Service terminé — félicitations !</div>
+          <p style={{ color: "#475569", fontSize: 14, marginTop: 8, lineHeight: 1.5 }}>
+            Vous avez assuré votre tournée. Merci et bon repos.<br />Rendez-vous à la prochaine tournée.
+          </p>
+        </div>
+        <StopList tournee={tournee} prisByEleve={prisByEleve} currentIndex={-1} excMap={excMap} />
+      </div>
+    );
   }
 
   // ── 1) Pas encore en service → BRIEFING ─────────────────────────────────────

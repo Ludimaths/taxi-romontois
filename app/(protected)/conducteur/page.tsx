@@ -405,7 +405,8 @@ export default function ConducteurPage(){
       {/* Contenu des onglets */}
       {tab==="tournee"&&(
         <TabTournee driver={driver} circ={circ} eleves={elevesCircuit} prises={prises} exceptions={exceptions}
-          enService={driver.status==="en_service"} onMarquerEleve={handleMarquerEleve}
+          enService={driver.status==="en_service"} serviceFini={!!todayLog?.heure_fin}
+          onMarquerEleve={handleMarquerEleve}
           onShowConfirm={()=>setShowConfirm(true)}
           onShowFin={()=>setShowFin(true)}
           onShowReprise={()=>setShowReprise(true)}/>
