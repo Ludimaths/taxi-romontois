@@ -68,11 +68,6 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
   const [mapError, setMapError] = useState(false);
   const [arrived, setArrived] = useState(false);          // arrivé sur place à l'arrêt courant
   const [schoolPhase, setSchoolPhase] = useState<"go" | "at" | "done">("go");
-  const [copiedTel, setCopiedTel] = useState<string | null>(null);
-  async function copyTel(num: string) {
-    try { await navigator.clipboard.writeText(num); } catch { /* noop */ }
-    setCopiedTel(num); setTimeout(() => setCopiedTel(null), 1500);
-  }
 
   const excMap = new Map<number, string>(exceptions.map(x => [x.eleve_id, x.type]));   // exceptions du jour
   const hasExc = (e: Eleve) => excMap.has(e.id);
@@ -158,27 +153,20 @@ export function TabTournee({ driver, circ, eleves, prises, exceptions = [], sens
     </a>
   );
 
-  const telBlock = (label: string, num: string, kind?: "p" | "s") => {
-    const base = cbtn(kind);
-    return (
-      <div style={{ ...base, padding: "9px 10px", display: "flex", flexDirection: "column", gap: 5 }}>
-        <div style={{ fontSize: 12, fontWeight: 800 }}>{label}</div>
-        <div style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: ".2px" }}>{num}</div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <a href={`tel:${cleanTel(num)}`} style={{ flex: 1, textAlign: "center", textDecoration: "none", fontSize: 12, fontWeight: 800, padding: "6px 4px", borderRadius: 8, background: C.navy, color: "#fff" }}>Appeler</a>
-          <button onClick={() => copyTel(num)} style={{ flex: 1, textAlign: "center", fontSize: 12, fontWeight: 800, padding: "6px 4px", borderRadius: 8, border: `1px solid ${C.gray200}`, background: "#fff", color: C.navy, cursor: "pointer" }}>
-            {copiedTel === num ? "Copié ✓" : "Copier"}
-          </button>
-        </div>
-      </div>
-    );
-  };
+  // Un seul geste : on appuie → l'app téléphone s'ouvre avec le numéro. Le numéro
+  // reste visible pour le lire / le copier au besoin.
+  const telChip = (label: string, num: string, kind?: "p" | "s") => (
+    <a href={`tel:${cleanTel(num)}`} style={{ ...cbtn(kind), display: "flex", flexDirection: "column", gap: 2, padding: "9px 10px" }}>
+      <span style={{ fontSize: 12, fontWeight: 800 }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: ".2px" }}>{num}</span>
+    </a>
+  );
   const contacts = (e: Eleve) => (
     <div style={{ display: "flex", gap: 7, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.gray100}`, flexWrap: "wrap" }}>
-      {e.tel_mere && telBlock("📞 Mère", e.tel_mere, "p")}
-      {e.tel_pere && telBlock("📞 Père", e.tel_pere, "p")}
-      {telBlock("🏫 École", ECOLE.tel, "s")}
-      {telBlock("🏢 Central", CENTRAL_TEL)}
+      {e.tel_mere && telChip("📞 Mère", e.tel_mere, "p")}
+      {e.tel_pere && telChip("📞 Père", e.tel_pere, "p")}
+      {telChip("🏫 École", ECOLE.tel, "s")}
+      {telChip("🏢 Central", CENTRAL_TEL)}
     </div>
   );
   function cbtn(kind?: "p" | "s"): React.CSSProperties {

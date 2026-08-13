@@ -522,8 +522,7 @@ export default function ConducteurPage(){
           onMarquerLu={handleMarquerLu} onSetTab={t=>setTab(t as Tab)}/>
       )}
       {tab==="planning"&&(
-        <TabPlanning circuits={myCircuits} week={weekStops} exceptions={exceptions}
-          today={(()=>{const d=new Date().getDay();return d>=1&&d<=5?d:1;})()}/>
+        <TabPlanning circuits={myCircuits} week={weekStops} exceptions={exceptions}/>
       )}
       {tab==="historique"&&(
         <TabHistorique histLogs={histLogs} incidents={incidents} />

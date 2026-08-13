@@ -11,42 +11,93 @@ type HebdoRow = {
 type Circ = { id: string; nom: string; emoji?: string };
 type Exc = { eleve_id: number; type: string };
 
-const JOURS: [string, number][] = [["Lun", 1], ["Mar", 2], ["Mer", 3], ["Jeu", 4], ["Ven", 5]];
-const JOUR_LONG: Record<number, string> = { 1: "Lundi", 2: "Mardi", 3: "Mercredi", 4: "Jeudi", 5: "Vendredi" };
+const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const JOUR_LONG: Record<number, string> = { 0: "Dimanche", 1: "Lundi", 2: "Mardi", 3: "Mercredi", 4: "Jeudi", 5: "Vendredi", 6: "Samedi" };
+const DOW = ["L", "M", "M", "J", "V", "S", "D"];
 
-export function TabPlanning({ circuits, week, exceptions, today }:
-  { circuits: Circ[]; week: HebdoRow[]; exceptions: Exc[]; today: number }) {
-  const [jour, setJour] = useState<number>(today >= 1 && today <= 5 ? today : 1);
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+export function TabPlanning({ circuits, week, exceptions }:
+  { circuits: Circ[]; week: HebdoRow[]; exceptions: Exc[] }) {
+  const today = new Date();
+  const [view, setView] = useState<{ y: number; m: number }>({ y: today.getFullYear(), m: today.getMonth() });
+  const [sel, setSel] = useState<string>(ymd(today));
   const excSet = new Set(exceptions.map(e => e.eleve_id));
+  const todayStr = ymd(today);
+
+  // Grille du mois (semaine commençant le lundi)
+  const first = new Date(view.y, view.m, 1);
+  const startOffset = (first.getDay() + 6) % 7;
+  const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
+  const cells: (Date | null)[] = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(view.y, view.m, d));
+
+  const selDate = new Date(`${sel}T00:00:00`);
+  const selJour = selDate.getDay();                 // 0=dim … 6=sam
+  const isWeekend = selJour === 0 || selJour === 6;
+
+  const shift = (delta: number) => {
+    const d = new Date(view.y, view.m + delta, 1);
+    setView({ y: d.getFullYear(), m: d.getMonth() });
+  };
 
   return (
     <div>
-      <p style={{ fontSize: 13, color: C.gray, margin: "0 0 12px" }}>
-        La tournée s&apos;affiche selon le jour, d&apos;après le fichier de courses. Aujourd&apos;hui : <b style={{ color: C.navy }}>{JOUR_LONG[today] || "—"}</b>.
-      </p>
-
-      {/* Sélecteur de jour */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-        {JOURS.map(([lbl, d]) => (
-          <button key={d} onClick={() => setJour(d)}
-            style={{ flex: 1, padding: "11px 4px", borderRadius: 11, border: "none", cursor: "pointer",
-              background: jour === d ? C.navy : "#fff", color: jour === d ? "#fff" : C.navy,
-              fontWeight: 800, fontSize: 13.5, position: "relative",
-              boxShadow: jour === d ? "0 3px 10px rgba(13,59,122,.25)" : "0 1px 4px rgba(0,0,0,.06)" }}>
-            {lbl}
-            {d === today && <span style={{ position: "absolute", top: 5, right: 7, width: 6, height: 6, borderRadius: "50%", background: jour === d ? "#fff" : C.green }} />}
-          </button>
-        ))}
+      {/* En-tête calendrier */}
+      <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,.06)", padding: 14, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <button onClick={() => shift(-1)} style={navBtnStyle}>‹</button>
+          <div style={{ fontWeight: 900, fontSize: 16, color: C.navy, textTransform: "capitalize" }}>{MOIS[view.m]} {view.y}</div>
+          <button onClick={() => shift(1)} style={navBtnStyle}>›</button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 4 }}>
+          {DOW.map((d, i) => (
+            <div key={i} style={{ textAlign: "center", fontSize: 11, fontWeight: 800, color: i >= 5 ? C.gray400 : C.gray600 }}>{d}</div>
+          ))}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+          {cells.map((d, i) => {
+            if (!d) return <div key={i} />;
+            const str = ymd(d);
+            const dow = d.getDay();
+            const weekend = dow === 0 || dow === 6;
+            const isToday = str === todayStr;
+            const isSel = str === sel;
+            return (
+              <button key={i} onClick={() => setSel(str)} disabled={weekend}
+                style={{
+                  aspectRatio: "1", borderRadius: 10, border: isToday ? `2px solid ${C.green}` : "1px solid transparent",
+                  cursor: weekend ? "default" : "pointer", fontSize: 13.5, fontWeight: isSel || isToday ? 900 : 600,
+                  background: isSel ? C.navy : isToday ? C.greenL : weekend ? "transparent" : "#F8FAFC",
+                  color: isSel ? "#fff" : weekend ? C.gray400 : isToday ? C.greenD : C.navy,
+                }}>
+                {d.getDate()}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: C.gray600, justifyContent: "center" }}>
+          <span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, border: `2px solid ${C.green}`, verticalAlign: "middle", marginRight: 4 }} />Aujourd&apos;hui</span>
+          <span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 3, background: C.navy, verticalAlign: "middle", marginRight: 4 }} />Jour sélectionné</span>
+        </div>
       </div>
 
-      {circuits.length === 0 && (
+      {/* Emploi du temps du jour sélectionné */}
+      <div style={{ fontSize: 15, fontWeight: 900, color: C.navy, margin: "0 2px 12px", textTransform: "capitalize" }}>
+        {JOUR_LONG[selJour]} {selDate.getDate()} {MOIS[selDate.getMonth()]}
+      </div>
+
+      {isWeekend ? (
+        <div style={{ padding: 24, textAlign: "center", color: C.gray, background: "#fff", borderRadius: 16 }}>
+          Pas de tournée le week-end.
+        </div>
+      ) : circuits.length === 0 ? (
         <div style={{ padding: 24, textAlign: "center", color: C.gray, background: "#fff", borderRadius: 16 }}>
           Aucun circuit attribué pour le moment.
         </div>
-      )}
-
-      {circuits.map(c => {
-        const stops = week.filter(h => h.circuit_id === c.id && h.jour === jour);
+      ) : circuits.map(c => {
+        const stops = week.filter(h => h.circuit_id === c.id && h.jour === selJour);
         const matin = stops.filter(h => h.sens === "matin");
         const aprem = stops.filter(h => h.sens === "aprem");
         const img = circuitImage(c.id);
@@ -70,6 +121,11 @@ export function TabPlanning({ circuits, week, exceptions, today }:
     </div>
   );
 }
+
+const navBtnStyle: React.CSSProperties = {
+  width: 34, height: 34, borderRadius: 10, border: `1px solid ${C.gray200}`, background: "#fff",
+  color: C.navy, fontSize: 20, fontWeight: 900, cursor: "pointer", lineHeight: 1,
+};
 
 function Section({ title, rows, excSet }: { title: string; rows: HebdoRow[]; excSet: Set<number> }) {
   if (!rows.length) return null;
