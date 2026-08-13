@@ -563,26 +563,34 @@ export default function EtablissementDetail() {
         <ArrowLeft size={15} /> Tous les établissements
       </button>
 
-      {/* En-tête établissement — étiquette compacte */}
-      <div style={{ background: C.white, borderRadius: 14, padding: "14px 20px",
+      {/* En-tête établissement — style simulateur (identité + légende + stats) */}
+      <div style={{ background: C.white, borderRadius: 16, padding: "18px 22px",
         border: `1px solid ${C.gray200}`, marginBottom: 18,
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 20, fontWeight: 900, color: C.gray800 }}>{ecole.nom}</div>
-          <div style={{ fontSize: 12.5, color: C.gray400, marginTop: 2 }}>
-            {ecole.adresse || ""}{ecole.lot ? ` · Lot ${ecole.lot}` : ""}
+          <div style={{ fontSize: 22, fontWeight: 900, color: "#0f2540" }}>{ecole.nom}</div>
+          <div style={{ fontSize: 12.5, color: C.gray400, marginTop: 3 }}>
+            {ecole.adresse || ""}{ecole.lot ? ` · Lot ${ecole.lot}` : ""} · Arrivée école 08:25
+          </div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 12, fontSize: 12, color: C.gray }}>
+            {([["#16A34A","Déposé"],["#E02424","Absent"],["#D97706","Ramené par les parents"],["#7C3AED","Circuit temporaire"]] as const).map(([col,lbl]) => (
+              <span key={lbl} style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ width:9, height:9, borderRadius:"50%", background:col, display:"inline-block" }} />{lbl}
+              </span>
+            ))}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
           {[
-            { v: elevesActifs.length, l: "élèves" },
-            { v: circuits.length,     l: "circuits" },
-            { v: prisesEcole.length,  l: "suivi" },
+            { v: elevesActifs.length, l: "Élèves actifs", c: C.navy },
+            { v: circuits.length,     l: "Circuits", c: C.navy },
+            { v: prisesEcole.filter(p => p.statut === "present").length, l: "Déposés aujourd'hui", c: C.green },
+            { v: exceptions.filter(x => { const t = isoToday(); return x.date_debut <= t && x.date_fin >= t; }).length, l: "Exceptions en cours", c: C.amber },
           ].map(s => (
             <div key={s.l} style={{ background: C.gray50, border: `1px solid ${C.gray200}`,
-              borderRadius: 10, padding: "6px 13px", textAlign: "center", minWidth: 60 }}>
-              <div style={{ fontSize: 17, fontWeight: 900, color: C.navy, lineHeight: 1 }}>{s.v}</div>
-              <div style={{ fontSize: 10.5, color: C.gray400, marginTop: 2 }}>{s.l}</div>
+              borderRadius: 12, padding: "12px 15px", textAlign: "center", minWidth: 92 }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: s.c, lineHeight: 1 }}>{s.v}</div>
+              <div style={{ fontSize: 11, color: C.gray400, marginTop: 3 }}>{s.l}</div>
             </div>
           ))}
           <Btn small outline onClick={openEditEcole}>Modifier</Btn>
@@ -622,11 +630,7 @@ export default function EtablissementDetail() {
                       fontWeight:700, color:C.gray600, borderBottom:`1px solid ${C.gray200}`,
                       cursor:"help" }}
                       title="Indique si l'élève est inscrit et pris en charge cette année scolaire">
-                      Inscrit ℹ
-                    </th>
-                    <th style={{ padding:"11px 14px", textAlign:"left",
-                      fontWeight:700, color:C.gray600, borderBottom:`1px solid ${C.gray200}` }}>
-                      Actions
+                      Statut
                     </th>
                   </tr>
                 </thead>
@@ -634,7 +638,8 @@ export default function EtablissementDetail() {
                   {eleves.map((e, i) => {
                     const circ = allCircuits.find(c => c.id === e.circuit_id);
                     return (
-                      <tr key={e.id} style={{ background: i % 2 === 0 ? C.white : C.gray50 }}>
+                      <tr key={e.id} onClick={() => openEdit(e)} title="Ouvrir la fiche"
+                        style={{ background: i % 2 === 0 ? C.white : C.gray50, cursor:"pointer" }}>
                         <td style={{ padding:"10px 14px", fontWeight:700, color:C.gray800 }}>
                           {e.nom_famille}
                         </td>
@@ -655,12 +660,6 @@ export default function EtablissementDetail() {
                             </div>
                           )}
                         </td>
-                        <td style={{ padding:"10px 14px" }}>
-                          <div style={{ display:"flex", gap:6 }}>
-                            <Btn small outline onClick={() => openEdit(e)}>Éditer</Btn>
-                            {!e.actif && <Btn small outline onClick={() => handlePause(e)}>Réactiver</Btn>}
-                          </div>
-                        </td>
                       </tr>
                     );
                   })}
@@ -676,21 +675,18 @@ export default function EtablissementDetail() {
         <div style={{ marginTop:20 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
             marginBottom:14, gap:12, flexWrap:"wrap" }}>
-            <div style={{ fontSize:13, color:C.gray400 }}>
-              Clique un circuit pour voir les enfants de la tournée et agir sur chacun (« ⋯ »).
-            </div>
-            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <div style={{ display:"flex", border:`1px solid ${C.gray200}`, borderRadius:9, overflow:"hidden" }}>
-                {([["cartes","▦ Cartes"],["liste","☰ Liste"]] as const).map(([v,lbl])=>(
-                  <button key={v} onClick={()=>setCircView(v)}
-                    style={{ padding:"7px 12px", fontSize:12.5, fontWeight:700, cursor:"pointer", border:"none",
+            <div style={{ fontSize:13, color:C.gray400 }}>Clique un circuit pour voir les enfants et agir sur chacun.</div>
+            <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+              <div style={{ display:"flex", border:`1px solid ${C.gray200}`, borderRadius:8, overflow:"hidden" }}>
+                {([["cartes","▦"],["liste","☰"]] as const).map(([v,lbl])=>(
+                  <button key={v} onClick={()=>setCircView(v)} title={v==="cartes"?"Cartes":"Liste"}
+                    style={{ padding:"6px 11px", fontSize:14, fontWeight:700, cursor:"pointer", border:"none",
                       background: circView===v?C.navy:C.white, color: circView===v?"#fff":C.gray }}>{lbl}</button>
                 ))}
               </div>
-              <Btn small outline onClick={()=>setShowImport(true)}>📄 Importer un Excel</Btn>
-              <Btn color={C.navy} small onClick={openAddCircuit}>
-                <Plus size={14} /> Ajouter un circuit
-              </Btn>
+              <button onClick={()=>setShowImport(true)} title="Importer un fichier Excel"
+                style={{ background:"none", border:"none", color:C.navyL, cursor:"pointer", fontSize:13, fontWeight:700 }}>📄 Importer</button>
+              <Btn color={C.navy} small onClick={openAddCircuit}><Plus size={14} /> Ajouter un circuit</Btn>
             </div>
           </div>
 
@@ -700,32 +696,39 @@ export default function EtablissementDetail() {
               Aucun circuit pour cet établissement. Cliquez sur « Ajouter un circuit ».
             </div>
           ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap: circView==="liste" ? 6 : 12 }}>
+            <div style={{ display:"grid", gridTemplateColumns: circView==="liste" ? "1fr" : "repeat(auto-fill,minmax(300px,1fr))", gap:14, alignItems:"start" }}>
               {circuits.map(c => {
                 const cEleves = eleves.filter(e => e.circuit_id === c.id && e.actif)
                   .sort((a,b)=>(a.heure_ramassage||"~").localeCompare(b.heure_ramassage||"~"));
                 const cond = condOf(c);
                 const open = openCircuitId === c.id;
                 const liste = circView === "liste";
-                const box = liste ? 34 : 50;
                 return (
                   <div key={c.id} className="etab-card" style={{ background:C.white, border:`1px solid ${open?C.navy:C.gray200}`,
-                    borderRadius:12, overflow:"hidden" }}>
-                    {/* En-tête cliquable */}
-                    <div onClick={()=>{ setOpenCircuitId(open?null:c.id); setMenuFor(null); }}
-                      style={{ display:"flex", alignItems:"center", gap: liste?11:14, padding: liste?"9px 14px":"15px 18px", cursor:"pointer" }}>
-                      <div style={{ width:box,height:box,borderRadius:liste?9:12,background:C.white,border:`1px solid ${C.gray100}`,
-                        display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 1px 4px rgba(0,0,0,.06)" }}>{circIcon(c,liste?26:42)}</div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize: liste?14:16, fontWeight:800, color:C.gray800 }}>{c.nom}</div>
-                        <div style={{ fontSize: liste?11.5:12.5, color:C.gray400, marginTop:2 }}>
-                          {c.id}{c.num?` · tournée ${c.num}`:""} · {cEleves.length} élèves{c.km_aller?` · ${c.km_aller} km`:""}
+                    borderRadius:16, overflow:"hidden", gridColumn: (open || liste) ? "1 / -1" : "auto" }}>
+                    {/* En-tête / carte cliquable */}
+                    <div onClick={()=>{ setOpenCircuitId(open?null:c.id); setMenuFor(null); setApercuFor(null); }}
+                      style={{ display:"flex", flexDirection: (liste||open) ? "row" : "column", alignItems: (liste||open) ? "center" : "stretch",
+                        gap: (liste||open) ? 13 : 0, padding: liste?"11px 16px":"16px", cursor:"pointer" }}>
+                      <div style={{ display:"flex", gap:13, alignItems:"center", flex:1, minWidth:0 }}>
+                        <div style={{ width: liste?40:58, height: liste?40:58, borderRadius:14, background:C.white, border:`1px solid ${C.gray100}`,
+                          display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, boxShadow:"0 2px 8px rgba(0,0,0,.06)" }}>{circIcon(c, liste?32:48)}</div>
+                        <div style={{ minWidth:0 }}>
+                          <div style={{ fontSize: liste?15:18, fontWeight:900, color:"#0f2540" }}>{c.nom}</div>
+                          <div style={{ fontSize:12, color:C.gray400, marginTop:2 }}>{c.id}{c.km_aller?` · ${c.km_aller} km`:""} · {cEleves.length} élèves</div>
+                          <div style={{ marginTop:7 }}>
+                            {cond
+                              ? <span style={{ display:"inline-flex", alignItems:"center", gap:5, background:C.greenL, color:C.greenD, borderRadius:20, padding:"3px 11px", fontSize:11.5, fontWeight:800 }}>● {cond.prenom} {cond.nom}</span>
+                              : <span style={{ background:C.amberL, color:C.amber, borderRadius:20, padding:"3px 11px", fontSize:11.5, fontWeight:800 }}>Conducteur non affecté</span>}
+                          </div>
                         </div>
                       </div>
-                      <span style={{ fontSize:12.5, color:cond?C.gray600:C.amber, fontWeight:700, textAlign:"right" }}>
-                        {cond?`👤 ${cond.prenom} ${cond.nom}`:"⚠️ non affecté"}
-                      </span>
-                      <ChevronDown size={16} style={{ color:C.gray400, transform:open?"rotate(180deg)":"none", transition:"transform .18s" }} />
+                      {(liste||open)
+                        ? <ChevronDown size={16} style={{ color:C.gray400, transform:open?"rotate(180deg)":"none", transition:"transform .18s", flexShrink:0 }} />
+                        : <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:14 }}>
+                            <span style={{ fontSize:12.5, color:C.gray400 }}>{cEleves.length} élève{cEleves.length>1?"s":""} dans la tournée</span>
+                            <span style={{ fontSize:12.5, fontWeight:800, color:C.navyL }}>Voir les élèves →</span>
+                          </div>}
                     </div>
 
                     {open && (
