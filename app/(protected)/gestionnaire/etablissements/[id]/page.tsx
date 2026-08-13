@@ -11,6 +11,7 @@ import HistoriqueEtab from "./HistoriqueEtab";
 import type { Ecole, Eleve, Circuit, Conducteur, PriseEnCharge, TourneeConfig, AdresseEleve, CercleScolaire } from "@/lib/types";
 
 type ConduPartial = Pick<Conducteur, "id" | "nom" | "prenom" | "circuit_id" | "status"> & { est_responsable?: boolean; tel?: string; secteur?: string };
+type HebdoStop = { id: number; circuit_id: string; jour: number; sens: "matin" | "aprem"; ordre: number; heure: string; eleve_nom: string; adresse: string | null; eleve_id: number | null };
 import { ArrowLeft, ChevronDown, Plus, Pencil, Trash2, User } from "lucide-react";
 
 interface CircuitForm { id: string; nom: string; emoji: string; num: string; km_aller: number; cercle_id: number | null; conducteur_id: number | ""; }
@@ -144,6 +145,7 @@ export default function EtablissementDetail() {
   // Mois affiché dans le calendrier du Planning
   const [calRef, setCalRef] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [planCircuit, setPlanCircuit] = useState<string>("all");   // filtre circuit du Planning & absences
+  const [hebdo, setHebdo] = useState<HebdoStop[]>([]);             // planning hebdo (matin + après-midi)
   const shiftMonth = (delta: number) => setCalRef(r => {
     const t = r.m + delta;
     return { y: r.y + Math.floor(t / 12), m: ((t % 12) + 12) % 12 };
@@ -173,6 +175,16 @@ export default function EtablissementDetail() {
     // Circuits de cet établissement (lien direct ecole_id)
     const ecoleCircuits = (allCirData ?? []).filter((c: Circuit) => c.ecole_id === ecoleId);
 
+    // Planning hebdo (matin + après-midi) des circuits de cet établissement
+    const circIds = ecoleCircuits.map((c: Circuit) => c.id);
+    let hebdoData: HebdoStop[] = [];
+    if (circIds.length) {
+      const { data: th } = await sb.from("tournee_hebdo")
+        .select("id,circuit_id,jour,sens,ordre,heure,eleve_nom,adresse,eleve_id")
+        .in("circuit_id", circIds);
+      hebdoData = (th ?? []) as HebdoStop[];
+    }
+
     // Exceptions par période des élèves de cet établissement
     const ids = elevesList.map(e => e.id);
     let excData: ExceptionEleve[] = [];
@@ -191,6 +203,7 @@ export default function EtablissementDetail() {
     setPrises(prisesData ?? []);
     setTournees(tournData ?? []);
     setExceptions(excData);
+    setHebdo(hebdoData);
     setLoading(false);
   }, [sb, ecoleId]);
 
@@ -421,6 +434,12 @@ export default function EtablissementDetail() {
   function excColor(type?: ExcType) {
     return type === "absent" ? C.red : type === "parent" ? C.amber : type === "changement_circuit" ? "#7C3AED" : C.gray400;
   }
+
+  // Jour courant (1=lundi … 5=vendredi ; week-end → aperçu du lundi)
+  const todayJour = (() => { const d = new Date().getDay(); return d >= 1 && d <= 5 ? d : 1; })();
+  // Arrêts du planning hebdo pour un circuit, aujourd'hui, par sens
+  const stopsOf = (circuitId: string, sens: "matin" | "aprem") =>
+    hebdo.filter(h => h.circuit_id === circuitId && h.jour === todayJour && h.sens === sens).sort((a, b) => a.ordre - b.ordre);
 
   // Absent / ramené parents pour AUJOURD'HUI (raccourci 1 jour)
   async function quickExc(e: Eleve, type: ExcType) {
@@ -798,7 +817,8 @@ export default function EtablissementDetail() {
                           </div>
                         </div>
 
-                        {/* Enfants de la tournée */}
+                        {/* ☀️ Matin — ramassage (liste + gestion par élève) */}
+                        <div style={{ padding:"8px 18px", fontSize:11, fontWeight:800, color:C.gray600, background:C.gray50, textTransform:"uppercase", letterSpacing:".4px" }}>☀️ Matin — ramassage</div>
                         {cEleves.length===0 ? (
                           <div style={{ padding:"18px", color:C.gray400, fontSize:13 }}>Aucun élève actif sur ce circuit.</div>
                         ) : cEleves.map((e,i)=>{
@@ -851,6 +871,22 @@ export default function EtablissementDetail() {
                             </div>
                           );
                         })}
+                        {/* 🌙 Après-midi — dépose (planning hebdo du jour) */}
+                        {(() => { const aps = stopsOf(c.id, "aprem"); if (!aps.length) return null; return (
+                          <div>
+                            <div style={{ padding:"8px 18px", fontSize:11, fontWeight:800, color:C.gray600, background:C.gray50, textTransform:"uppercase", letterSpacing:".4px" }}>🌙 Après-midi — dépose (aujourd&apos;hui)</div>
+                            {aps.map((h,idx)=>(
+                              <div key={h.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 18px", borderTop:`1px solid ${C.gray100}` }}>
+                                <div style={{ width:24,height:24,borderRadius:7,background:"#6366F1",color:"#fff",fontWeight:800,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>{idx+1}</div>
+                                <div style={{ minWidth:50, fontSize:13, fontWeight:800, color:C.navy }}>{h.heure}</div>
+                                <div style={{ flex:1, minWidth:0 }}>
+                                  <div style={{ fontWeight:700, fontSize:13.5, color:C.gray800 }}>{h.eleve_nom}</div>
+                                  {h.adresse && <div style={{ fontSize:12, color:C.gray400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{h.adresse}</div>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );})()}
                         <div style={{ padding:"12px 18px" }}>
                           <Btn small outline onClick={()=>{ setEditEleve(null); setEleveForm({...EMPTY_EF, circuit_id:c.id}); setElErr(""); setEleveAdresses([]); setShowAddrAdd(false); setAddrForm(EMPTY_ADDR); setShowModal(true); }}>
                             + Ajouter un élève à {c.nom}
@@ -906,27 +942,51 @@ export default function EtablissementDetail() {
                         <ChevronDown size={15} style={{ color:C.gray400, transform:acc?"rotate(180deg)":"none", transition:"transform .18s" }} />
                       </div>
                     </div>
-                    {acc && (
+                    {acc && (() => {
+                      const secHead = { padding:"7px 16px", fontSize:11, fontWeight:800, color:C.gray600, background:C.gray50, textTransform:"uppercase" as const, letterSpacing:".4px" };
+                      const aps = stopsOf(c.id, "aprem");
+                      return (
                       <div style={{ borderTop:`1px solid ${C.gray100}` }}>
+                        {/* ☀️ Matin — ramassage */}
+                        <div style={secHead}>☀️ Matin — ramassage</div>
                         {cEleves.length===0 ? <div style={{padding:16,color:C.gray400,fontSize:13}}>Aucun élève.</div> :
                           cEleves.slice().sort((a,b)=>(a.heure_ramassage||"~").localeCompare(b.heure_ramassage||"~")).map(e=>{
-                            const pr = cPrises.find(p=>p.eleve_id===e.id);
+                            const pr = cPrises.find(p=>p.eleve_id===e.id && p.sens==="aller");
                             const ex = excToday(e.id);
                             let label = "En attente"; let bg: string = "#F1F5F9"; let fg: string = C.gray;
-                            if (pr?.statut==="present"){label="Déposé";bg="#DCFCE7";fg="#15803D";}
+                            if (pr?.statut==="present"){label="Pris";bg="#DCFCE7";fg="#15803D";}
                             else if (pr?.statut==="absent"){label="Absent";bg="#FDECEC";fg="#E02424";}
                             else if (ex?.type==="absent"){label="Absent (prévu)";bg="#FDECEC";fg="#E02424";}
                             else if (ex?.type==="parent"){label="Ramené parents";bg="#FEF3C7";fg="#D97706";}
                             else if (ex?.type==="changement_circuit"){label="Autre circuit";bg="#EDE9FE";fg="#7C3AED";}
                             return (
-                              <div key={e.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 16px", borderTop:`1px solid ${C.gray100}` }}>
+                              <div key={"m"+e.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 16px", borderTop:`1px solid ${C.gray100}` }}>
                                 <span style={{ fontSize:13.5, color:C.gray800 }}><b style={{color:C.navy}}>{e.heure_ramassage||"—"}</b> &nbsp; {e.prenom_initiale} {e.nom_famille}</span>
                                 <span style={{ background:bg, color:fg, borderRadius:20, padding:"3px 10px", fontSize:12, fontWeight:800 }}>{label}</span>
                               </div>
                             );
                           })}
+                        {/* 🌙 Après-midi — dépose */}
+                        {aps.length>0 && <div style={secHead}>🌙 Après-midi — dépose</div>}
+                        {aps.map(h=>{
+                          const pr = cPrises.find(p=>p.eleve_id===h.eleve_id && p.sens==="retour");
+                          const ex = h.eleve_id!=null ? excToday(h.eleve_id) : undefined;
+                          let label = "En attente"; let bg: string = "#F1F5F9"; let fg: string = C.gray;
+                          if (pr?.statut==="present"){label="Déposé";bg="#DCFCE7";fg="#15803D";}
+                          else if (pr?.statut==="absent"){label="Absent";bg="#FDECEC";fg="#E02424";}
+                          else if (ex?.type==="absent"){label="Absent (prévu)";bg="#FDECEC";fg="#E02424";}
+                          else if (ex?.type==="parent"){label="Ramené parents";bg="#FEF3C7";fg="#D97706";}
+                          else if (ex?.type==="changement_circuit"){label="Autre circuit";bg="#EDE9FE";fg="#7C3AED";}
+                          return (
+                            <div key={"a"+h.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 16px", borderTop:`1px solid ${C.gray100}` }}>
+                              <span style={{ fontSize:13.5, color:C.gray800 }}><b style={{color:"#6366F1"}}>{h.heure}</b> &nbsp; {h.eleve_nom}</span>
+                              <span style={{ background:bg, color:fg, borderRadius:20, padding:"3px 10px", fontSize:12, fontWeight:800 }}>{label}</span>
+                            </div>
+                          );
+                        })}
                       </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 );
               })}

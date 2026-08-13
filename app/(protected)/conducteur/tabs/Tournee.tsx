@@ -97,6 +97,7 @@ export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = []
   const cur = curList[curIdx];
   const img = circuitImage(driver.circuit_id);
   const withCoords = curList.filter(e => e.lat != null && e.lon != null);
+  const dateStr = new Date().toLocaleDateString("fr-CH", { weekday: "long", day: "numeric", month: "long" });
 
   // ── Carte (arrêts de la phase en cours) ─────────────────────────────────────
   useEffect(() => {
@@ -141,7 +142,7 @@ export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = []
           </div>
         : <div style={{ fontSize: 56 }}>{circ?.emoji || "🚌"}</div>}
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, opacity: .85, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>Ma tournée du jour</div>
+        <div style={{ fontSize: 12, opacity: .85, fontWeight: 600, letterSpacing: ".3px", textTransform: "uppercase" }}>Ma tournée · {dateStr}</div>
         <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-.4px", marginTop: 1 }}>{circ?.nom || "Circuit"}</div>
         <div style={{ fontSize: 12.5, opacity: .85, marginTop: 3 }}>
           {matinActive} ramassage{matinActive > 1 ? "s" : ""} · {apremActive} dépose{apremActive > 1 ? "s" : ""}
