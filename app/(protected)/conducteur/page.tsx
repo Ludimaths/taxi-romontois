@@ -10,7 +10,7 @@ type JourneeCircuit = { id: string; nom: string; emoji?: string; nb: number;
 type HebdoRow = { id: number; circuit_id: string; jour: number; sens: "matin" | "aprem";
   ordre: number; heure: string; eleve_nom: string; adresse: string | null;
   eleve_id: number | null; besoin_special: boolean };
-import { Bus, FileText, AlertCircle, Mail, History, CalendarDays, LogOut, MoreHorizontal, MapPin, X } from "lucide-react";
+import { Bus, FileText, AlertCircle, Mail, History, CalendarDays, CalendarRange, LogOut, MoreHorizontal, MapPin, X } from "lucide-react";
 import { BSheet, BigBtn, TA, Chip, StatusBadge } from "./tabs/shared";
 import { TabFiche } from "./tabs/Fiche";
 import { TabSignalements } from "./tabs/Signalements";
@@ -18,8 +18,9 @@ import { TabMessages } from "./tabs/Messages";
 import { TabHistorique } from "./tabs/Historique";
 import { TabConges } from "./tabs/Conges";
 import { TabTournee, type ExcToday } from "./tabs/Tournee";
+import { TabPlanning } from "./tabs/Planning";
 
-type Tab = "tournee" | "fiche" | "signalements" | "messages" | "historique" | "conges";
+type Tab = "tournee" | "fiche" | "signalements" | "messages" | "historique" | "conges" | "planning";
 
 export default function ConducteurPage(){
   const sb=createClient();
@@ -47,6 +48,8 @@ export default function ConducteurPage(){
   const [matinEleves, setMatinEleves] = useState<Eleve[]>([]);
   const [apremEleves, setApremEleves] = useState<Eleve[]>([]);
   const [phase,       setPhase]       = useState<"matin"|"aprem">("matin");
+  const [weekStops,   setWeekStops]   = useState<HebdoRow[]>([]);
+  const [myCircuits,  setMyCircuits]  = useState<{id:string;nom:string;emoji?:string}[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState<Tab>("tournee");
   const [drawerOpen,setDrawerOpen]= useState(false);
@@ -129,22 +132,28 @@ export default function ConducteurPage(){
     const myCircs = (myCircsRaw ?? []) as Circuit[];
     const circIds = myCircs.map(c => c.id);
 
-    // Planning hebdo DU JOUR (matin + après-midi) + exceptions + prises + élèves (contacts)
-    let hebdo: HebdoRow[] = [];
+    setMyCircuits(myCircs.map(c => ({ id: c.id, nom: c.nom, emoji: c.emoji })));
+
+    // Planning hebdo COMPLET (tous les jours) + exceptions + prises + élèves (contacts)
+    let hebdo: HebdoRow[] = [];      // arrêts du JOUR courant
     let jexc: { eleve_id: number; type: string }[] = [];
     let prisesJour: PriseEnCharge[] = [];
     let elevesAll: Eleve[] = [];
     if (circIds.length) {
       const [{ data: th }, { data: ex2 }, { data: pr }, { data: elA }] = await Promise.all([
-        sb.from("tournee_hebdo").select("*").in("circuit_id", circIds).eq("jour", jour).order("sens").order("ordre"),
+        sb.from("tournee_hebdo").select("*").in("circuit_id", circIds).order("jour").order("sens").order("ordre"),
         sb.from("exceptions_eleves").select("eleve_id,type").lte("date_debut", t2).gte("date_fin", t2),
         sb.from("prises_en_charge").select("*").eq("conducteur_id", cid).eq("date", t2),
         sb.from("eleves").select("*").in("circuit_id", circIds).eq("actif", true),
       ]);
-      hebdo = (th ?? []) as HebdoRow[];
+      const week = (th ?? []) as HebdoRow[];
+      setWeekStops(week);
+      hebdo = week.filter(h => h.jour === jour);
       jexc = (ex2 ?? []) as { eleve_id: number; type: string }[];
       prisesJour = (pr ?? []) as PriseEnCharge[];
       elevesAll = (elA ?? []) as Eleve[];
+    } else {
+      setWeekStops([]);
     }
     setExceptions(jexc as ExcToday[]);
     setPrises(prisesJour);
@@ -366,6 +375,7 @@ export default function ConducteurPage(){
     fiche:        <FileText size={size} />,
     signalements: <AlertCircle size={size} />,
     messages:     <Mail size={size} />,
+    planning:     <CalendarRange size={size} />,
     historique:   <History size={size} />,
     conges:       <CalendarDays size={size} />,
   }[id]);
@@ -378,12 +388,13 @@ export default function ConducteurPage(){
   ];
   // Menu « Plus » (tiroir) — le reste des onglets.
   const MORE:{id:Tab;label:string;badge?:number}[]=[
+    {id:"planning",     label:"Planning"},
     {id:"historique",   label:"Historique"},
     {id:"conges",       label:"Mes congés"},
   ];
   const TAB_LABELS:Record<Tab,string>={
     tournee:"Ma tournée",fiche:"Ma fiche",
-    signalements:"Signalements",messages:"Messages",historique:"Historique",conges:"Congés",
+    signalements:"Signalements",messages:"Messages",planning:"Planning",historique:"Historique",conges:"Congés",
   };
 
   // ── Guards ────────────────────────────────────────────────────────────────────
@@ -509,6 +520,10 @@ export default function ConducteurPage(){
           incWithResponse={incWithResponse} unreadMsg={unreadMsg}
           myNom={driver?`${driver.prenom} ${driver.nom}`:"Conducteur"}
           onMarquerLu={handleMarquerLu} onSetTab={t=>setTab(t as Tab)}/>
+      )}
+      {tab==="planning"&&(
+        <TabPlanning circuits={myCircuits} week={weekStops} exceptions={exceptions}
+          today={(()=>{const d=new Date().getDay();return d>=1&&d<=5?d:1;})()}/>
       )}
       {tab==="historique"&&(
         <TabHistorique histLogs={histLogs} incidents={incidents} />
