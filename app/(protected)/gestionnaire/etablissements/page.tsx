@@ -21,12 +21,15 @@ interface AddForm {
   numero_tva: string;
   iban: string;
   lot: string;
+  secteur: string;
 }
 
 const EMPTY_FORM: AddForm = {
   nom: "", adresse: "", nom_responsable_facturation: "",
-  email: "", telephone: "", numero_tva: "", iban: "", lot: "",
+  email: "", telephone: "", numero_tva: "", iban: "", lot: "", secteur: "",
 };
+
+const SECTEURS = ["Morges", "Moudon", "Payerne", "Yverdon-les-Bains"];
 
 export default function EtablissementsPage() {
   const sb = useMemo(() => createClient(), []);
@@ -71,6 +74,7 @@ export default function EtablissementsPage() {
       numero_tva: form.numero_tva.trim() || null,
       iban: form.iban.trim() || null,
       lot: form.lot.trim() || null,
+      secteur: form.secteur.trim() || null,
     });
     setSaving(false);
     if (err) { setError(err.message); return; }
@@ -119,9 +123,14 @@ export default function EtablissementsPage() {
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {e.nom}
                 </div>
-                {e.lot && (
-                  <div style={{ fontSize: 12, color: C.gray400, marginTop: 2 }}>Lot {e.lot}</div>
-                )}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                  {e.secteur
+                    ? <span style={{ fontSize: 11, fontWeight: 700, color: "#1E3A8A",
+                        background: "#DBEAFE", borderRadius: 6, padding: "1px 7px" }}>{e.secteur}</span>
+                    : <span style={{ fontSize: 11, fontWeight: 700, color: C.gray400,
+                        background: C.gray50, borderRadius: 6, padding: "1px 7px" }}>Sans secteur</span>}
+                  {e.lot && <span style={{ fontSize: 12, color: C.gray400 }}>Lot {e.lot}</span>}
+                </div>
               </div>
             </div>
 
@@ -181,6 +190,20 @@ export default function EtablissementsPage() {
                 />
               </div>
             ))}
+
+            {/* Secteur — détermine quel responsable gère l'établissement */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 13, color: C.gray600, fontWeight: 600,
+                display: "block", marginBottom: 4 }}>Secteur</label>
+              <select
+                value={form.secteur}
+                onChange={ev => setForm(prev => ({ ...prev, secteur: ev.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", border: `1px solid ${C.gray200}`,
+                  borderRadius: 8, fontSize: 14, boxSizing: "border-box", background: C.white }}>
+                <option value="">— Aucun secteur —</option>
+                {SECTEURS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
 
             {error && (
               <div style={{ background: C.redL, color: C.red, borderRadius: 8,

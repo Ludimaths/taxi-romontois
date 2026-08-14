@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, statusColor, statusLabel, fmtDate, fmtDateTime, conducteurEmail, isoToday } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal, TabBar } from "@/components/ui";
-import { CheckCircle2, AlertTriangle, Pen, Trash2, KeyRound, RefreshCw, Link2, UserPlus, ClipboardCopy, Check, Bus, FileText, Users, CalendarDays, XCircle, Send } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Pen, Trash2, KeyRound, RefreshCw, Link2, UserPlus, ClipboardCopy, Check, Bus, FileText, Users, CalendarDays, XCircle, Send, LayoutGrid, List } from "lucide-react";
 import type { Conducteur, Circuit, Vehicule, CongesDemande } from "@/lib/types";
 
 
@@ -151,6 +151,7 @@ export default function ConducteursPage() {
   const [search,    setSearch]    = useState("");
   const [filterSt,  setFilterSt]  = useState(() => searchParams.get("status") ?? "all");
   const [filterSec, setFilterSec] = useState("all");
+  const [viewMode,  setViewMode]  = useState<"cards" | "list">("cards");
   const [editModal, setEditModal] = useState(false);
   const [addModal,  setAddModal]  = useState(false);
   const [saving,    setSaving]    = useState(false);
@@ -1119,9 +1120,79 @@ export default function ConducteursPage() {
             ))}
           </div>
         )}
+        {/* Bascule cartes / liste */}
+        <div style={{ display: "flex", gap: 4, marginLeft: "auto",
+          background: C.gray50, borderRadius: 8, padding: 3 }}>
+          <button onClick={() => setViewMode("cards")} title="Vue cartes"
+            style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px",
+              borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
+              background: viewMode === "cards" ? C.white : "transparent",
+              color: viewMode === "cards" ? C.navy : C.gray400,
+              boxShadow: viewMode === "cards" ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>
+            <LayoutGrid size={14} /> Cartes
+          </button>
+          <button onClick={() => setViewMode("list")} title="Vue liste"
+            style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px",
+              borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
+              background: viewMode === "list" ? C.white : "transparent",
+              color: viewMode === "list" ? C.navy : C.gray400,
+              boxShadow: viewMode === "list" ? "0 1px 3px rgba(0,0,0,0.12)" : "none" }}>
+            <List size={14} /> Liste
+          </button>
+        </div>
       </div>
 
+      {/* Vue liste — compacte */}
+      {viewMode === "list" && (
+        <div style={{ border: `1px solid ${C.gray200}`, borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(180px,2fr) 1.4fr 1.4fr 1fr 100px",
+            gap: 12, padding: "10px 16px", background: C.gray50, borderBottom: `1px solid ${C.gray200}`,
+            fontSize: 11, fontWeight: 800, color: C.gray400, textTransform: "uppercase", letterSpacing: 0.4 }}>
+            <div>Conducteur</div><div>Circuit</div><div>Véhicule</div><div>Permis</div><div>Statut</div>
+          </div>
+          {filtered.map((d, i) => {
+            const circ = circuits.find(c => c.id === d.circuit_id);
+            const permisExpireSoon = d.permis_exp && new Date(d.permis_exp) < new Date(Date.now() + 90 * 864e5);
+            const isIncomplete = !d.circuit_id || !d.vehicule_id || !d.permis;
+            return (
+              <div key={d.id} onClick={() => setSel(d.id)}
+                onMouseEnter={e => { e.currentTarget.style.background = C.skyL; }}
+                onMouseLeave={e => { e.currentTarget.style.background = i % 2 ? C.gray50 : C.white; }}
+                style={{ display: "grid", gridTemplateColumns: "minmax(180px,2fr) 1.4fr 1.4fr 1fr 100px",
+                  gap: 12, padding: "10px 16px", alignItems: "center", cursor: "pointer",
+                  background: i % 2 ? C.gray50 : C.white, fontSize: 13,
+                  borderBottom: i < filtered.length - 1 ? `1px solid ${C.gray200}` : "none" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <Avatar initials={d.photo_initials} size={34} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, color: C.gray800, overflow: "hidden",
+                      textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.prenom} {d.nom}</div>
+                    <div style={{ fontSize: 11, color: C.gray400 }}>{d.tel || "—"}</div>
+                  </div>
+                </div>
+                <div style={{ color: C.gray600, overflow: "hidden", textOverflow: "ellipsis",
+                  whiteSpace: "nowrap" }}>{circ ? `${circ.emoji} ${circ.nom}` : "—"}</div>
+                <div style={{ color: C.gray600 }}>{d.vehicule?.plaque || "—"}</div>
+                <div style={{ color: permisExpireSoon ? C.red : C.gray600, fontWeight: permisExpireSoon ? 700 : 400 }}>
+                  {d.permis || "—"}
+                </div>
+                <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
+                  <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>
+                  {isIncomplete && <span title="Fiche incomplète"><Badge color="amber">!</Badge></span>}
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div style={{ padding: 28, textAlign: "center", color: C.gray400, fontSize: 13 }}>
+              Aucun conducteur.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Grid */}
+      {viewMode === "cards" && (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
         {filtered.map(d => {
           const circ = circuits.find(c => c.id === d.circuit_id);
@@ -1169,6 +1240,7 @@ export default function ConducteursPage() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

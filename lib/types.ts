@@ -11,6 +11,7 @@ export interface Ecole {
   telephone?: string;
   numero_tva?: string;
   iban?: string;
+  secteur?: string | null;
   created_at: string;
 }
 

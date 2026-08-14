@@ -319,6 +319,7 @@ export default function EtablissementDetail() {
       email: ecole.email ?? "", telephone: ecole.telephone ?? "",
       numero_tva: ecole.numero_tva ?? "", iban: ecole.iban ?? "",
       lot: ecole.lot ?? "",
+      secteur: ecole.secteur ?? "",
     });
     setShowEdit(true);
   }
@@ -326,7 +327,9 @@ export default function EtablissementDetail() {
   async function handleSaveEcole() {
     if (!ecole) return;
     setSavingEc(true);
-    await sb.from("ecoles").update(editForm).eq("id", ecoleId);
+    // Secteur vide → null (un établissement sans secteur n'est rattaché à aucun responsable)
+    const payload = { ...editForm, secteur: (editForm.secteur || "").trim() || null };
+    await sb.from("ecoles").update(payload).eq("id", ecoleId);
     setSavingEc(false);
     setShowEdit(false);
     load();
@@ -1485,6 +1488,25 @@ export default function EtablissementDetail() {
                 />
               </div>
             ))}
+            {/* Secteur — détermine quel responsable de secteur gère cet établissement */}
+            <div>
+              <label style={{ fontSize:13, color:C.gray600, fontWeight:600,
+                display:"block", marginBottom:4 }}>Secteur</label>
+              <select
+                value={editForm.secteur ?? ""}
+                onChange={ev => setEditForm(prev => ({ ...prev, secteur: ev.target.value }))}
+                style={{ width:"100%", padding:"9px 12px", border:`1px solid ${C.gray200}`,
+                  borderRadius:8, fontSize:14, boxSizing:"border-box", background:C.white }}>
+                <option value="">— Aucun secteur —</option>
+                {Array.from(new Set(["Morges","Moudon","Payerne","Yverdon-les-Bains",
+                  ...(editForm.secteur ? [editForm.secteur] : [])])).map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <div style={{ fontSize:11, color:C.gray400, marginTop:4 }}>
+                Le responsable de ce secteur pourra gérer cet établissement.
+              </div>
+            </div>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:4 }}>
               <Btn outline onClick={() => setShowEdit(false)}>Annuler</Btn>
               <Btn color="navy" disabled={savingEc} onClick={handleSaveEcole}>
