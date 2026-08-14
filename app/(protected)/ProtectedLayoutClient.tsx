@@ -1,17 +1,28 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Menu } from "lucide-react";
+import { Menu, School, Users, Bus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import Sidebar from "@/components/Sidebar";
 import { C } from "@/lib/constants";
 import type { Profile } from "@/lib/types";
 
+// Onglets de gestion accessibles à un responsable de secteur.
+const RESP_NAV = [
+  { path: "/gestionnaire/etablissements", label: "Établissements", icon: School },
+  { path: "/gestionnaire/conducteurs",    label: "Conducteurs",    icon: Users },
+  { path: "/gestionnaire/vehicules",      label: "Véhicules",      icon: Bus },
+];
+
 export default function ProtectedLayoutClient({
   profile,
+  isResponsable = false,
+  monSecteur = null,
   children,
 }: {
   profile: Profile;
+  isResponsable?: boolean;
+  monSecteur?: string | null;
   children: React.ReactNode;
 }) {
   const router   = useRouter();
@@ -154,6 +165,63 @@ export default function ProtectedLayoutClient({
     return (
       <div style={{ minHeight: "100vh", background: C.gray50, color: C.gray800 }}>
         {children}
+      </div>
+    );
+  }
+
+  // Responsable de secteur (conducteur) sur les pages de gestion :
+  // header dédié + tiroir avec les 3 onglets de gestion + retour à la tournée.
+  if (profile.role === "conducteur" && isResponsable && pathname.startsWith("/gestionnaire")) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh",
+        background: C.gray50, color: C.gray800 }}>
+        <header style={{
+          position: "sticky", top: 0, zIndex: 200, background: C.navy,
+          height: 56, display: "flex", alignItems: "center",
+          justifyContent: "space-between", padding: "0 16px", gap: 12,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.2)", flexShrink: 0,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, overflow: "hidden" }}>
+            <span style={{ background: "#DBEAFE", color: "#1E3A8A", borderRadius: 8,
+              padding: "4px 10px", fontSize: 11, fontWeight: 700,
+              whiteSpace: "nowrap", flexShrink: 0 }}>
+              Responsable{monSecteur ? ` · ${monSecteur}` : ""}
+            </span>
+            <button onClick={() => router.push("/conducteur")}
+              style={{ background: "rgba(255,255,255,0.15)", border: "none", color: C.white,
+                cursor: "pointer", padding: "6px 12px", borderRadius: 8,
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>
+              ← Ma tournée
+            </button>
+          </div>
+          <button onClick={() => setMobileNavOpen(v => !v)}
+            style={{ background: "transparent", border: "none", color: C.white,
+              cursor: "pointer", padding: 8, borderRadius: 8,
+              display: "flex", alignItems: "center", flexShrink: 0 }}>
+            <Menu size={24} color={C.white} />
+          </button>
+        </header>
+        {mobileNavOpen && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 300 }}>
+            <div onClick={() => setMobileNavOpen(false)}
+              style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
+            <div style={{ position: "fixed", right: 0, top: 0, bottom: 0,
+              width: 228, zIndex: 1000, boxShadow: "-4px 0 20px rgba(0,0,0,0.3)" }}>
+              <Sidebar
+                role={"gestionnaire" as import("@/lib/types").Role}
+                navOverride={RESP_NAV}
+                roleLabelOverride={`Responsable${monSecteur ? ` · ${monSecteur}` : ""}`}
+                nom={profile.nom}
+                prenom={profile.prenom}
+                onSignOut={handleSignOut}
+                onNavClick={() => setMobileNavOpen(false)}
+              />
+            </div>
+          </div>
+        )}
+        <div className="tx-main-padding" style={{ flex: 1, overflowY: "auto" }}>
+          {children}
+        </div>
       </div>
     );
   }

@@ -11,7 +11,7 @@ type HebdoRow = { id: number; circuit_id: string; jour: number; sens: "matin" | 
   ordre: number; heure: string; eleve_nom: string; adresse: string | null;
   eleve_id: number | null; besoin_special: boolean };
 type ExcRange = { eleve_id: number; type: string; date_debut: string; date_fin: string };
-import { Bus, FileText, AlertCircle, Mail, History, CalendarDays, CalendarRange, LogOut, MoreHorizontal, MapPin, X } from "lucide-react";
+import { Bus, FileText, AlertCircle, Mail, History, CalendarDays, CalendarRange, LogOut, MoreHorizontal, MapPin, X, ShieldCheck } from "lucide-react";
 import { BSheet, BigBtn, TA, Chip, StatusBadge } from "./tabs/shared";
 import { TabFiche } from "./tabs/Fiche";
 import { TabSignalements } from "./tabs/Signalements";
@@ -507,6 +507,16 @@ export default function ConducteurPage(){
                   <span style={{flex:1}}>{t.label}</span>
                 </button>
               ))}
+              {(driver as {est_responsable?:boolean}).est_responsable && (
+                <button onClick={()=>router.push("/gestionnaire/etablissements")}
+                  style={{width:"100%",display:"flex",alignItems:"center",gap:10,
+                    padding:"12px 12px",borderRadius:8,border:"none",cursor:"pointer",
+                    background:"rgba(255,255,255,0.12)",color:C.white,
+                    fontWeight:700,fontSize:14,textAlign:"left",marginTop:8}}>
+                  <span style={{display:"flex",alignItems:"center"}}><ShieldCheck size={16}/></span>
+                  <span style={{flex:1}}>Gérer mon secteur</span>
+                </button>
+              )}
             </nav>
             <div style={{padding:"12px 14px",borderTop:"1px solid rgba(255,255,255,0.1)"}}>
               <button onClick={handleSignOut}

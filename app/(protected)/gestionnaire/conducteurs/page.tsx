@@ -171,6 +171,10 @@ export default function ConducteursPage() {
   // Congés
   const [congesCondu,    setCongesCondu]    = useState<CongesDemande[]>([]);
   const [currentUserId,  setCurrentUserId]  = useState<string | null>(null);
+  // Le viewer est-il un responsable de secteur ? (les opérations de compte de
+  // connexion — créer / supprimer / mot de passe — lui sont masquées : réservées
+  // au gestionnaire.)
+  const [viewerIsResp,   setViewerIsResp]   = useState(false);
   const [congeRefusId,   setCongeRefusId]   = useState<number | null>(null);
   const [congeRefusMotif,setCongeRefusMotif]= useState("");
   const [congeTransId,   setCongeTransId]   = useState<number | null>(null);
@@ -203,8 +207,16 @@ export default function ConducteursPage() {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   useEffect(() => {
-    sb.auth.getUser().then(({ data }) => {
-      if (data.user) setCurrentUserId(data.user.id);
+    sb.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      setCurrentUserId(data.user.id);
+      const { data: p } = await sb.from("profiles")
+        .select("role, conducteur_id").eq("id", data.user.id).maybeSingle();
+      if (p?.role === "conducteur" && p.conducteur_id) {
+        const { data: c } = await sb.from("conducteurs")
+          .select("est_responsable").eq("id", p.conducteur_id).maybeSingle();
+        setViewerIsResp(!!(c as { est_responsable?: boolean } | null)?.est_responsable);
+      }
     });
   }, [sb]);
 
@@ -520,7 +532,7 @@ export default function ConducteursPage() {
           </button>
           <div style={{ display: "flex", gap: 8 }}>
             <Btn small onClick={() => setEditModal(true)} color={C.navyL}>Modifier</Btn>
-            <Btn small onClick={handleDelete} color={C.red} outline>Supprimer</Btn>
+            {!viewerIsResp && <Btn small onClick={handleDelete} color={C.red} outline>Supprimer</Btn>}
           </div>
         </div>
 
@@ -555,6 +567,18 @@ export default function ConducteursPage() {
             </Card>
 
             {/* Accès conducteur */}
+            {viewerIsResp ? (
+              <Card style={{ padding: 18 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: C.navy, marginBottom: 8,
+                  textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  Accès conducteur
+                </div>
+                <div style={{ fontSize: 12, color: C.gray600, lineHeight: 1.5 }}>
+                  La gestion des comptes de connexion (création, mot de passe, suppression)
+                  est assurée par le gestionnaire.
+                </div>
+              </Card>
+            ) : (
             <Card style={{ padding: 18 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: C.navy, marginBottom: 12,
                 textTransform: "uppercase", letterSpacing: 0.5 }}>
@@ -666,6 +690,7 @@ export default function ConducteursPage() {
                 </div>
               )}
             </Card>
+            )}
           </div>
 
           {/* Right: tabs */}

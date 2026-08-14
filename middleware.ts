@@ -80,7 +80,7 @@ export async function middleware(request: NextRequest) {
   // ── 4. Fetch role and enforce access control ──────────────────────────────
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, conducteur_id")
     .eq("id", user.id)
     .single();
 
@@ -94,7 +94,29 @@ export async function middleware(request: NextRequest) {
   }
 
   const role = profile.role as string;
-  const allowed = ROLE_ALLOWED[role] ?? [];
+  let allowed = ROLE_ALLOWED[role] ?? [];
+
+  // ── Responsable de secteur ────────────────────────────────────────────────
+  // Un conducteur marqué « est_responsable » gère Établissements / Conducteurs /
+  // Véhicules de son secteur. On étend (sans jamais retirer) ses routes autorisées.
+  // Les opérations sensibles de compte (create/delete/set-password) NE sont PAS
+  // ouvertes : elles restent réservées au gestionnaire/admin.
+  if (role === "conducteur" && profile.conducteur_id) {
+    const { data: cond } = await supabase
+      .from("conducteurs")
+      .select("est_responsable")
+      .eq("id", profile.conducteur_id)
+      .maybeSingle();
+    if (cond?.est_responsable) {
+      allowed = [
+        ...allowed,
+        "/gestionnaire/etablissements",
+        "/gestionnaire/conducteurs",
+        "/gestionnaire/vehicules",
+        "/api/gestionnaire/facture-dgeo",
+      ];
+    }
+  }
 
   if (!matchesAny(pathname, allowed)) {
     if (isProtectedAPI) {

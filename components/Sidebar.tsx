@@ -58,13 +58,15 @@ interface SidebarProps {
   messagesCount?: number;
   congesCount?: number;
   onNavClick?: () => void;
+  navOverride?: { path: string; label: string; icon: LucideIcon }[];
+  roleLabelOverride?: string;
 }
 
-export default function Sidebar({ role, nom, prenom, onSignOut, onNavClick, incidentsCount = 0, alertesCount = 0, reparationsCount = 0, messagesCount = 0, congesCount = 0 }: SidebarProps) {
+export default function Sidebar({ role, nom, prenom, onSignOut, onNavClick, incidentsCount = 0, alertesCount = 0, reparationsCount = 0, messagesCount = 0, congesCount = 0, navOverride, roleLabelOverride }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [logoError, setLogoError] = useState(false);
-  const navItems = NAV_ITEMS[role] ?? NAV_ITEMS.gestionnaire;
+  const navItems = navOverride ?? NAV_ITEMS[role] ?? NAV_ITEMS.gestionnaire;
 
   const ROLE_LABELS: Record<Role, string> = {
     gestionnaire: "Gestionnaire",
@@ -108,7 +110,7 @@ export default function Sidebar({ role, nom, prenom, onSignOut, onNavClick, inci
             {prenom} {nom}
           </div>
           <div style={{ fontSize: 12, color: C.sky, fontWeight: 600 }}>
-            {ROLE_LABELS[role]}
+            {roleLabelOverride ?? ROLE_LABELS[role]}
           </div>
         </div>
       </div>
