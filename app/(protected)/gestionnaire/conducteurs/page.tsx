@@ -270,9 +270,31 @@ export default function ConducteursPage() {
     setCongeTransId(null); setCongeTransNote("");
   }, [sel]);
 
+  // ── Raccord conducteur ↔ circuit ────────────────────────────────────────────
+  // Le compte conducteur lit sa tournée via circuits.conducteur_id (lien inverse).
+  // Il faut donc l'écrire ici, pas seulement conducteurs.circuit_id — sinon la
+  // journée (horaires, carte, validation des enfants) reste vide côté conducteur.
+  async function linkCircuit(driverId: number, chosen: string | null, prev: string | null) {
+    // 1) Si le circuit change, on libère l'ancien (seulement s'il pointait bien vers ce conducteur)
+    if (prev && prev !== chosen) {
+      await sb.from("circuits").update({ conducteur_id: null }).eq("id", prev).eq("conducteur_id", driverId);
+    }
+    // 2) On rattache le circuit choisi à ce conducteur (les deux sens sont désormais cohérents)
+    if (chosen) {
+      const prevHolder = circuits.find(c => c.id === chosen)?.conducteur_id ?? null;
+      await sb.from("circuits").update({ conducteur_id: driverId }).eq("id", chosen);
+      // 3) L'ancien titulaire du circuit récupère un circuit principal cohérent (ou aucun)
+      if (prevHolder && prevHolder !== driverId) {
+        const { data } = await sb.from("circuits").select("id").eq("conducteur_id", prevHolder).order("nom").limit(1);
+        await sb.from("conducteurs").update({ circuit_id: data && data[0] ? data[0].id : null }).eq("id", prevHolder);
+      }
+    }
+  }
+
   const handleSave = async (form: Partial<Conducteur>) => {
     setSaving(true);
     if (sel) {
+      const prevCircuit = drivers.find(x => x.id === sel)?.circuit_id ?? null;
       const fx = form as { secteur?: string | null; permis_pays?: string | null };
       await sb.from("conducteurs").update({
         nom: form.nom, prenom: form.prenom, tel: form.tel || null,
@@ -285,6 +307,7 @@ export default function ConducteursPage() {
         absence_motif: form.status === "absent" ? (form.absence_motif || null) : null,
         photo_initials: form.photo_initials || ((form.nom?.[0] ?? "").toUpperCase() + (form.prenom?.[0] ?? "").toUpperCase()),
       }).eq("id", sel);
+      await linkCircuit(sel, form.circuit_id || null, prevCircuit);
     }
     await fetchAll();
     setSaving(false);
@@ -294,7 +317,7 @@ export default function ConducteursPage() {
   const handleAdd = async (form: Partial<Conducteur>) => {
     setSaving(true);
     const fx = form as { secteur?: string | null; permis_pays?: string | null };
-    await sb.from("conducteurs").insert({
+    const { data: inserted } = await sb.from("conducteurs").insert({
       nom: form.nom!, prenom: form.prenom!, tel: form.tel || null,
       affectation: "Scolaire",
       permis: form.permis || null,
@@ -306,7 +329,9 @@ export default function ConducteursPage() {
       absence_motif: form.status === "absent" ? (form.absence_motif || null) : null,
       photo_initials: form.photo_initials || ((form.nom?.slice(0,1).toUpperCase() ?? "") + (form.prenom?.slice(0,1).toUpperCase() ?? "")),
       tachygraphe: false,
-    });
+    }).select("id").single();
+    // Raccord du lien inverse pour que la tournée s'affiche côté conducteur
+    if (inserted?.id) await linkCircuit(inserted.id, form.circuit_id || null, null);
     await fetchAll();
     setSaving(false);
     setAddModal(false);
