@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, statusColor, statusLabel, fmtDate, fmtDateTime, conducteurEmail, isoToday } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal, TabBar } from "@/components/ui";
-import { CheckCircle2, AlertTriangle, Pen, Trash2, KeyRound, RefreshCw, Link2, UserPlus, ClipboardCopy, Check, Bus, FileText, Users, CalendarDays, XCircle, Send, LayoutGrid, List } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Pen, Trash2, KeyRound, RefreshCw, Link2, UserPlus, ClipboardCopy, Check, Bus, FileText, Users, CalendarDays, XCircle, Send, LayoutGrid, List, PauseCircle, PlayCircle } from "lucide-react";
 import type { Conducteur, Circuit, Vehicule, CongesDemande } from "@/lib/types";
 
 
@@ -190,6 +190,11 @@ export default function ConducteursPage() {
   const [linkDone,     setLinkDone]     = useState(false);
   const [linkError,    setLinkError]    = useState("");
   const [delConfirm,   setDelConfirm]   = useState(false);
+  // Mise en pause (archivage doux) — préféré à la suppression
+  const [showPaused,   setShowPaused]   = useState(false);
+  const [pauseModal,   setPauseModal]   = useState(false);
+  const [pauseMotif,   setPauseMotif]   = useState("");
+  const [pauseBusy,    setPauseBusy]    = useState(false);
 
   const fetchAll = useCallback(async () => {
     const [drv, cir, veh] = await Promise.all([
@@ -305,6 +310,32 @@ export default function ConducteursPage() {
     await fetchAll();
     setSaving(false);
     setAddModal(false);
+  };
+
+  // ── Mise en pause / réactivation ────────────────────────────────────────────
+  const confirmPause = async () => {
+    if (!sel) return;
+    setPauseBusy(true);
+    await sb.from("conducteurs").update({
+      actif: false,
+      pause_motif: pauseMotif.trim() || null,
+      paused_at: new Date().toISOString(),
+      status: "absent",
+    }).eq("id", sel);
+    setPauseBusy(false);
+    setPauseModal(false);
+    setPauseMotif("");
+    await fetchAll();
+  };
+
+  const handleReactivate = async () => {
+    if (!sel) return;
+    setPauseBusy(true);
+    await sb.from("conducteurs").update({
+      actif: true, pause_motif: null, paused_at: null, status: "disponible",
+    }).eq("id", sel);
+    setPauseBusy(false);
+    await fetchAll();
   };
 
   const handleDelete = () => { if (sel) setDelConfirm(true); };
@@ -451,10 +482,15 @@ export default function ConducteursPage() {
 
   // ── Filter ─────────────────────────────────────────────────────────────────
   const secOf = (x: Conducteur) => (x as { secteur?: string | null }).secteur ?? "";
+  const isPaused = (x: Conducteur) => (x as { actif?: boolean }).actif === false;
+  const pausedCount = drivers.filter(isPaused).length;
   const filtered = drivers.filter(d => {
     const match = `${d.prenom} ${d.nom} ${d.tel ?? ""}`.toLowerCase().includes(search.toLowerCase());
-    const stMatch = filterSt === "all" || d.status === filterSt;
     const secMatch = filterSec === "all" || secOf(d) === filterSec;
+    // Les conducteurs en pause sont masqués par défaut ; le filtre « En pause » les isole.
+    if (showPaused) return isPaused(d) && match && secMatch;
+    if (isPaused(d)) return false;
+    const stMatch = filterSt === "all" || d.status === filterSt;
     return match && stMatch && secMatch;
   });
 
@@ -525,6 +561,33 @@ export default function ConducteursPage() {
           </Modal>
         )}
 
+        {pauseModal && (
+          <Modal title="Mettre en pause" onClose={() => setPauseModal(false)}>
+            <p style={{ fontSize: 14, color: C.gray800, marginBottom: 8 }}>
+              Mettre <strong>{d.prenom} {d.nom}</strong> en pause. La fiche est conservée
+              et pourra être réactivée à tout moment.
+            </p>
+            <label style={{ fontSize: 13, color: C.gray600, fontWeight: 600, display: "block", marginBottom: 4 }}>
+              Motif (facultatif)
+            </label>
+            <input value={pauseMotif} onChange={e => setPauseMotif(e.target.value)}
+              placeholder="Ex : arrêt maladie, congé longue durée…"
+              style={{ ...inp, marginBottom: 20 }} />
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={() => setPauseModal(false)}
+                style={{ padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.gray200}`,
+                  background: C.white, color: C.gray800, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Annuler
+              </button>
+              <button onClick={confirmPause} disabled={pauseBusy}
+                style={{ padding: "9px 18px", borderRadius: 8, border: "none",
+                  background: C.amber, color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                {pauseBusy ? "…" : "Mettre en pause"}
+              </button>
+            </div>
+          </Modal>
+        )}
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <button onClick={() => { setSel(null); setTab("infos"); setGeneratedPwd(null); setCreateResult(null); setCreateError(""); }}
             style={{ background: "none", border: "none", color: C.navyL, cursor: "pointer",
@@ -533,7 +596,21 @@ export default function ConducteursPage() {
           </button>
           <div style={{ display: "flex", gap: 8 }}>
             <Btn small onClick={() => setEditModal(true)} color={C.navyL}>Modifier</Btn>
-            {!viewerIsResp && <Btn small onClick={handleDelete} color={C.red} outline>Supprimer</Btn>}
+            {isPaused(d)
+              ? <>
+                  <Btn small onClick={handleReactivate} color={C.green} disabled={pauseBusy}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <PlayCircle size={14} /> Réactiver
+                    </span>
+                  </Btn>
+                  {/* Suppression = garde-fou : gestionnaire uniquement, et seulement une fois en pause */}
+                  {!viewerIsResp && <Btn small onClick={handleDelete} color={C.red} outline>Supprimer</Btn>}
+                </>
+              : <Btn small onClick={() => { setPauseMotif(""); setPauseModal(true); }} color={C.amber} outline>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <PauseCircle size={14} /> Mettre en pause
+                  </span>
+                </Btn>}
           </div>
         </div>
 
@@ -549,10 +626,17 @@ export default function ConducteursPage() {
                   <div style={{ fontSize: 17, fontWeight: 900, color: C.navy }}>{d.prenom} {d.nom}</div>
                   <div style={{ fontSize: 12, color: C.gray600, marginTop: 2 }}>{d.tel || "—"} · {d.affectation}</div>
                   <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>
+                    {isPaused(d)
+                      ? <Badge color="gray">En pause</Badge>
+                      : <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>}
                     {isIncomplete && <span title={`Manque : ${missingFields}`}><Badge color="amber">Incomplet</Badge></span>}
                     {permisExpireSoon && <Badge color="red">Permis bientôt</Badge>}
                   </div>
+                  {isPaused(d) && (d as { pause_motif?: string }).pause_motif && (
+                    <div style={{ fontSize: 11, color: C.gray400, marginTop: 4 }}>
+                      Pause : {(d as { pause_motif?: string }).pause_motif}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1100,9 +1184,9 @@ export default function ConducteursPage() {
             fontSize: 13, outline: "none", width: 260 }} />
         <div style={{ display: "flex", gap: 6 }}>
           {([["all","Tous"],["en_service","En service"],["disponible","Disponible"],["absent","Absent"]] as const).map(([v,l]) => (
-            <button key={v} onClick={() => setFilterSt(v)}
-              style={{ padding: "5px 12px", borderRadius: 20, border: `1.5px solid ${filterSt === v ? C.navyL : C.gray200}`,
-                background: filterSt === v ? C.navyL : C.white, color: filterSt === v ? C.white : C.gray600,
+            <button key={v} onClick={() => { setFilterSt(v); setShowPaused(false); }}
+              style={{ padding: "5px 12px", borderRadius: 20, border: `1.5px solid ${filterSt === v && !showPaused ? C.navyL : C.gray200}`,
+                background: filterSt === v && !showPaused ? C.navyL : C.white, color: filterSt === v && !showPaused ? C.white : C.gray600,
                 fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
               {l}
             </button>
@@ -1119,6 +1203,16 @@ export default function ConducteursPage() {
               </button>
             ))}
           </div>
+        )}
+        {/* Conducteurs en pause */}
+        {pausedCount > 0 && (
+          <button onClick={() => setShowPaused(v => !v)} title="Conducteurs en pause"
+            style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px",
+              borderRadius: 20, border: `1.5px solid ${showPaused ? C.amber : C.gray200}`,
+              background: showPaused ? C.amber : C.white, color: showPaused ? C.white : C.gray600,
+              fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+            <PauseCircle size={13} /> En pause ({pausedCount})
+          </button>
         )}
         {/* Bascule cartes / liste */}
         <div style={{ display: "flex", gap: 4, marginLeft: "auto",
@@ -1177,7 +1271,9 @@ export default function ConducteursPage() {
                   {d.permis || "—"}
                 </div>
                 <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
-                  <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>
+                  {isPaused(d)
+                    ? <Badge color="gray">En pause</Badge>
+                    : <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>}
                   {isIncomplete && <span title="Fiche incomplète"><Badge color="amber">!</Badge></span>}
                 </div>
               </div>
@@ -1213,7 +1309,9 @@ export default function ConducteursPage() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>
+                  {isPaused(d)
+                    ? <Badge color="gray">En pause</Badge>
+                    : <Badge color={statusColor(d.status) as "green"|"red"|"amber"|"blue"|"gray"}>{statusLabel(d.status)}</Badge>}
                   {isIncomplete && <span title={`Manque : ${missingFields}`}><Badge color="amber">Incomplet</Badge></span>}
                 </div>
                 {permisExpireSoon && <Badge color="red">Permis exp.</Badge>}
