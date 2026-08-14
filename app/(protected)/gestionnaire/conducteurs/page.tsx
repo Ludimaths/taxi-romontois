@@ -49,8 +49,9 @@ function genPassword(): string {
 }
 
 // ── DriverForm ────────────────────────────────────────────────────────────────
-function DriverForm({ init, circuits, vehicules, onSave, onCancel, saving }: {
+function DriverForm({ init, circuits, vehicules, responsables, onSave, onCancel, saving }: {
   init: Partial<Conducteur>; circuits: Circuit[]; vehicules: Vehicule[];
+  responsables: { id: number; prenom: string; nom: string; secteur: string | null }[];
   onSave: (d: Partial<Conducteur>) => void; onCancel: () => void; saving: boolean;
 }) {
   const [f, setF] = useState<Partial<Conducteur>>({ status: "disponible", ...init });
@@ -77,7 +78,26 @@ function DriverForm({ init, circuits, vehicules, onSave, onCancel, saving }: {
           </select>
         </div>
         <div>{field("Permis (ex: B,D)", "permis")}</div>
-        <div>{field("Validité permis", "permis_exp", "date")}</div>
+        <div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 4 }}>Permis — pays</label>
+          <select value={(f as { permis_pays?: string }).permis_pays ?? ""}
+            onChange={e => { const v = e.target.value; set("permis_pays", v || null); if (v === "Suisse") set("permis_exp", null); }} style={inp}>
+            <option value="">— À préciser —</option>
+            <option value="Suisse">Suisse</option>
+            <option value="Français">Français</option>
+          </select>
+        </div>
+        {(f as { permis_pays?: string }).permis_pays === "Français" && <div>{field("Validité permis", "permis_exp", "date")}</div>}
+        {(f as { permis_pays?: string }).permis_pays === "Suisse" && (
+          <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 12, fontSize: 12, color: C.gray }}>Permis suisse — pas de date d&apos;expiration.</div>
+        )}
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 4 }}>Responsable de secteur</label>
+        <select value={(f as { secteur?: string }).secteur ?? ""} onChange={e => set("secteur", e.target.value || null)} style={inp}>
+          <option value="">— Aucun —</option>
+          {responsables.map(r => <option key={r.id} value={r.secteur ?? ""}>{r.prenom} {r.nom}{r.secteur ? ` — ${r.secteur}` : ""}</option>)}
+        </select>
       </div>
       <div style={{ marginBottom: 12 }}>
         <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.gray600,
@@ -235,9 +255,13 @@ export default function ConducteursPage() {
   const handleSave = async (form: Partial<Conducteur>) => {
     setSaving(true);
     if (sel) {
+      const fx = form as { secteur?: string | null; permis_pays?: string | null };
       await sb.from("conducteurs").update({
         nom: form.nom, prenom: form.prenom, tel: form.tel || null,
-        permis: form.permis || null, permis_exp: form.permis_exp || null,
+        permis: form.permis || null,
+        permis_pays: fx.permis_pays || null,
+        permis_exp: fx.permis_pays === "Suisse" ? null : (form.permis_exp || null),
+        secteur: fx.secteur || null,
         circuit_id: form.circuit_id || null, vehicule_id: form.vehicule_id || null,
         status: form.status,
         absence_motif: form.status === "absent" ? (form.absence_motif || null) : null,
@@ -251,10 +275,14 @@ export default function ConducteursPage() {
 
   const handleAdd = async (form: Partial<Conducteur>) => {
     setSaving(true);
+    const fx = form as { secteur?: string | null; permis_pays?: string | null };
     await sb.from("conducteurs").insert({
       nom: form.nom!, prenom: form.prenom!, tel: form.tel || null,
       affectation: "Scolaire",
-      permis: form.permis || null, permis_exp: form.permis_exp || null,
+      permis: form.permis || null,
+      permis_pays: fx.permis_pays || null,
+      permis_exp: fx.permis_pays === "Suisse" ? null : (form.permis_exp || null),
+      secteur: fx.secteur || null,
       circuit_id: form.circuit_id || null, vehicule_id: form.vehicule_id || null,
       status: form.status ?? "disponible",
       absence_motif: form.status === "absent" ? (form.absence_motif || null) : null,
@@ -419,6 +447,10 @@ export default function ConducteursPage() {
 
   // Secteurs présents + compteur par secteur (pour le filtre)
   const secteurs = [...new Set(drivers.map(secOf).filter(Boolean))].sort();
+  // Responsables de secteur (pour le menu de la fiche conducteur)
+  const responsables = drivers
+    .filter(x => (x as { est_responsable?: boolean }).est_responsable)
+    .map(x => ({ id: x.id, prenom: x.prenom, nom: x.nom, secteur: secOf(x) || null }));
   const countSec = (s: string) => drivers.filter(x => secOf(x) === s).length;
   const secChip = (active: boolean): React.CSSProperties => ({
     padding: "5px 12px", borderRadius: 20, border: `1.5px solid ${active ? C.green : C.gray200}`,
@@ -454,7 +486,7 @@ export default function ConducteursPage() {
       <div>
         {editModal && (
           <Modal title={`Modifier — ${d.prenom} ${d.nom}`} onClose={() => setEditModal(false)}>
-            <DriverForm init={d} circuits={circuits} vehicules={vehicules}
+            <DriverForm init={d} circuits={circuits} vehicules={vehicules} responsables={responsables}
               onSave={handleSave} onCancel={() => setEditModal(false)} saving={saving} />
           </Modal>
         )}
@@ -659,6 +691,8 @@ export default function ConducteursPage() {
                 <InfoBox label="Prénom"         value={d.prenom} />
                 <InfoBox label="Téléphone"      value={d.tel} />
                 <InfoBox label="Affectation"    value={d.affectation} />
+                <InfoBox label="Secteur"        value={(d as { secteur?: string }).secteur || "—"} />
+                <InfoBox label="Permis (pays)"  value={(d as { permis_pays?: string }).permis_pays || "—"} />
                 <InfoBox label="Cercle scolaire"value={d.cercle?.nom} full />
                 <InfoBox label="Notes"          value={d.notes} full />
               </div>
@@ -991,7 +1025,7 @@ export default function ConducteursPage() {
     <div>
       {addModal && (
         <Modal title="Ajouter un conducteur" onClose={() => setAddModal(false)}>
-          <DriverForm init={{}} circuits={circuits} vehicules={vehicules}
+          <DriverForm init={{}} circuits={circuits} vehicules={vehicules} responsables={responsables}
             onSave={handleAdd} onCancel={() => setAddModal(false)} saving={saving} />
         </Modal>
       )}

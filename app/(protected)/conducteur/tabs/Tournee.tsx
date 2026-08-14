@@ -77,8 +77,13 @@ export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = []
   const priseAllerBy = new Map(prises.filter(p => p.sens === "aller").map(p => [p.eleve_id, p]));
   const priseRetourBy = new Map(prises.filter(p => p.sens === "retour").map(p => [p.eleve_id, p]));
 
+  // Un enfant absent le matin (marqué "absent" sur place) n'est PAS à l'école :
+  // il ne doit donc pas compter dans les déposes de l'après-midi.
+  const allerAbsent = (e: Eleve) => priseAllerBy.get(e.id)?.statut === "absent";
+  const skipDay = (e: Eleve) => hasExc(e) || allerAbsent(e);
+
   const doneMatin = (e: Eleve) => priseAllerBy.has(e.id) || hasExc(e);
-  const doneAprem = (e: Eleve) => priseRetourBy.has(e.id) || hasExc(e);
+  const doneAprem = (e: Eleve) => priseRetourBy.has(e.id) || skipDay(e);
 
   const curMatinIdx = matinList.findIndex(e => !doneMatin(e));
   const curApremIdx = apremList.findIndex(e => !doneAprem(e));
@@ -88,7 +93,11 @@ export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = []
   const apremStarted = priseRetourBy.size > 0;
 
   const matinActive = matinList.filter(e => !hasExc(e)).length;
-  const apremActive = apremList.filter(e => !hasExc(e)).length;
+  const apremActive = apremList.filter(e => !skipDay(e)).length;
+
+  // Carte des exceptions pour l'après-midi = exceptions + enfants absents ce matin
+  const apremExcMap = new Map(excMap);
+  apremList.forEach(e => { if (allerAbsent(e) && !apremExcMap.has(e.id)) apremExcMap.set(e.id, "absent"); });
   const presMatin = [...priseAllerBy.values()].filter(p => p.statut === "present").length;
   const presAprem = [...priseRetourBy.values()].filter(p => p.statut === "present").length;
 
@@ -189,7 +198,7 @@ export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = []
 
   const dayList = (
     <DayList matin={matinList} aprem={apremList} priseAllerBy={priseAllerBy} priseRetourBy={priseRetourBy}
-      excMap={excMap} curMatinIdx={enService && inMatin ? curMatinIdx : -1} curApremIdx={enService && !inMatin ? curApremIdx : -1} />
+      matinExcMap={excMap} apremExcMap={apremExcMap} curMatinIdx={enService && inMatin ? curMatinIdx : -1} curApremIdx={enService && !inMatin ? curApremIdx : -1} />
   );
 
   // ── 0bis) Aucun circuit attribué ────────────────────────────────────────────
@@ -365,15 +374,15 @@ export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = []
 }
 
 // ── Liste de la journée : matin (ramassage) → école → après-midi (dépose) ──────
-function DayList({ matin, aprem, priseAllerBy, priseRetourBy, excMap, curMatinIdx, curApremIdx }:
+function DayList({ matin, aprem, priseAllerBy, priseRetourBy, matinExcMap, apremExcMap, curMatinIdx, curApremIdx }:
   { matin: Eleve[]; aprem: Eleve[]; priseAllerBy: Map<number, PriseEnCharge>; priseRetourBy: Map<number, PriseEnCharge>;
-    excMap: Map<number, string>; curMatinIdx: number; curApremIdx: number }) {
+    matinExcMap: Map<number, string>; apremExcMap: Map<number, string>; curMatinIdx: number; curApremIdx: number }) {
   return (
     <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 2px 8px rgba(0,0,0,.06)", overflow: "hidden", marginTop: 4 }}>
       <SectionHead label="☀️ Matin — ramassage" />
       {matin.length === 0
         ? <Empty text="Aucun ramassage." />
-        : matin.map((el, i) => <StopRow key={`m${el.id}`} el={el} prise={priseAllerBy.get(el.id)} exc={excMap.get(el.id)} current={i === curMatinIdx} index={i} />)}
+        : matin.map((el, i) => <StopRow key={`m${el.id}`} el={el} prise={priseAllerBy.get(el.id)} exc={matinExcMap.get(el.id)} current={i === curMatinIdx} index={i} />)}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#EEF4FB" }}>
         <div style={{ width: 26, height: 26, borderRadius: 8, background: "#fff", border: `1px solid ${C.gray200}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <School size={14} color={C.navy} />
@@ -384,7 +393,7 @@ function DayList({ matin, aprem, priseAllerBy, priseRetourBy, excMap, curMatinId
       <SectionHead label="🌙 Après-midi — dépose" />
       {aprem.length === 0
         ? <Empty text="Aucune dépose." />
-        : aprem.map((el, i) => <StopRow key={`a${el.id}`} el={el} prise={priseRetourBy.get(el.id)} exc={excMap.get(el.id)} current={i === curApremIdx} index={i} />)}
+        : aprem.map((el, i) => <StopRow key={`a${el.id}`} el={el} prise={priseRetourBy.get(el.id)} exc={apremExcMap.get(el.id)} current={i === curApremIdx} index={i} />)}
     </div>
   );
 }
