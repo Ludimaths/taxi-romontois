@@ -12,6 +12,7 @@ import type { Ecole, Eleve, Circuit, Conducteur, PriseEnCharge, TourneeConfig, A
 
 type ConduPartial = Pick<Conducteur, "id" | "nom" | "prenom" | "circuit_id" | "status"> & { est_responsable?: boolean; tel?: string; secteur?: string };
 type HebdoStop = { id: number; circuit_id: string; jour: number; sens: "matin" | "aprem"; ordre: number; heure: string; eleve_nom: string; adresse: string | null; eleve_id: number | null };
+type NotifParent = { id: number; eleve_id: number | null; circuit_id: string | null; type: string; message: string; date_jour: string; created_at: string; lu: boolean };
 import { ArrowLeft, ChevronDown, Plus, Pencil, Trash2, User } from "lucide-react";
 
 interface CircuitForm { id: string; nom: string; emoji: string; num: string; km_aller: number; cercle_id: number | null; conducteur_id: number | ""; }
@@ -92,6 +93,7 @@ export default function EtablissementDetail() {
   const [prises,     setPrises]     = useState<PriseEnCharge[]>([]);
   const [tournees,   setTournees]   = useState<TourneeConfig[]>([]);
   const [exceptions, setExceptions] = useState<ExceptionEleve[]>([]);
+  const [notifsParents, setNotifsParents] = useState<NotifParent[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [tab,        setTab]        = useState("Circuits & élèves");
 
@@ -189,10 +191,16 @@ export default function EtablissementDetail() {
     // Exceptions par période des élèves de cet établissement
     const ids = elevesList.map(e => e.id);
     let excData: ExceptionEleve[] = [];
+    let notifData: NotifParent[] = [];
     if (ids.length) {
-      const { data: exc } = await sb.from("exceptions_eleves").select("*")
-        .in("eleve_id", ids).neq("statut", "clos").order("date_debut", { ascending: false });
+      const [{ data: exc }, { data: notif }] = await Promise.all([
+        sb.from("exceptions_eleves").select("*")
+          .in("eleve_id", ids).neq("statut", "clos").order("date_debut", { ascending: false }),
+        sb.from("notifications_parents").select("*")
+          .eq("date_jour", today_).in("eleve_id", ids).order("created_at", { ascending: false }),
+      ]);
       excData = (exc ?? []) as ExceptionEleve[];
+      notifData = (notif ?? []) as NotifParent[];
     }
 
     setEcole(ecoleData ?? null);
@@ -204,6 +212,7 @@ export default function EtablissementDetail() {
     setPrises(prisesData ?? []);
     setTournees(tournData ?? []);
     setExceptions(excData);
+    setNotifsParents(notifData);
     setHebdo(hebdoData);
     setLoading(false);
   }, [sb, ecoleId]);
@@ -219,6 +228,7 @@ export default function EtablissementDetail() {
       .on("postgres_changes", { event:"*", schema:"public", table:"circuits" }, load)
       .on("postgres_changes", { event:"*", schema:"public", table:"conducteurs" }, load)
       .on("postgres_changes", { event:"*", schema:"public", table:"exceptions_eleves" }, load)
+      .on("postgres_changes", { event:"*", schema:"public", table:"notifications_parents" }, load)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [sb, ecoleId, load]);
@@ -931,6 +941,43 @@ export default function EtablissementDetail() {
       {/* ── SUIVI DU JOUR (accordéon par circuit) ──────────────────────────── */}
       {tab === "Suivi du jour" && (
         <div style={{ marginTop:20 }}>
+          {/* 🔔 Notifications envoyées aux parents — automatique, en direct */}
+          <div style={{ background:C.white, border:`1px solid ${C.gray200}`, borderRadius:12, marginBottom:16, overflow:"hidden" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:11, padding:"13px 16px",
+              borderBottom: notifsParents.length ? `1px solid ${C.gray100}` : "none" }}>
+              <div style={{ width:36, height:36, borderRadius:10, background:"#EFF6FF", display:"flex",
+                alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:18 }}>🔔</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:800, color:C.navy, fontSize:14 }}>Notifications envoyées aux parents</div>
+                <div style={{ fontSize:12, color:C.gray400 }}>Automatique — à la prise en charge et à la dépose de chaque enfant</div>
+              </div>
+              <span style={{ background:"#EFF6FF", color:"#2563EB", borderRadius:20, padding:"4px 11px",
+                fontSize:12, fontWeight:800, flexShrink:0 }}>{notifsParents.length}</span>
+            </div>
+            {notifsParents.length === 0 ? (
+              <div style={{ padding:16, fontSize:13, color:C.gray400 }}>
+                Aucune notification pour l&apos;instant aujourd&apos;hui — elles apparaissent ici en direct au fil de la tournée.
+              </div>
+            ) : (
+              <div style={{ maxHeight:320, overflowY:"auto" }}>
+                {notifsParents.map(n => {
+                  const isEcole = n.type === "arrivee_ecole";
+                  const h = new Date(n.created_at).toLocaleTimeString("fr-CH", { hour:"2-digit", minute:"2-digit" });
+                  return (
+                    <div key={n.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 16px", borderTop:`1px solid ${C.gray100}` }}>
+                      <div style={{ minWidth:42, fontSize:13, fontWeight:800, color:C.navy }}>{h}</div>
+                      <div style={{ width:30, height:30, borderRadius:9, flexShrink:0, display:"flex", alignItems:"center",
+                        justifyContent:"center", fontSize:15, background: isEcole ? "#EFF6FF" : "#DCFCE7" }}>{isEcole ? "🏫" : "🏠"}</div>
+                      <div style={{ flex:1, minWidth:0, fontSize:13.5, color:C.gray800 }}>{n.message}</div>
+                      <span style={{ background:"#F1F5F9", color:C.gray600, borderRadius:20, padding:"3px 9px",
+                        fontSize:11, fontWeight:800, flexShrink:0, whiteSpace:"nowrap" }}>✓ Envoyée</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <div style={{ fontSize:14, fontWeight:800, color:C.navy, marginBottom:14 }}>
             En direct — {fmtJour(isoToday())} · clique un circuit pour le détail
           </div>
