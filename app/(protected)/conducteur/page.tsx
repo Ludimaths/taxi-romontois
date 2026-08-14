@@ -131,10 +131,29 @@ export default function ConducteurPage(){
 
     // Tous les circuits du conducteur
     const { data: myCircsRaw } = await sb.from("circuits").select("*").eq("conducteur_id", cid).order("nom");
-    const myCircs = (myCircsRaw ?? []) as Circuit[];
+    let myCircs = (myCircsRaw ?? []) as Circuit[];
+
+    // Remplacement exceptionnel actif aujourd'hui → le conducteur couvre un autre circuit.
+    // Additif : sans remplacement, rien ne change (circuit habituel).
+    let effectiveCircuitId: string | null = drv.data?.circuit_id ?? null;
+    let coveredCircuit: Circuit | null = null;
+    const { data: rempls } = await sb.from("remplacements_exceptionnels")
+      .select("circuit_id").eq("remplacant_id", cid)
+      .lte("date_debut", t2).gte("date_fin", t2).order("date_debut").limit(1);
+    if (rempls && rempls[0]) {
+      const { data: cc } = await sb.from("circuits")
+        .select("*,cercle:cercles_scolaires(*)").eq("id", rempls[0].circuit_id).maybeSingle();
+      if (cc) {
+        coveredCircuit = cc as Circuit;
+        effectiveCircuitId = coveredCircuit.id;
+        if (!myCircs.some(c => c.id === coveredCircuit!.id)) myCircs = [coveredCircuit, ...myCircs];
+      }
+    }
     const circIds = myCircs.map(c => c.id);
 
     setMyCircuits(myCircs.map(c => ({ id: c.id, nom: c.nom, emoji: c.emoji })));
+    // Si remplacement actif, la fiche affichée (en-tête, image, tournée) suit le circuit couvert
+    if (coveredCircuit) setDriver(prev => prev ? { ...prev, circuit_id: effectiveCircuitId!, circuit: coveredCircuit! } : prev);
 
     // Planning hebdo COMPLET (tous les jours) + exceptions (avec période) + prises + élèves (contacts)
     let hebdo: HebdoRow[] = [];      // arrêts du JOUR courant
@@ -202,7 +221,7 @@ export default function ConducteurPage(){
         heure_ramassage: h.heure,
       } as Eleve;
     };
-    const primary = drv.data?.circuit_id;
+    const primary = effectiveCircuitId;
     const primStops = hebdo.filter(h => h.circuit_id === primary);
     setMatinEleves(primStops.filter(h => h.sens === "matin").map(toEleve));
     setApremEleves(primStops.filter(h => h.sens === "aprem").map(toEleve));

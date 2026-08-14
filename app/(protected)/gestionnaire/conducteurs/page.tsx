@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { C, statusColor, statusLabel, fmtDate, fmtDateTime, conducteurEmail, isoToday } from "@/lib/constants";
 import { Badge, Avatar, Card, InfoBox, Btn, Modal, TabBar } from "@/components/ui";
-import { CheckCircle2, AlertTriangle, Pen, Trash2, KeyRound, RefreshCw, Link2, UserPlus, ClipboardCopy, Check, Bus, FileText, Users, CalendarDays, XCircle, Send, LayoutGrid, List, PauseCircle, PlayCircle } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Pen, Trash2, KeyRound, RefreshCw, Link2, UserPlus, ClipboardCopy, Check, Bus, FileText, Users, CalendarDays, XCircle, Send, LayoutGrid, List, PauseCircle, PlayCircle, Repeat } from "lucide-react";
 import type { Conducteur, Circuit, Vehicule, CongesDemande } from "@/lib/types";
 
 
@@ -195,6 +195,12 @@ export default function ConducteursPage() {
   const [pauseModal,   setPauseModal]   = useState(false);
   const [pauseMotif,   setPauseMotif]   = useState("");
   const [pauseBusy,    setPauseBusy]    = useState(false);
+  // Remplacement exceptionnel (le conducteur sélectionné couvre un autre circuit)
+  const [remplModal,   setRemplModal]   = useState(false);
+  const [remplBusy,    setRemplBusy]    = useState(false);
+  const [remplForm,    setRemplForm]    = useState<{ circuit_id: string; single: boolean; date_debut: string; date_fin: string; motif: string }>(
+    { circuit_id: "", single: true, date_debut: "", date_fin: "", motif: "" });
+  const [mesRempl,     setMesRempl]     = useState<{ id: number; circuit_id: string; date_debut: string; date_fin: string; motif: string | null }[]>([]);
 
   const fetchAll = useCallback(async () => {
     const [drv, cir, veh] = await Promise.all([
@@ -252,8 +258,8 @@ export default function ConducteursPage() {
   }, [sb, histYear]);
 
   useEffect(() => {
-    if (sel !== null) fetchHistory(sel);
-  }, [sel, fetchHistory]);
+    if (sel !== null) { fetchHistory(sel); fetchRempl(sel); }
+  }, [sel, fetchHistory, fetchRempl]);
 
   useEffect(() => {
     setCreateBusy(false);
@@ -361,6 +367,33 @@ export default function ConducteursPage() {
     }).eq("id", sel);
     setPauseBusy(false);
     await fetchAll();
+  };
+
+  // ── Remplacement exceptionnel ───────────────────────────────────────────────
+  const fetchRempl = useCallback(async (driverId: number) => {
+    const { data } = await sb.from("remplacements_exceptionnels")
+      .select("id,circuit_id,date_debut,date_fin,motif")
+      .eq("remplacant_id", driverId).gte("date_fin", isoToday())
+      .order("date_debut");
+    setMesRempl(data ?? []);
+  }, [sb]);
+
+  const confirmRempl = async () => {
+    if (!sel || !remplForm.circuit_id || !remplForm.date_debut) return;
+    setRemplBusy(true);
+    const fin = remplForm.single ? remplForm.date_debut : (remplForm.date_fin || remplForm.date_debut);
+    await sb.from("remplacements_exceptionnels").insert({
+      circuit_id: remplForm.circuit_id,
+      remplacant_id: sel,
+      titulaire_id: circuits.find(c => c.id === remplForm.circuit_id)?.conducteur_id ?? null,
+      date_debut: remplForm.date_debut,
+      date_fin: fin,
+      motif: remplForm.motif.trim() || null,
+      cree_par: currentUserId,
+    });
+    setRemplBusy(false);
+    setRemplModal(false);
+    fetchRempl(sel);   // les responsables sont notifiés automatiquement (déclencheur en base)
   };
 
   const handleDelete = () => { if (sel) setDelConfirm(true); };
@@ -613,6 +646,71 @@ export default function ConducteursPage() {
           </Modal>
         )}
 
+        {remplModal && (
+          <Modal title={`Remplacement exceptionnel — ${d.prenom} ${d.nom}`} onClose={() => setRemplModal(false)}>
+            <p style={{ fontSize: 13.5, color: C.gray600, marginBottom: 14, lineHeight: 1.5 }}>
+              {d.prenom} assure exceptionnellement un autre circuit. Les responsables des secteurs
+              concernés (circuit couvert et {d.prenom.toLowerCase()}) sont prévenus automatiquement.
+            </p>
+
+            <label style={{ fontSize: 13, color: C.gray600, fontWeight: 600, display: "block", marginBottom: 4 }}>Circuit à couvrir</label>
+            <select value={remplForm.circuit_id}
+              onChange={e => setRemplForm(p => ({ ...p, circuit_id: e.target.value }))}
+              style={{ ...inp, marginBottom: 14, background: C.white }}>
+              <option value="">— Choisir un circuit —</option>
+              {circuits.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.nom}</option>)}
+            </select>
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              {([["true","Une journée"],["false","Une période"]] as const).map(([v,l]) => {
+                const active = remplForm.single === (v === "true");
+                return (
+                  <button key={v} onClick={() => setRemplForm(p => ({ ...p, single: v === "true" }))}
+                    style={{ flex: 1, padding: "9px 12px", borderRadius: 8, cursor: "pointer",
+                      border: `1.5px solid ${active ? C.navyL : C.gray200}`,
+                      background: active ? C.navyL : C.white, color: active ? C.white : C.gray600,
+                      fontSize: 13, fontWeight: 700 }}>{l}</button>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 13, color: C.gray600, fontWeight: 600, display: "block", marginBottom: 4 }}>
+                  {remplForm.single ? "Date" : "Du"}
+                </label>
+                <input type="date" value={remplForm.date_debut}
+                  onChange={e => setRemplForm(p => ({ ...p, date_debut: e.target.value }))} style={inp} />
+              </div>
+              {!remplForm.single && (
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 13, color: C.gray600, fontWeight: 600, display: "block", marginBottom: 4 }}>Au</label>
+                  <input type="date" value={remplForm.date_fin} min={remplForm.date_debut}
+                    onChange={e => setRemplForm(p => ({ ...p, date_fin: e.target.value }))} style={inp} />
+                </div>
+              )}
+            </div>
+
+            <label style={{ fontSize: 13, color: C.gray600, fontWeight: 600, display: "block", marginBottom: 4 }}>Motif (facultatif)</label>
+            <input value={remplForm.motif} onChange={e => setRemplForm(p => ({ ...p, motif: e.target.value }))}
+              placeholder="Ex : remplacement de X absent" style={{ ...inp, marginBottom: 20 }} />
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={() => setRemplModal(false)}
+                style={{ padding: "9px 18px", borderRadius: 8, border: `1px solid ${C.gray200}`,
+                  background: C.white, color: C.gray800, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Annuler
+              </button>
+              <button onClick={confirmRempl} disabled={remplBusy || !remplForm.circuit_id || !remplForm.date_debut}
+                style={{ padding: "9px 18px", borderRadius: 8, border: "none",
+                  background: (!remplForm.circuit_id || !remplForm.date_debut) ? C.gray200 : C.navyL,
+                  color: C.white, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                {remplBusy ? "…" : "Affecter le remplacement"}
+              </button>
+            </div>
+          </Modal>
+        )}
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <button onClick={() => { setSel(null); setTab("infos"); setGeneratedPwd(null); setCreateResult(null); setCreateError(""); }}
             style={{ background: "none", border: "none", color: C.navyL, cursor: "pointer",
@@ -621,6 +719,13 @@ export default function ConducteursPage() {
           </button>
           <div style={{ display: "flex", gap: 8 }}>
             <Btn small onClick={() => setEditModal(true)} color={C.navyL}>Modifier</Btn>
+            {!isPaused(d) && (
+              <Btn small onClick={() => { setRemplForm({ circuit_id: "", single: true, date_debut: isoToday(), date_fin: isoToday(), motif: "" }); setRemplModal(true); }} color={C.navyL} outline>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <Repeat size={14} /> Remplacement
+                </span>
+              </Btn>
+            )}
             {isPaused(d)
               ? <>
                   <Btn small onClick={handleReactivate} color={C.green} disabled={pauseBusy}>
@@ -638,6 +743,26 @@ export default function ConducteursPage() {
                 </Btn>}
           </div>
         </div>
+
+        {mesRempl.length > 0 && (
+          <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: C.navyL, textTransform: "uppercase",
+              letterSpacing: 0.4, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+              <Repeat size={13} /> Remplacements exceptionnels à venir
+            </div>
+            {mesRempl.map(r => {
+              const c = circuits.find(x => x.id === r.circuit_id);
+              const periode = r.date_debut === r.date_fin
+                ? `le ${fmtDate(r.date_debut)}`
+                : `du ${fmtDate(r.date_debut)} au ${fmtDate(r.date_fin)}`;
+              return (
+                <div key={r.id} style={{ fontSize: 13.5, color: C.gray800, padding: "3px 0" }}>
+                  {c ? `${c.emoji} ${c.nom}` : r.circuit_id} · <b>{periode}</b>{r.motif ? ` — ${r.motif}` : ""}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 22 }}>
 
