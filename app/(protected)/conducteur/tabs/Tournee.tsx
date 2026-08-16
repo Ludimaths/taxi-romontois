@@ -12,7 +12,7 @@ const ECOLE = { nom: "Fondation Mérine", adr: "Rue du Château 47, 1510 Moudon"
 const CENTRAL_TEL = "024 455 44 80";
 const ARRIVEE = "08:25";
 
-export interface ExcToday { eleve_id: number; type: "absent" | "parent" | "changement_circuit"; }
+export interface ExcToday { eleve_id: number; type: "absent" | "parent" | "changement_circuit"; moments?: string[] | null; }
 
 interface TourneeProps {
   driver: Conducteur;
@@ -68,8 +68,18 @@ export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = []
   const [arrived, setArrived] = useState(false);        // arrivé sur place à l'arrêt courant
   const [ecolePassed, setEcolePassed] = useState(false); // dépose école faite (transition matin → après-midi)
 
-  const excMap = new Map<number, string>(exceptions.map(x => [x.eleve_id, x.type]));
-  const hasExc = (e: Eleve) => excMap.has(e.id);
+  // Exceptions sensibles au moment de la journée :
+  //  moments vide/null = toute la journée ; 'matin' → matin (aller) ; 'apresmidi'/'soir' → après-midi (retour) ; 'midi' → aucun effet sur les tournées modélisées.
+  const excFor = new Map<number, ExcToday>(exceptions.map(x => [x.eleve_id, x]));
+  const excApplies = (id: number, sens: "aller" | "retour"): boolean => {
+    const x = excFor.get(id);
+    if (!x) return false;
+    const m = x.moments;
+    if (!m || m.length === 0) return true;
+    return sens === "aller" ? m.includes("matin") : (m.includes("apresmidi") || m.includes("soir"));
+  };
+  const hasExcAller  = (e: Eleve) => excApplies(e.id, "aller");
+  const hasExcRetour = (e: Eleve) => excApplies(e.id, "retour");
 
   const matinList = [...matin].sort(byHeure);
   const apremList = [...aprem].sort(byHeure);
@@ -80,9 +90,9 @@ export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = []
   // Un enfant absent le matin (marqué "absent" sur place) n'est PAS à l'école :
   // il ne doit donc pas compter dans les déposes de l'après-midi.
   const allerAbsent = (e: Eleve) => priseAllerBy.get(e.id)?.statut === "absent";
-  const skipDay = (e: Eleve) => hasExc(e) || allerAbsent(e);
+  const skipDay = (e: Eleve) => hasExcRetour(e) || allerAbsent(e);
 
-  const doneMatin = (e: Eleve) => priseAllerBy.has(e.id) || hasExc(e);
+  const doneMatin = (e: Eleve) => priseAllerBy.has(e.id) || hasExcAller(e);
   const doneAprem = (e: Eleve) => priseRetourBy.has(e.id) || skipDay(e);
 
   const curMatinIdx = matinList.findIndex(e => !doneMatin(e));
@@ -92,11 +102,14 @@ export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = []
   const dayComplete = matinComplete && apremComplete;
   const apremStarted = priseRetourBy.size > 0;
 
-  const matinActive = matinList.filter(e => !hasExc(e)).length;
+  const matinActive = matinList.filter(e => !hasExcAller(e)).length;
   const apremActive = apremList.filter(e => !skipDay(e)).length;
 
-  // Carte des exceptions pour l'après-midi = exceptions + enfants absents ce matin
-  const apremExcMap = new Map(excMap);
+  // Cartes d'exceptions par phase (selon le moment)
+  const matinExcMap = new Map<number, string>();
+  matinList.forEach(e => { const x = excFor.get(e.id); if (x && hasExcAller(e)) matinExcMap.set(e.id, x.type); });
+  const apremExcMap = new Map<number, string>();
+  apremList.forEach(e => { const x = excFor.get(e.id); if (x && hasExcRetour(e)) apremExcMap.set(e.id, x.type); });
   apremList.forEach(e => { if (allerAbsent(e) && !apremExcMap.has(e.id)) apremExcMap.set(e.id, "absent"); });
   const presMatin = [...priseAllerBy.values()].filter(p => p.statut === "present").length;
   const presAprem = [...priseRetourBy.values()].filter(p => p.statut === "present").length;
@@ -198,7 +211,7 @@ export function TabTournee({ driver, circ, matin, aprem, prises, exceptions = []
 
   const dayList = (
     <DayList matin={matinList} aprem={apremList} priseAllerBy={priseAllerBy} priseRetourBy={priseRetourBy}
-      matinExcMap={excMap} apremExcMap={apremExcMap} curMatinIdx={enService && inMatin ? curMatinIdx : -1} curApremIdx={enService && !inMatin ? curApremIdx : -1} />
+      matinExcMap={matinExcMap} apremExcMap={apremExcMap} curMatinIdx={enService && inMatin ? curMatinIdx : -1} curApremIdx={enService && !inMatin ? curApremIdx : -1} />
   );
 
   // ── 0bis) Aucun circuit attribué ────────────────────────────────────────────

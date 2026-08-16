@@ -21,10 +21,14 @@ type ExcType = "absent" | "parent" | "changement_circuit";
 interface ExceptionEleve {
   id: number; eleve_id: number; type: ExcType; date_debut: string; date_fin: string;
   circuit_cible_id: string | null; definitif: boolean; justification: string | null;
-  source: string; statut: string; created_at: string;
+  source: string; statut: string; created_at: string; moments: string[] | null;
 }
-interface ExcForm { eleve_id: number; type: ExcType; date_debut: string; date_fin: string; circuit_cible_id: string; definitif: boolean; justification: string; }
+interface ExcForm { eleve_id: number; type: ExcType; date_debut: string; date_fin: string; circuit_cible_id: string; definitif: boolean; justification: string; moments: string[]; }
 const EXC_LABEL: Record<ExcType,string> = { absent:"Absent", parent:"Ramené par les parents", changement_circuit:"Changement de circuit" };
+const MOMENTS: { v: string; l: string }[] = [
+  { v:"matin", l:"Matin" }, { v:"midi", l:"Midi" }, { v:"apresmidi", l:"Après-midi" }, { v:"soir", l:"Soir" },
+];
+const momentLabel = (m: string) => MOMENTS.find(x => x.v === m)?.l ?? m;
 
 const isoToday = () => new Date().toISOString().slice(0, 10);
 
@@ -461,7 +465,7 @@ export default function EtablissementDetail() {
   function openExc(e: Eleve, type: ExcType) {
     setMenuFor(null);
     const t = isoToday();
-    setExcForm({ eleve_id: e.id, type, date_debut: t, date_fin: t, circuit_cible_id: "", definitif: false, justification: "" });
+    setExcForm({ eleve_id: e.id, type, date_debut: t, date_fin: t, circuit_cible_id: "", definitif: false, justification: "", moments: [] });
     setShowExc(true);
   }
   async function handleSaveExc() {
@@ -476,6 +480,7 @@ export default function EtablissementDetail() {
         eleve_id: f.eleve_id, type: f.type, date_debut: f.date_debut, date_fin: f.date_fin,
         circuit_cible_id: f.type === "changement_circuit" ? (f.circuit_cible_id || null) : null,
         definitif: !!f.definitif, justification: f.justification.trim() || null,
+        moments: (f.type !== "changement_circuit" && f.moments.length) ? f.moments : null,
         source: "gestionnaire", statut: "actif",
       });
     }
@@ -1100,6 +1105,7 @@ export default function EtablissementDetail() {
                       const e = eleves.find(el=>el.id===x.eleve_id);
                       const col = excColor(x.type);
                       const cible = x.circuit_cible_id ? allCircuits.find(c=>c.id===x.circuit_cible_id) : null;
+                      const circ = allCircuits.find(c=>c.id===circOf(x.eleve_id));   // circuit concerné par le changement
                       return (
                         <div key={x.id} style={{ display:"flex", alignItems:"center", gap:12, background:C.white, border:`1px solid ${C.gray200}`, borderRadius:12, padding:"12px 14px" }}>
                           <div style={{ width:5, alignSelf:"stretch", borderRadius:6, background:col }} />
@@ -1107,6 +1113,16 @@ export default function EtablissementDetail() {
                             <div style={{ fontWeight:800, fontSize:14, color:C.gray800 }}>
                               {e ? `${e.prenom_initiale} ${e.nom_famille}` : `Élève #${x.eleve_id}`}
                               <span style={{ color:col, marginLeft:8, fontWeight:800 }}>· {EXC_LABEL[x.type]}</span>
+                            </div>
+                            <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"5px 0 2px" }}>
+                              {circ && (
+                                <span style={{ fontSize:11.5, fontWeight:700, color:C.navy, background:"#EFF6FF",
+                                  borderRadius:6, padding:"2px 8px" }}>{circ.emoji} {circ.nom}</span>
+                              )}
+                              {(x.moments && x.moments.length > 0) && x.moments.map(m => (
+                                <span key={m} style={{ fontSize:11, fontWeight:700, color:"#92600b", background:"#FEF3C7",
+                                  borderRadius:6, padding:"2px 8px" }}>{momentLabel(m)}</span>
+                              ))}
                             </div>
                             <div style={{ fontSize:12.5, color:C.gray }}>
                               du {fmtJour(x.date_debut)} au {fmtJour(x.date_fin)}
@@ -1635,6 +1651,26 @@ export default function EtablissementDetail() {
                   <CircField label="Du"><input type="date" value={excForm.date_debut} onChange={ev=>set({date_debut:ev.target.value})} style={cInp} /></CircField>
                   <CircField label="Au"><input type="date" value={excForm.date_fin} onChange={ev=>set({date_fin:ev.target.value})} style={cInp} /></CircField>
                 </div>
+              )}
+              {!isChg && (
+                <CircField label="Moment (facultatif — vide = toute la journée)">
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                    {MOMENTS.map(m => {
+                      const on = excForm.moments.includes(m.v);
+                      return (
+                        <button key={m.v} onClick={() => set({ moments: on ? excForm.moments.filter(x=>x!==m.v) : [...excForm.moments, m.v] })}
+                          style={{ padding:"8px 14px", borderRadius:20, cursor:"pointer", fontWeight:700, fontSize:13,
+                            border:`1.5px solid ${on?C.navy:C.gray200}`,
+                            background:on?C.navy:"#fff", color:on?C.white:C.gray600 }}>
+                          {m.l}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize:11.5, color:C.gray400, marginTop:6 }}>
+                    Ex : un enfant qui prend le taxi le matin et rentre le soir mais pas le midi → coche « Midi ».
+                  </div>
+                </CircField>
               )}
               <CircField label="Justification (visible par le conducteur & le responsable)">
                 <textarea rows={2} value={excForm.justification} onChange={ev=>set({justification:ev.target.value})}

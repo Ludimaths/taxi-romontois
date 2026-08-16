@@ -157,14 +157,14 @@ export default function ConducteurPage(){
 
     // Planning hebdo COMPLET (tous les jours) + exceptions (avec période) + prises + élèves (contacts)
     let hebdo: HebdoRow[] = [];      // arrêts du JOUR courant
-    let jexc: { eleve_id: number; type: string }[] = [];   // exceptions ACTIVES aujourd'hui
+    let jexc: { eleve_id: number; type: string; moments?: string[] | null }[] = [];   // exceptions ACTIVES aujourd'hui
     let excAll: ExcRange[] = [];                             // exceptions en cours ou à venir (avec dates)
     let prisesJour: PriseEnCharge[] = [];
     let elevesAll: Eleve[] = [];
     if (circIds.length) {
       const [{ data: th }, { data: ex2 }, { data: pr }, { data: elA }] = await Promise.all([
         sb.from("tournee_hebdo").select("*").in("circuit_id", circIds).order("jour").order("sens").order("ordre"),
-        sb.from("exceptions_eleves").select("eleve_id,type,date_debut,date_fin").gte("date_fin", t2),
+        sb.from("exceptions_eleves").select("eleve_id,type,date_debut,date_fin,moments").gte("date_fin", t2),
         sb.from("prises_en_charge").select("*").eq("conducteur_id", cid).eq("date", t2),
         sb.from("eleves").select("*").in("circuit_id", circIds).eq("actif", true),
       ]);
@@ -172,7 +172,7 @@ export default function ConducteurPage(){
       setWeekStops(week);
       hebdo = week.filter(h => h.jour === jour);
       excAll = (ex2 ?? []) as ExcRange[];
-      jexc = excAll.filter(x => x.date_debut <= t2 && x.date_fin >= t2).map(x => ({ eleve_id: x.eleve_id, type: x.type }));
+      jexc = excAll.filter(x => x.date_debut <= t2 && x.date_fin >= t2).map(x => ({ eleve_id: x.eleve_id, type: x.type, moments: (x as { moments?: string[] | null }).moments ?? null }));
       prisesJour = (pr ?? []) as PriseEnCharge[];
       elevesAll = (elA ?? []) as Eleve[];
     } else {
