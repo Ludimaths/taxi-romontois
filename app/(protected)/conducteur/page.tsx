@@ -11,7 +11,7 @@ type HebdoRow = { id: number; circuit_id: string; jour: number; sens: "matin" | 
   ordre: number; heure: string; eleve_nom: string; adresse: string | null;
   eleve_id: number | null; besoin_special: boolean };
 type ExcRange = { eleve_id: number; type: string; date_debut: string; date_fin: string };
-import { Bus, FileText, AlertCircle, Mail, History, CalendarDays, CalendarRange, LogOut, MoreHorizontal, MapPin, X, ShieldCheck } from "lucide-react";
+import { Bus, FileText, AlertCircle, Mail, History, CalendarDays, CalendarRange, LogOut, MoreHorizontal, MapPin, X, ShieldCheck, Info } from "lucide-react";
 import { BSheet, BigBtn, TA, Chip, StatusBadge } from "./tabs/shared";
 import { TabFiche } from "./tabs/Fiche";
 import { TabSignalements } from "./tabs/Signalements";
@@ -21,7 +21,7 @@ import { TabConges } from "./tabs/Conges";
 import { TabTournee, type ExcToday } from "./tabs/Tournee";
 import { TabPlanning } from "./tabs/Planning";
 
-type Tab = "tournee" | "fiche" | "signalements" | "messages" | "historique" | "conges" | "planning";
+type Tab = "tournee" | "fiche" | "signalements" | "messages" | "historique" | "conges" | "planning" | "info";
 
 export default function ConducteurPage(){
   const sb=createClient();
@@ -55,6 +55,15 @@ export default function ConducteurPage(){
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState<Tab>("tournee");
   const [drawerOpen,setDrawerOpen]= useState(false);
+
+  // Annonce de lancement (« vos circuits sont attribués ») + accusé de lecture + signalement d'écart
+  const ANNONCE_CLE = "lancement_circuits";
+  const [annonceLue,  setAnnonceLue]  = useState<string|null>(null);   // date de lecture, ou null
+  const [showAnnonce, setShowAnnonce] = useState(false);
+  const [ecartOpen,   setEcartOpen]   = useState(false);
+  const [ecartText,   setEcartText]   = useState("");
+  const [ecartBusy,   setEcartBusy]   = useState(false);
+  const [mesEcarts,   setMesEcarts]   = useState<{id:number;message:string;statut:string;created_at:string;circuit_id:string|null}[]>([]);
 
   // Modals service
   const [showConfirm,  setShowConfirm]  = useState(false);
@@ -225,6 +234,16 @@ export default function ConducteurPage(){
     const primStops = hebdo.filter(h => h.circuit_id === primary);
     setMatinEleves(primStops.filter(h => h.sens === "matin").map(toEleve));
     setApremEleves(primStops.filter(h => h.sens === "aprem").map(toEleve));
+
+    // Annonce de lancement (accusé de lecture) + écarts signalés
+    const [{ data: ack }, { data: ec }] = await Promise.all([
+      sb.from("annonces_conducteur_lues").select("lu_at").eq("conducteur_id", cid).eq("cle", ANNONCE_CLE).maybeSingle(),
+      sb.from("signalements_ecart").select("id,message,statut,created_at,circuit_id").eq("conducteur_id", cid).order("created_at", { ascending: false }),
+    ]);
+    setAnnonceLue(ack?.lu_at ?? null);
+    setMesEcarts(ec ?? []);
+    // Pop-up seulement si un circuit est attribué ET pas encore accusé réception
+    setShowAnnonce(!!effectiveCircuitId && !ack);
 
     setLoading(false);
   },[sb]);
@@ -436,6 +455,7 @@ export default function ConducteurPage(){
     planning:     <CalendarRange size={size} />,
     historique:   <History size={size} />,
     conges:       <CalendarDays size={size} />,
+    info:         <Info size={size} />,
   }[id]);
   // Barre du bas (accès rapide) — la tournée est en premier, mise en avant.
   const BOTTOM:{id:Tab;label:string;badge?:number}[]=[
@@ -446,14 +466,39 @@ export default function ConducteurPage(){
   ];
   // Menu « Plus » (tiroir) — le reste des onglets.
   const MORE:{id:Tab;label:string;badge?:number}[]=[
+    {id:"info",         label:"Infos"},
     {id:"planning",     label:"Planning"},
     {id:"historique",   label:"Historique"},
     {id:"conges",       label:"Mes congés"},
   ];
   const TAB_LABELS:Record<Tab,string>={
     tournee:"Ma tournée",fiche:"Ma fiche",
-    signalements:"Signalements",messages:"Messages",planning:"Planning",historique:"Historique",conges:"Congés",
+    signalements:"Signalements",messages:"Messages",planning:"Planning",historique:"Historique",conges:"Congés",info:"Infos",
   };
+
+  // ── Annonce de lancement : accusé de lecture (privé) + signalement d'écart (→ responsable) ──
+  async function markAnnonceLue(){
+    if(!condId) return;
+    const now=new Date().toISOString();
+    await sb.from("annonces_conducteur_lues").upsert(
+      {conducteur_id:condId, cle:ANNONCE_CLE, lu_at:now}, {onConflict:"conducteur_id,cle"});
+    setAnnonceLue(now);
+    setShowAnnonce(false);
+  }
+  async function submitEcart(){
+    if(!condId || !ecartText.trim()) return;
+    setEcartBusy(true);
+    await sb.from("signalements_ecart").insert(
+      {conducteur_id:condId, circuit_id:driver?.circuit_id||null, message:ecartText.trim()});
+    const {data:ec}=await sb.from("signalements_ecart")
+      .select("id,message,statut,created_at,circuit_id").eq("conducteur_id",condId)
+      .order("created_at",{ascending:false});
+    setMesEcarts(ec??[]);
+    setEcartBusy(false);
+    setEcartText("");
+    setEcartOpen(false);
+    await markAnnonceLue();
+  }
 
   // ── Guards ────────────────────────────────────────────────────────────────────
   if(loading)return(
@@ -596,6 +641,92 @@ export default function ConducteurPage(){
       )}
       {tab==="conges"&&(
         <TabConges conges={conges} onSend={handleEnvoyerConge}/>
+      )}
+      {tab==="info"&&(
+        <div style={{maxWidth:640}}>
+          <div style={{background:C.white,borderRadius:16,padding:18,boxShadow:"0 2px 8px rgba(0,0,0,.06)",marginBottom:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <Info size={18} color={C.navy}/>
+              <div style={{fontWeight:800,fontSize:15,color:C.navy}}>Attribution des circuits</div>
+            </div>
+            <p style={{fontSize:14,color:"#475569",lineHeight:1.55,margin:0}}>
+              Vos circuits sont désormais attribués. Merci de vérifier votre affectation avec le document
+              remis lors de la formation. En cas d&apos;écart, signalez-le à votre responsable de secteur.
+            </p>
+            {annonceLue
+              ? <div style={{marginTop:12,fontSize:12.5,color:C.green,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                  ✓ Lu et vérifié le {new Date(annonceLue).toLocaleDateString("fr-CH")}
+                </div>
+              : <button onClick={markAnnonceLue}
+                  style={{marginTop:12,padding:"11px 16px",background:C.navy,color:C.white,borderRadius:10,border:"none",fontSize:14,fontWeight:800,cursor:"pointer"}}>
+                  J&apos;ai vérifié
+                </button>}
+            <button onClick={()=>{setEcartText("");setEcartOpen(true);}}
+              style={{marginTop:10,marginLeft:annonceLue?0:10,padding:"11px 16px",background:"#fff",color:C.navy,borderRadius:10,border:`1.5px solid ${C.gray200}`,fontSize:14,fontWeight:800,cursor:"pointer"}}>
+              Signaler un écart
+            </button>
+          </div>
+          {mesEcarts.length>0&&(
+            <div style={{background:C.white,borderRadius:16,padding:18,boxShadow:"0 2px 8px rgba(0,0,0,.06)"}}>
+              <div style={{fontWeight:800,fontSize:14,color:C.navy,marginBottom:6}}>Mes écarts signalés</div>
+              {mesEcarts.map(e=>(
+                <div key={e.id} style={{padding:"10px 0",borderTop:`1px solid ${C.gray100}`}}>
+                  <div style={{fontSize:13.5,color:"#1E293B"}}>{e.message}</div>
+                  <div style={{fontSize:11.5,color:C.gray400,marginTop:2}}>
+                    {new Date(e.created_at).toLocaleDateString("fr-CH")} · {e.statut==="ouvert"?"Transmis au responsable":e.statut}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pop-up de lancement : « vos circuits sont attribués » (une fois, accusé de lecture qui reste) */}
+      {showAnnonce&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(13,59,122,0.6)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:C.white,borderRadius:16,padding:26,width:"100%",maxWidth:420,boxShadow:"0 8px 32px rgba(0,0,0,0.3)"}}>
+            <div style={{fontSize:30,marginBottom:8}}>📋</div>
+            <h2 style={{margin:"0 0 8px",fontSize:19,color:C.navy,fontWeight:900}}>Vos circuits sont attribués</h2>
+            <p style={{margin:"0 0 18px",fontSize:14.5,color:"#475569",lineHeight:1.55}}>
+              Merci de vérifier votre affectation avec le document remis lors de la formation.
+              En cas d&apos;écart, signalez-le à votre responsable de secteur.
+            </p>
+            <button onClick={markAnnonceLue}
+              style={{width:"100%",padding:"13px",background:C.navy,color:C.white,borderRadius:12,border:"none",fontSize:15.5,fontWeight:800,cursor:"pointer",marginBottom:10}}>
+              J&apos;ai vérifié
+            </button>
+            <button onClick={()=>{setShowAnnonce(false);setEcartText("");setEcartOpen(true);}}
+              style={{width:"100%",padding:"12px",background:"#fff",color:C.navy,borderRadius:12,border:`1.5px solid ${C.gray200}`,fontSize:14.5,fontWeight:800,cursor:"pointer"}}>
+              Signaler un écart
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Signaler un écart → remonte au responsable de secteur */}
+      {ecartOpen&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(13,59,122,0.6)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:C.white,borderRadius:16,padding:24,width:"100%",maxWidth:420,boxShadow:"0 8px 32px rgba(0,0,0,0.3)"}}>
+            <h2 style={{margin:"0 0 6px",fontSize:18,color:C.navy,fontWeight:900}}>Signaler un écart</h2>
+            <p style={{margin:"0 0 12px",fontSize:13.5,color:C.gray600,lineHeight:1.5}}>
+              Décrivez ce qui ne correspond pas à votre document. Votre responsable de secteur sera prévenu.
+            </p>
+            <textarea value={ecartText} onChange={e=>setEcartText(e.target.value)} rows={4}
+              placeholder="Ex : mon circuit ne correspond pas, véhicule différent…"
+              style={{width:"100%",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.gray200}`,fontSize:14,boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",marginBottom:14}}/>
+            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+              <button onClick={()=>setEcartOpen(false)}
+                style={{padding:"10px 16px",borderRadius:10,border:`1px solid ${C.gray200}`,background:"#fff",color:C.gray800,fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                Annuler
+              </button>
+              <button onClick={submitEcart} disabled={ecartBusy||!ecartText.trim()}
+                style={{padding:"10px 16px",borderRadius:10,border:"none",background:ecartText.trim()?C.navy:C.gray200,color:C.white,fontSize:14,fontWeight:800,cursor:ecartText.trim()?"pointer":"default"}}>
+                {ecartBusy?"Envoi…":"Envoyer au responsable"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {mustChangePwd&&(
