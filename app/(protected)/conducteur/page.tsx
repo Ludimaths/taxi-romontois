@@ -238,6 +238,11 @@ export default function ConducteurPage(){
       .on("postgres_changes",{event:"*",schema:"public",table:"conges_demandes"},load)
       .on("postgres_changes",{event:"*",schema:"public",table:"prises_en_charge"},load)
       .on("postgres_changes",{event:"*",schema:"public",table:"exceptions_eleves"},load)
+      // Actualisation en direct (sans rafraîchir) quand la répartition/planning change
+      .on("postgres_changes",{event:"*",schema:"public",table:"conducteurs"},load)
+      .on("postgres_changes",{event:"*",schema:"public",table:"circuits"},load)
+      .on("postgres_changes",{event:"*",schema:"public",table:"tournee_hebdo"},load)
+      .on("postgres_changes",{event:"*",schema:"public",table:"remplacements_exceptionnels"},load)
       .subscribe();
     return()=>{sb.removeChannel(ch);};
   },[load,sb]);

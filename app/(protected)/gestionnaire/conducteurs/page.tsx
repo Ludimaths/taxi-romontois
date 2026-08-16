@@ -257,6 +257,14 @@ export default function ConducteursPage() {
     setCongesCondu(cng.data ?? []);
   }, [sb, histYear]);
 
+  const fetchRempl = useCallback(async (driverId: number) => {
+    const { data } = await sb.from("remplacements_exceptionnels")
+      .select("id,circuit_id,date_debut,date_fin,motif")
+      .eq("remplacant_id", driverId).gte("date_fin", isoToday())
+      .order("date_debut");
+    setMesRempl(data ?? []);
+  }, [sb]);
+
   useEffect(() => {
     if (sel !== null) { fetchHistory(sel); fetchRempl(sel); }
   }, [sel, fetchHistory, fetchRempl]);
@@ -370,14 +378,6 @@ export default function ConducteursPage() {
   };
 
   // ── Remplacement exceptionnel ───────────────────────────────────────────────
-  const fetchRempl = useCallback(async (driverId: number) => {
-    const { data } = await sb.from("remplacements_exceptionnels")
-      .select("id,circuit_id,date_debut,date_fin,motif")
-      .eq("remplacant_id", driverId).gte("date_fin", isoToday())
-      .order("date_debut");
-    setMesRempl(data ?? []);
-  }, [sb]);
-
   const confirmRempl = async () => {
     if (!sel || !remplForm.circuit_id || !remplForm.date_debut) return;
     setRemplBusy(true);
