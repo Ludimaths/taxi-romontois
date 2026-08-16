@@ -91,6 +91,7 @@ export interface Circuit {
   conducteur_id?: number;
   enfants_count: number;
   km_aller: number;
+  carte_url?: string | null;
 }
 
 export interface Conducteur {

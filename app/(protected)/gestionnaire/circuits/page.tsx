@@ -89,6 +89,7 @@ export default function CircuitsPage() {
 
   // Élèves du circuit — drill-down
   const [eleveModal,  setEleveModal]  = useState<string | null>(null);
+  const [carteModal,  setCarteModal]  = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     const today = isoToday();
@@ -256,6 +257,24 @@ export default function CircuitsPage() {
                 </div>
               );
             })}
+          </Modal>
+        );
+      })()}
+
+      {/* Modal carte du circuit */}
+      {carteModal && (() => {
+        const cc = circuits.find(c => c.id === carteModal);
+        return (
+          <Modal title={`Carte — ${cc?.emoji} ${cc?.nom}`} onClose={() => setCarteModal(null)} wide>
+            {cc?.carte_url ? (
+              <iframe
+                src={cc.carte_url}
+                title={`Carte ${cc.nom}`}
+                style={{ width: "100%", height: "70vh", border: `1px solid ${C.gray200}`, borderRadius: 10 }}
+              />
+            ) : (
+              <p style={{ color: C.gray400, textAlign: "center", padding: 20 }}>Aucune carte disponible pour ce circuit.</p>
+            )}
           </Modal>
         );
       })()}
