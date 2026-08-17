@@ -137,6 +137,19 @@ export interface Vehicule {
   notes?: string;
   qr_token: string;
   created_at: string;
+  // Fiche enrichie (source: liste véhicules par école)
+  etablissement?: string | null;
+  tournee_nom?: string | null;
+  conducteur_nom?: string | null;
+  tel?: string | null;
+  permis_requis?: string | null;
+  boite?: string | null;
+  tachygraphe_type?: string | null;
+  configuration?: string | null;
+  chassis?: string | null;
+  poids_total?: string | null;
+  mise_circulation?: string | null;
+  places_requises?: string | null;
 }
 
 export interface Enfant {

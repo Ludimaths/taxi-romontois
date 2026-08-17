@@ -51,6 +51,16 @@ const inp: React.CSSProperties = {
   border: `1px solid ${C.gray200}`, fontSize: 13, color: C.gray800, boxSizing: "border-box",
 };
 
+// Étiquette (chip) réutilisable
+function Chip({ children, bg, fg }: { children: React.ReactNode; bg: string; fg: string }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", background: bg, color: fg,
+      borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+      {children}
+    </span>
+  );
+}
+
 // ── VehiculeForm ───────────────────────────────────────────────────────────────
 function VehiculeForm({ init, circuits, conducteurs, onSave, onCancel, saving, isNew }: {
   init: Partial<Vehicule>; circuits: Circuit[]; conducteurs: Conducteur[];
@@ -138,6 +148,11 @@ export default function VehiculesPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filterEtat, setFilterEtat] = useState("all");
+  const [search, setSearch] = useState("");
+  const [fEtab, setFEtab] = useState("all");
+  const [fPlaces, setFPlaces] = useState("all");
+  const [fPermis, setFPermis] = useState("all");
+  const [fBoite, setFBoite] = useState("all");
 
   const fetchAll = useCallback(async () => {
     const [veh, cir, drv] = await Promise.all([
@@ -335,6 +350,21 @@ export default function VehiculesPage() {
                   <InfoBox label="Assurance"     value={fmtDate(v.assurance_date)} highlight={assWarn ? C.red : undefined} />
                   {v.date_vidange && <InfoBox label="Dernière vidange" value={v.date_vidange} />}
                 </div>
+                {(v.permis_requis || v.boite || v.tachygraphe_type || v.configuration || v.chassis || v.poids_total || v.mise_circulation || v.etablissement) && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600, textTransform: "uppercase", marginBottom: 6 }}>Caractéristiques</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {v.permis_requis    && <Chip bg={C.gray100} fg={C.gray600}>Permis {v.permis_requis}</Chip>}
+                      {v.boite            && <Chip bg={C.gray100} fg={C.gray600}>Boîte {v.boite}</Chip>}
+                      {v.tachygraphe_type && <Chip bg={C.gray100} fg={C.gray600}>Tachy {v.tachygraphe_type}</Chip>}
+                      {v.configuration    && <Chip bg={C.gray100} fg={C.gray600}>{v.configuration}</Chip>}
+                      {v.chassis          && <Chip bg={C.gray100} fg={C.gray600}>Châssis {v.chassis}</Chip>}
+                      {v.poids_total      && <Chip bg={C.gray100} fg={C.gray600}>{v.poids_total}</Chip>}
+                      {v.mise_circulation && <Chip bg={C.gray100} fg={C.gray600}>Mise en circ. {v.mise_circulation}</Chip>}
+                      {v.etablissement    && <Chip bg={C.skyL} fg={C.navy}>{v.etablissement}</Chip>}
+                    </div>
+                  </div>
+                )}
                 {v.notes && (
                   <div style={{ marginTop: 12, padding: "10px 14px", background: C.amberL, borderRadius: 10,
                     borderLeft: `3px solid ${C.amber}` }}>
@@ -420,9 +450,34 @@ export default function VehiculesPage() {
   const sansConducteur = vehicles.filter(v => !v.conducteur).length;
   const alerts = vehicles.filter(v => alertCT(v) || alertAss(v)).length;
 
-  const filtered = filterEtat === "all"
-    ? vehicles
-    : vehicles.filter(v => (v.etat as string) === filterEtat);
+  const uniq = (arr: (string | null | undefined)[]) =>
+    Array.from(new Set(arr.filter(Boolean) as string[])).sort();
+  const etabOptions   = uniq(vehicles.map(v => v.etablissement));
+  const permisOptions = uniq(vehicles.map(v => v.permis_requis));
+  const boiteOptions  = uniq(vehicles.map(v => v.boite));
+  const placesOptions = Array.from(new Set(vehicles.map(v => v.places).filter(p => p != null && p > 0)))
+    .sort((a, b) => (a as number) - (b as number)) as number[];
+
+  const q = search.trim().toLowerCase();
+  const filtered = vehicles.filter(v => {
+    if (filterEtat !== "all" && (v.etat as string) !== filterEtat) return false;
+    if (fEtab !== "all" && v.etablissement !== fEtab) return false;
+    if (fPlaces !== "all" && String(v.places) !== fPlaces) return false;
+    if (fPermis !== "all" && v.permis_requis !== fPermis) return false;
+    if (fBoite !== "all" && v.boite !== fBoite) return false;
+    if (q) {
+      const cond = v.conducteur as Conducteur | undefined;
+      const hay = [v.plaque, v.marque, v.modele, v.etablissement, v.tournee_nom,
+        v.conducteur_nom, cond ? `${cond.prenom} ${cond.nom}` : "",
+        (v.circuit as Circuit | undefined)?.nom].join(" ").toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  const selStyle: React.CSSProperties = {
+    padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${C.gray200}`,
+    background: C.white, color: C.gray600, fontWeight: 600, fontSize: 12, cursor: "pointer",
+  };
 
   return (
     <div>
@@ -449,16 +504,52 @@ export default function VehiculesPage() {
         <Btn onClick={() => setAddModal(true)} color={C.green}>+ Ajouter véhicule</Btn>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {([["all","Tous"],["bon","En service"],["attention","Attention"],["atelier","En atelier"]] as const).map(([v,l]) => (
-          <button key={v} onClick={() => setFilterEtat(v)}
-            style={{ padding: "5px 14px", borderRadius: 20, border: `1.5px solid ${filterEtat === v ? C.navyL : C.gray200}`,
-              background: filterEtat === v ? C.navyL : C.white, color: filterEtat === v ? C.white : C.gray600,
+      {/* Recherche */}
+      <div style={{ marginBottom: 12 }}>
+        <input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Rechercher — plaque, marque, modèle, conducteur, circuit, établissement…"
+          style={{ ...inp, maxWidth: 460 }} />
+      </div>
+
+      {/* État */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        {([["all","Tous"],["bon","En service"],["attention","Attention"],["atelier","En atelier"]] as const).map(([val,l]) => (
+          <button key={val} onClick={() => setFilterEtat(val)}
+            style={{ padding: "5px 14px", borderRadius: 20, border: `1.5px solid ${filterEtat === val ? C.navyL : C.gray200}`,
+              background: filterEtat === val ? C.navyL : C.white, color: filterEtat === val ? C.white : C.gray600,
               fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
             {l}
           </button>
         ))}
+      </div>
+
+      {/* Filtres avancés */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <select value={fPlaces} onChange={e => setFPlaces(e.target.value)} style={selStyle}>
+          <option value="all">Toutes les places</option>
+          {placesOptions.map(p => <option key={p} value={String(p)}>{p} places</option>)}
+        </select>
+        <select value={fEtab} onChange={e => setFEtab(e.target.value)} style={selStyle}>
+          <option value="all">Tous les établissements</option>
+          {etabOptions.map(x => <option key={x} value={x}>{x}</option>)}
+        </select>
+        {permisOptions.length > 0 && (
+          <select value={fPermis} onChange={e => setFPermis(e.target.value)} style={selStyle}>
+            <option value="all">Tous permis</option>
+            {permisOptions.map(x => <option key={x} value={x}>Permis {x}</option>)}
+          </select>
+        )}
+        {boiteOptions.length > 0 && (
+          <select value={fBoite} onChange={e => setFBoite(e.target.value)} style={selStyle}>
+            <option value="all">Toute boîte</option>
+            {boiteOptions.map(x => <option key={x} value={x}>{x}</option>)}
+          </select>
+        )}
+        <span style={{ fontSize: 12, color: C.gray400, marginLeft: 2 }}>{filtered.length} véhicule(s)</span>
+        {(search || filterEtat !== "all" || fEtab !== "all" || fPlaces !== "all" || fPermis !== "all" || fBoite !== "all") && (
+          <button onClick={() => { setSearch(""); setFilterEtat("all"); setFEtab("all"); setFPlaces("all"); setFPermis("all"); setFBoite("all"); }}
+            style={{ ...selStyle, color: C.navyL, borderColor: C.navyL }}>Réinitialiser</button>
+        )}
       </div>
 
       {/* Grid */}
@@ -472,39 +563,36 @@ export default function VehiculesPage() {
           return (
             <Card key={veh.id} onClick={() => setSel(veh.id)}
               style={{ padding: 18, borderLeft: etat === "atelier" ? `4px solid ${C.red}` : etat === "attention" ? `4px solid ${C.amber}` : undefined }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 900, color: C.navy }}>{veh.plaque}</div>
-                  <div style={{ fontSize: 11, color: C.gray400, marginTop: 1 }}>{veh.marque} {veh.modele}</div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: C.navy }}>{veh.plaque || "Plaque à renseigner"}</div>
+                  <div style={{ fontSize: 11, color: C.gray400, marginTop: 1 }}>{[veh.marque, veh.modele].filter(Boolean).join(" ") || "—"}</div>
                 </div>
                 <Badge color={stateColor(etat)}>{stateLabel(etat)}</Badge>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, fontSize: 12, marginBottom: 10 }}>
-                <div style={{ background: C.gray50, borderRadius: 6, padding: "6px 9px" }}>
-                  <div style={{ fontSize: 9, color: C.gray400, textTransform: "uppercase" }}>Places</div>
-                  <div style={{ fontWeight: 600, color: C.gray800, marginTop: 1 }}>
-                    {veh.places}{veh.places_handi > 0 ? ` + ${veh.places_handi}ha` : ""}
-                  </div>
-                </div>
-                <div style={{ background: (veh.km ?? 0) > 130000 ? C.redL : C.gray50, borderRadius: 6, padding: "6px 9px" }}>
-                  <div style={{ fontSize: 9, color: C.gray400, textTransform: "uppercase" }}>Kilométrage</div>
-                  <div style={{ fontWeight: 600, color: (veh.km ?? 0) > 130000 ? C.red : C.gray800, marginTop: 1 }}>
-                    {(veh.km ?? 0).toLocaleString("fr-FR")} km
-                  </div>
-                </div>
-                <div style={{ background: C.gray50, borderRadius: 6, padding: "6px 9px", gridColumn: "1/-1" }}>
-                  <div style={{ fontSize: 9, color: C.gray400, textTransform: "uppercase" }}>Conducteur</div>
-                  <div style={{ fontWeight: 600, color: cond ? C.gray800 : C.amber, marginTop: 1 }}>
-                    {cond ? `${cond.prenom} ${cond.nom}` : "Non affecté"}
-                  </div>
-                </div>
-                {circ && (
-                  <div style={{ background: C.skyL, borderRadius: 6, padding: "6px 9px", gridColumn: "1/-1" }}>
-                    <div style={{ fontSize: 9, color: C.gray400, textTransform: "uppercase" }}>Circuit</div>
-                    <div style={{ fontWeight: 600, color: C.navy, marginTop: 1 }}>{circ.emoji} {circ.nom}</div>
-                  </div>
-                )}
+
+              {/* Étiquettes */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+                {veh.places > 0 && <Chip bg={C.skyL} fg={C.navy}>{veh.places} places{veh.places_handi > 0 ? ` · ${veh.places_handi} ♿` : ""}</Chip>}
+                {veh.permis_requis && <Chip bg={C.gray100} fg={C.gray600}>Permis {veh.permis_requis}</Chip>}
+                {veh.boite && <Chip bg={C.gray100} fg={C.gray600}>{veh.boite}</Chip>}
+                {veh.tachygraphe_type && <Chip bg={C.gray100} fg={C.gray600}>Tachy {veh.tachygraphe_type}</Chip>}
+                {(veh.km ?? 0) > 0 && <Chip bg={(veh.km ?? 0) > 130000 ? C.redL : C.gray100} fg={(veh.km ?? 0) > 130000 ? C.red : C.gray600}>{(veh.km ?? 0).toLocaleString("fr-FR")} km</Chip>}
+                {veh.etablissement && <Chip bg={C.gray100} fg={C.gray600}>{veh.etablissement}</Chip>}
               </div>
+
+              <div style={{ fontSize: 12, marginBottom: 8 }}>
+                <span style={{ color: C.gray400 }}>Conducteur : </span>
+                <span style={{ fontWeight: 700, color: cond ? C.gray800 : C.amber }}>
+                  {cond ? `${cond.prenom} ${cond.nom}` : (veh.conducteur_nom || "Non affecté")}
+                </span>
+              </div>
+              {circ && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 5, background: C.skyL,
+                  borderRadius: 6, padding: "4px 9px", fontSize: 12, fontWeight: 700, color: C.navy, marginBottom: 8 }}>
+                  {circ.emoji} {circ.nom}
+                </div>
+              )}
               <div style={{ borderTop: `1px solid ${C.gray100}`, paddingTop: 8, fontSize: 11, color: C.gray400,
                 display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <span style={{ color: ctW ? C.red : undefined, fontWeight: ctW ? 700 : undefined }}>CT: {fmtDate(veh.ct_date)}</span>
