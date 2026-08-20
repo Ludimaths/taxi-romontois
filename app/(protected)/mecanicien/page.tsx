@@ -159,6 +159,15 @@ export default function MecanicienPage() {
   const [tab,         setTab]         = useState<MTab>("accueil");
   const [drawerOpen,  setDrawerOpen]  = useState(false);
   const [loading,     setLoading]     = useState(true);
+  // Nom du mécanicien connecté (affiché dans l'en-tête et le tiroir).
+  const [meNom,       setMeNom]       = useState("Mécanicien");
+  const meInitials = meNom.split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+  // Changement de mot de passe obligatoire à la première connexion (comme les conducteurs).
+  const [mustChangePwd, setMustChangePwd] = useState(false);
+  const [newPwd,        setNewPwd]        = useState("");
+  const [newPwdConfirm, setNewPwdConfirm] = useState("");
+  const [pwdChangeErr,  setPwdChangeErr]  = useState("");
+  const [pwdChangeBusy, setPwdChangeBusy] = useState(false);
 
   // Data
   const [alertesMeca, setAlertesMeca] = useState<Alerte[]>([]);
@@ -239,6 +248,16 @@ export default function MecanicienPage() {
     setConducteurs(cond.data ?? []);
     setMsgDecisions(dec.data ?? []);
     setUnreadMsgsCount(msgs.count ?? 0);
+    // Nom du mécanicien connecté (au lieu d'un nom codé en dur).
+    const { data: authData } = await sb.auth.getUser();
+    if (authData.user) {
+      const { data: prof } = await sb.from("profiles").select("prenom,nom,must_change_password").eq("id", authData.user.id).single();
+      if (prof) {
+        const pr = prof as { prenom: string; nom: string; must_change_password?: boolean };
+        setMeNom(`${pr.prenom} ${pr.nom}`.trim());
+        setMustChangePwd(!!pr.must_change_password);
+      }
+    }
     setLoading(false);
   }, [sb]);
 
@@ -253,6 +272,18 @@ export default function MecanicienPage() {
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [load, sb]);
+
+  // Changement de mot de passe obligatoire (première connexion).
+  async function handleChangePwd() {
+    if (newPwd.length < 8) { setPwdChangeErr("Minimum 8 caractères"); return; }
+    if (newPwd !== newPwdConfirm) { setPwdChangeErr("Les mots de passe ne correspondent pas"); return; }
+    setPwdChangeBusy(true); setPwdChangeErr("");
+    const { error } = await sb.auth.updateUser({ password: newPwd });
+    if (error) { setPwdChangeErr(error.message); setPwdChangeBusy(false); return; }
+    const { data: { user } } = await sb.auth.getUser();
+    if (user) await sb.from("profiles").update({ must_change_password: false }).eq("id", user.id);
+    setMustChangePwd(false); setNewPwd(""); setNewPwdConfirm(""); setPwdChangeBusy(false);
+  }
 
   // Chargement seuil budget depuis parametres
   useEffect(() => {
@@ -688,9 +719,9 @@ export default function MecanicienPage() {
               display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ width: 42, height: 42, borderRadius: "50%", background: C.white,
                 color: C.navy, display: "flex", alignItems: "center", justifyContent: "center",
-                fontWeight: 900, fontSize: 16, flexShrink: 0 }}>RM</div>
+                fontWeight: 900, fontSize: 16, flexShrink: 0 }}>{meInitials}</div>
               <div>
-                <div style={{ color: C.white, fontWeight: 700, fontSize: 14 }}>Rachid Mehni</div>
+                <div style={{ color: C.white, fontWeight: 700, fontSize: 14 }}>{meNom}</div>
                 <div style={{ color: C.sky, fontWeight: 600, fontSize: 12 }}>Mécanicien</div>
               </div>
             </div>
@@ -725,6 +756,36 @@ export default function MecanicienPage() {
         </div>
       )}
 
+      {/* ── Changement de mot de passe obligatoire (première connexion) ── */}
+      {mustChangePwd && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(13,59,122,0.75)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: C.white, borderRadius: 12, padding: 32, width: "100%", maxWidth: 400, boxShadow: "0 8px 32px rgba(0,0,0,0.3)" }}>
+            <div style={{ fontSize: 22, marginBottom: 8 }}>🔐</div>
+            <h2 style={{ margin: "0 0 8px", fontSize: 18, color: C.navy, fontWeight: 700 }}>Changement de mot de passe requis</h2>
+            <p style={{ margin: "0 0 20px", fontSize: 14, color: C.gray600, lineHeight: 1.5 }}>
+              Pour des raisons de sécurité, définissez votre propre mot de passe avant d&apos;accéder à votre compte.
+            </p>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: C.gray600, marginBottom: 4, fontWeight: 600 }}>Nouveau mot de passe</div>
+              <input type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)}
+                placeholder="Minimum 8 caractères"
+                style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${C.gray200}`, fontSize: 14, boxSizing: "border-box" }} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: C.gray600, marginBottom: 4, fontWeight: 600 }}>Confirmer le mot de passe</div>
+              <input type="password" value={newPwdConfirm} onChange={e => setNewPwdConfirm(e.target.value)}
+                placeholder="Répétez le mot de passe"
+                style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${C.gray200}`, fontSize: 14, boxSizing: "border-box" }} />
+            </div>
+            {pwdChangeErr && <div style={{ color: C.red, fontSize: 13, marginBottom: 12 }}>{pwdChangeErr}</div>}
+            <button onClick={handleChangePwd} disabled={pwdChangeBusy}
+              style={{ width: "100%", padding: "12px", background: C.navy, color: C.white, borderRadius: 8, border: "none", fontSize: 15, fontWeight: 700, cursor: pwdChangeBusy ? "not-allowed" : "pointer", opacity: pwdChangeBusy ? 0.7 : 1 }}>
+              {pwdChangeBusy ? "Enregistrement..." : "Confirmer le mot de passe"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Contenu ── */}
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "16px 4px 80px" }}>
 
@@ -735,11 +796,11 @@ export default function MecanicienPage() {
           <div style={{ width: 52, height: 52, borderRadius: 26, background: "rgba(255,255,255,0.2)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 18, fontWeight: 900, color: "#fff", flexShrink: 0 }}>
-            RM
+            {meInitials}
           </div>
           <div>
             <p style={{ fontSize: 12, opacity: 0.7, margin: "0 0 2px" }}>Mécanicien</p>
-            <h1 style={{ fontSize: 19, fontWeight: 900, margin: 0 }}>Rachid Mehni</h1>
+            <h1 style={{ fontSize: 19, fontWeight: 900, margin: 0 }}>{meNom}</h1>
           </div>
         </div>
         <div style={{ display: "flex", gap: 16, marginTop: 14, fontSize: 12, opacity: 0.85, flexWrap: "wrap" }}>
