@@ -45,6 +45,9 @@ const NAV_ITEMS: Record<Role, { path: string; label: string; icon: LucideIcon }[
   ecole: [
     { path: "/ecole", label: "Mon établissement", icon: Home },
   ],
+  referente: [
+    { path: "/referente", label: "Messages", icon: MessageSquare },
+  ],
 };
 
 interface SidebarProps {
@@ -75,6 +78,7 @@ export default function Sidebar({ role, nom, prenom, onSignOut, onNavClick, inci
     mecanicien:   "Mécanicien",
     parent:       "Parent",
     ecole:        "Établissement",
+    referente:    "Référente",
   };
 
   const initials = ((prenom?.[0] ?? "") + (nom?.[0] ?? "")).toUpperCase() || "??";

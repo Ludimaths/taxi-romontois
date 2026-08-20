@@ -33,16 +33,21 @@ export interface MessagesProps {
   incWithResponse: Incident[];
   unreadMsg: number;
   myNom: string;
+  isResponsable?: boolean;
   onMarquerLu: (a: Alerte) => void;
   onSetTab: (t: string) => void;
 }
 
-const CONDUCTEUR_TARGETS = [{ label: "Gestionnaire", role: "gestionnaire" }];
-
 export function TabMessages({
-  messages,incidents,absences,enfants,incWithResponse,unreadMsg,myNom,
+  messages,incidents,absences,enfants,incWithResponse,unreadMsg,myNom,isResponsable,
   onMarquerLu,onSetTab,
 }:MessagesProps){
+  // Cibles de messagerie du conducteur. La Référente n'est proposée qu'aux
+  // responsables de secteur (pour les soucis à régler), pas à tous les conducteurs.
+  const conducteurTargets = [
+    { label: "Gestionnaire", role: "gestionnaire" },
+    ...(isResponsable ? [{ label: "Référente", role: "referente" }] : []),
+  ];
   const [expandedDays,setExpandedDays]=useState<Record<string,boolean>>({});
   const msgGroups=groupByDay(messages);
 
@@ -160,7 +165,7 @@ export function TabMessages({
           letterSpacing:0.5,marginBottom:12}}>
           Messagerie directe
         </div>
-        <MessagerieBox myRole="conducteur" myNom={myNom} allowedTargets={CONDUCTEUR_TARGETS} />
+        <MessagerieBox myRole="conducteur" myNom={myNom} allowedTargets={conducteurTargets} />
       </div>
 
       <p style={{fontSize:13,color:C.gray,marginBottom:16}}>

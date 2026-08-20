@@ -9,6 +9,7 @@ const ROLE_HOME: Record<string, string> = {
   admin:        "/admin",
   parent:       "/parent",
   ecole:        "/ecole",
+  referente:    "/referente",
 };
 
 // ── Role → allowed path prefixes ─────────────────────────────────────────────
@@ -16,12 +17,13 @@ const ROLE_ALLOWED: Record<string, string[]> = {
   gestionnaire: ["/gestionnaire", "/api/gestionnaire", "/api/admin", "/api/export", "/api/import"],
   conducteur:   ["/conducteur"],
   mecanicien:   ["/mecanicien"],
-  admin:        ["/admin", "/gestionnaire", "/mecanicien", "/parent", "/conducteur", "/ecole", "/api/admin", "/api/gestionnaire", "/api/export", "/api/import"],
+  admin:        ["/admin", "/gestionnaire", "/mecanicien", "/parent", "/conducteur", "/ecole", "/referente", "/api/admin", "/api/gestionnaire", "/api/export", "/api/import"],
   parent:       ["/parent"],
   ecole:        ["/ecole"],
+  referente:    ["/referente"],
 };
 
-const PROTECTED_PAGES: string[] = ["/gestionnaire", "/conducteur", "/mecanicien", "/admin", "/parent", "/ecole"];
+const PROTECTED_PAGES: string[] = ["/gestionnaire", "/conducteur", "/mecanicien", "/admin", "/parent", "/ecole", "/referente"];
 const PROTECTED_APIS: string[]  = ["/api/gestionnaire", "/api/admin", "/api/export", "/api/import"];
 const PUBLIC_PREFIXES: string[] = ["/login", "/scan/", "/api/vehicule/", "/auth/callback", "/_next/", "/favicon", "/logo.png"];
 

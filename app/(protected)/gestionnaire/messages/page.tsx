@@ -5,6 +5,7 @@ import { C } from "@/lib/constants";
 import MessagerieBox from "@/components/MessagerieBox";
 
 const GEST_TARGETS = [
+  { label: "Référente",   role: "referente" },
   { label: "Conducteurs", role: "conducteur" },
   { label: "Mécanicien",  role: "mecanicien" },
   { label: "Admin",       role: "admin" },

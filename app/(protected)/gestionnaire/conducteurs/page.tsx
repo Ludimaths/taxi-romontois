@@ -797,6 +797,7 @@ export default function ConducteursPage() {
                 <InfoBox label="Validité"      value={d.permis_exp ? fmtDate(d.permis_exp) : "—"} highlight={permisExpireSoon ? C.red : undefined} />
                 <InfoBox label="École"         value={circ?.cercle?.nom} />
                 <InfoBox label="Tachygraphe"   value={d.tachygraphe ? "Requis" : "Non requis"} />
+                <InfoBox label="Prochaine formation" value={d.formation_date || "—"} />
                 {d.absence_motif && <InfoBox label="Motif absence" value={d.absence_motif} full highlight={C.red} />}
               </div>
             </Card>

@@ -1,4 +1,4 @@
-export type Role = "gestionnaire" | "conducteur" | "mecanicien" | "parent" | "admin" | "ecole";
+export type Role = "gestionnaire" | "conducteur" | "mecanicien" | "parent" | "admin" | "ecole" | "referente";
 
 // ── Facturation / Suivi élèves ────────────────────────────────────────────────
 export interface Ecole {
@@ -114,6 +114,7 @@ export interface Conducteur {
   status: DriverStatus;
   absence_motif?: string;
   notes?: string;
+  formation_date?: string | null;
   created_at: string;
   updated_at: string;
 }

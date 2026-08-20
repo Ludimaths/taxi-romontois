@@ -631,6 +631,7 @@ export default function ConducteurPage(){
         <TabMessages messages={messages} incidents={incidents} absences={absences} enfants={enfants}
           incWithResponse={incWithResponse} unreadMsg={unreadMsg}
           myNom={driver?`${driver.prenom} ${driver.nom}`:"Conducteur"}
+          isResponsable={!!(driver as {est_responsable?:boolean})?.est_responsable}
           onMarquerLu={handleMarquerLu} onSetTab={t=>setTab(t as Tab)}/>
       )}
       {tab==="planning"&&(

@@ -26,6 +26,10 @@ interface Props {
   myRole: string;
   myNom?: string;
   allowedTargets: { label: string; role: string }[];
+  /** Contacts explicites à ajouter à la liste (ex : les responsables de secteur,
+   *  qui sont des conducteurs et ne peuvent pas être ciblés par rôle sans inclure
+   *  tous les conducteurs). Fusionnés avec les contacts chargés par rôle. */
+  people?: Person[];
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -34,9 +38,10 @@ const ROLE_LABELS: Record<string, string> = {
   mecanicien:   "Mécanicien",
   admin:        "Administrateur",
   parent:       "Parent",
+  referente:    "Référente",
 };
 
-export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets }: Props) {
+export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets, people }: Props) {
   const sb = createClient();
   const [myId,           setMyId]           = useState<string | null>(null);
   const [myNom,          setMyNom]          = useState(myNomProp ?? "");
@@ -77,7 +82,18 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
 
   // Chargement de tous les contacts avec fallback (tâche 4)
   useEffect(() => {
+    // Fusionne les contacts explicites (people) sans doublon d'id.
+    const withExtras = (base: Person[]): Person[] => {
+      const seen = new Set(base.map(p => p.id));
+      const merged = [...base];
+      (people ?? []).forEach(p => { if (!seen.has(p.id)) { merged.push(p); seen.add(p.id); } });
+      merged.sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+      return merged;
+    };
+
     const roles = allowedTargets.map(t => t.role);
+    if (roles.length === 0) { setAllPersons(withExtras([])); return; }
+
     sb.from("profiles")
       .select("id,prenom,nom,role")
       .in("role", roles)
@@ -90,7 +106,7 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
             nom:  t.label,
             role: t.role,
           }));
-          setAllPersons(fallback);
+          setAllPersons(withExtras(fallback));
           return;
         }
         const persons = data.map(p => ({
@@ -98,8 +114,7 @@ export default function MessagerieBox({ myRole, myNom: myNomProp, allowedTargets
           nom:  `${p.prenom} ${p.nom}`,
           role: p.role as string,
         }));
-        persons.sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
-        setAllPersons(persons);
+        setAllPersons(withExtras(persons));
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

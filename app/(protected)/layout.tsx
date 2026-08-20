@@ -9,6 +9,7 @@ const ROLE_HOME: Record<string, string> = {
   mecanicien:   "/mecanicien",
   admin:        "/admin",
   parent:       "/parent",
+  referente:    "/referente",
 };
 
 const ROLE_PREFIX: Record<string, string> = {
@@ -17,6 +18,7 @@ const ROLE_PREFIX: Record<string, string> = {
   mecanicien:   "/mecanicien",
   admin:        "/admin",
   parent:       "/parent",
+  referente:    "/referente",
 };
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
